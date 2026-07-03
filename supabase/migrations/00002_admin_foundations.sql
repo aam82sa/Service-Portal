@@ -54,8 +54,10 @@ alter table notification_templates drop constraint notification_templates_pkey;
 alter table notification_templates
   add column id uuid primary key default gen_random_uuid(),
   add column dept dept_code;                 -- null = platform default
-create unique index notification_templates_key_dept
-  on notification_templates (key, coalesce(dept::text, '*'));
+create unique index notification_templates_default_key
+  on notification_templates (key) where dept is null;
+create unique index notification_templates_dept_key
+  on notification_templates (key, dept) where dept is not null;
 
 -- ============ Inbound email routing (email-to-ticket) ============
 create table inbound_routes (
