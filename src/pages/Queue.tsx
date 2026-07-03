@@ -17,11 +17,14 @@ interface QueueRow {
   assignee: { display_name: string } | null
 }
 
-const NEXT_ACTION: Record<string, { label: string; to: string } | undefined> = {
-  new: { label: 'Triage', to: 'triaged' },
-  triaged: { label: 'Start', to: 'in_progress' },
-  in_progress: { label: 'Resolve', to: 'resolved' },
-  resolved: { label: 'Close', to: 'closed' },
+const NEXT_ACTIONS: Record<string, { label: string; to: string; primary?: boolean }[]> = {
+  new: [{ label: 'Triage', to: 'triaged', primary: true }],
+  triaged: [{ label: 'Start', to: 'in_progress', primary: true }],
+  in_progress: [
+    { label: 'Send for approval', to: 'pending_approval' },
+    { label: 'Resolve', to: 'resolved', primary: true },
+  ],
+  resolved: [{ label: 'Close', to: 'closed', primary: true }],
 }
 
 function SlaRing({ createdAt, due }: { createdAt: string; due: string | null }) {
@@ -91,7 +94,7 @@ export function Queue() {
       <div className="card">
         {rows.map((r) => {
           const c = DEPT_COLOR[r.dept]
-          const action = NEXT_ACTION[r.status]
+          const actions = NEXT_ACTIONS[r.status] ?? []
           const mine = r.assignee_id === session!.user.id
           return (
             <div className="row" key={r.id}>
@@ -120,11 +123,16 @@ export function Queue() {
                   Assign to me
                 </button>
               )}
-              {action && (mine || !r.assignee_id) && (
-                <button className="btn primary" onClick={() => update(r.id, { status: action.to })}>
-                  {action.label}
-                </button>
-              )}
+              {(mine || !r.assignee_id) &&
+                actions.map((a) => (
+                  <button
+                    key={a.to}
+                    className={`btn${a.primary ? ' primary' : ''}`}
+                    onClick={() => update(r.id, { status: a.to })}
+                  >
+                    {a.label}
+                  </button>
+                ))}
             </div>
           )
         })}
