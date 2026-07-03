@@ -6,6 +6,7 @@ import type { FormField } from '../pages/RequestForm'
 
 interface ServiceRow extends Service {
   form_schema: FormField[]
+  parent_id: string | null
 }
 
 const FIELD_TYPES: FormField['type'][] = [
@@ -22,6 +23,7 @@ export function FormBuilder() {
   const [services, setServices] = useState<ServiceRow[]>([])
   const [serviceId, setServiceId] = useState<string>('')
   const [fields, setFields] = useState<FormField[]>([])
+  const [optDrafts, setOptDrafts] = useState<Record<number, string>>({})
   const [dirty, setDirty] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +31,7 @@ export function FormBuilder() {
   useEffect(() => {
     supabase
       .from('services')
-      .select('id, dept, code, name, description, form_schema')
+      .select('id, dept, code, name, description, form_schema, parent_id')
       .eq('is_active', true)
       .order('dept')
       .order('name')
@@ -127,6 +129,21 @@ export function FormBuilder() {
         </button>
       </div>
 
+      {fields.length === 0 && service?.parent_id && (() => {
+        const parent = services.find((s) => s.id === service.parent_id)
+        if (!parent || (parent.form_schema ?? []).length === 0) return null
+        return (
+          <div style={{ background: 'var(--it-soft)', color: 'var(--it)', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ flex: 1 }}>
+              This child service inherits {parent.form_schema.length} fields from {parent.code} — {parent.name}.
+              Copy them here to customize.
+            </span>
+            <button className="btn" onClick={() => { setFields(parent.form_schema); setDirty(true) }}>
+              Copy parent form
+            </button>
+          </div>
+        )
+      })()}
       <div className="card">
         <div className="row" style={{ fontSize: 11, color: 'var(--muted)' }}>
           <span style={{ width: 44 }}>Order</span>
@@ -137,7 +154,8 @@ export function FormBuilder() {
           <span style={{ width: 30 }} />
         </div>
         {fields.map((f, i) => (
-          <div className="row" key={i} style={{ opacity: f.visible === false ? 0.55 : 1 }}>
+          <div key={i}>
+          <div className="row" style={{ opacity: f.visible === false ? 0.55 : 1 }}>
             <span style={{ width: 44, display: 'flex', gap: 2 }}>
               <button className="btn" style={{ padding: '2px 6px' }} onClick={() => move(i, -1)} aria-label="Move up">↑</button>
               <button className="btn" style={{ padding: '2px 6px' }} onClick={() => move(i, 1)} aria-label="Move down">↓</button>
@@ -181,8 +199,38 @@ export function FormBuilder() {
               ×
             </button>
           </div>
+          {f.type === 'dropdown' && (
+            <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>options</span>
+              {(f.options ?? []).map((o) => (
+                <span key={o} className="chip" style={{ background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--line)', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                  {o}
+                  <span
+                    style={{ cursor: 'pointer', color: 'var(--red)' }}
+                    onClick={() => patch(i, { options: (f.options ?? []).filter((x) => x !== o) })}
+                  >
+                    ×
+                  </span>
+                </span>
+              ))}
+              <input
+                className="input"
+                style={{ width: 140, padding: '4px 8px', fontSize: 12 }}
+                placeholder="Add option + Enter"
+                value={optDrafts[i] ?? ''}
+                onChange={(e) => setOptDrafts((s) => ({ ...s, [i]: e.target.value }))}
+                onKeyDown={(e) => {
+                  const v = (optDrafts[i] ?? '').trim()
+                  if (e.key === 'Enter' && v && !(f.options ?? []).includes(v)) {
+                    patch(i, { options: [...(f.options ?? []), v] })
+                    setOptDrafts((s) => ({ ...s, [i]: '' }))
+                  }
+                }}
+              />
+            </div>
+          )}
+          </div>
         ))}
-        {f_dropdown_hint(fields)}
         <div className="row">
           <button className="btn" style={{ borderStyle: 'dashed' }} onClick={addField}>
             + Add field
@@ -197,13 +245,3 @@ export function FormBuilder() {
   )
 }
 
-function f_dropdown_hint(fields: FormField[]) {
-  const dd = fields.filter((f) => f.type === 'dropdown' && (!f.options || f.options.length === 0))
-  if (dd.length === 0) return null
-  return (
-    <div className="row" style={{ fontSize: 11.5, color: 'var(--amber)' }}>
-      Dropdown fields without options yet: {dd.map((f) => f.label).join(', ')} — options editing
-      arrives with the next iteration; existing options are preserved.
-    </div>
-  )
-}

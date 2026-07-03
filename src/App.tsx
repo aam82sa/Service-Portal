@@ -8,9 +8,10 @@ import { Approvals } from './pages/Approvals'
 import { MyWork } from './pages/MyWork'
 import { Insights } from './pages/Insights'
 import { RequestDetail } from './pages/RequestDetail'
+import { Assets } from './pages/Assets'
 import { AdminPage } from './admin/AdminPage'
 
-type Page = 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'admin'
+type Page = 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
 
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, signOut } = useAuth()
@@ -19,7 +20,9 @@ export default function App() {
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
-  const canInsights = hasRole('team_lead') || hasRole('executive') || hasRole('system_admin')
+  const canInsights = true
+  const canAssets =
+    hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || hasRole('system_admin')
   const go = (p: Page) => {
     setDetailId(null)
     setPage(p)
@@ -95,6 +98,14 @@ export default function App() {
             Insights
           </button>
         )}
+        {canAssets && (
+          <button
+            className={`nav-item${activePage === 'assets' ? ' active' : ''}`}
+            onClick={() => go('assets')}
+          >
+            IT assets
+          </button>
+        )}
         {canAdmin && (
           <>
             <div className="nav-group">Administration</div>
@@ -127,6 +138,7 @@ export default function App() {
             {activePage === 'queue' && isStaff && <Queue onOpen={setDetailId} />}
             {activePage === 'approvals' && isApprover && <Approvals />}
             {activePage === 'insights' && canInsights && <Insights />}
+            {activePage === 'assets' && canAssets && <Assets onOpenRequest={setDetailId} />}
             {activePage === 'admin' && canAdmin && <AdminPage />}
           </>
         )}
