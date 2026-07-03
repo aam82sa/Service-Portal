@@ -14,6 +14,7 @@ export default function App() {
   const [page, setPage] = useState<Page>('portal')
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
+  const canAdmin = isAdmin || hasRole('dept_admin')
 
   if (loading) {
     return (
@@ -24,7 +25,7 @@ export default function App() {
   }
   if (!session) return <SignIn />
 
-  const activePage = page === 'admin' && !isAdmin ? 'portal' : page
+  const activePage = page === 'admin' && !canAdmin ? 'portal' : page
 
   return (
     <div className="shell">
@@ -62,7 +63,7 @@ export default function App() {
             Approvals
           </button>
         )}
-        {isAdmin && (
+        {canAdmin && (
           <>
             <div className="nav-group">Administration</div>
             <button
@@ -88,7 +89,7 @@ export default function App() {
         {activePage === 'requests' && <MyRequests />}
         {activePage === 'queue' && isStaff && <Queue />}
         {activePage === 'approvals' && isApprover && <Approvals />}
-        {activePage === 'admin' && isAdmin && <AdminPage />}
+        {activePage === 'admin' && canAdmin && <AdminPage />}
       </main>
     </div>
   )
