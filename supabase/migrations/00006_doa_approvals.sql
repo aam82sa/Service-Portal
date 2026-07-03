@@ -1,13 +1,12 @@
 -- DoA approvals engine: chain generation from doa_matrix, sequential
 -- decisions via RPC, and resolution blocked until the chain is approved.
 
--- Approvers see requests that carry an approval chain (rows are unassigned
--- until decided, so the original approver_id-based policy never matched)
+-- Approvers see requests awaiting approval. Deliberately self-contained:
+-- referencing approvals here while approvals' policy references requests
+-- creates infinite policy recursion.
 drop policy if exists req_approver on requests;
 create policy req_approver on requests for select to authenticated
-  using (has_role('approver') and exists (
-    select 1 from approvals a where a.request_id = requests.id
-  ));
+  using (has_role('approver') and status = 'pending_approval');
 
 -- Approvals visible to approvers, the requester, and department staff
 create policy apr_read on approvals for select to authenticated
