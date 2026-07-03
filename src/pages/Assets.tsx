@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEPT_COLOR } from '../lib/types'
 import { SlaRing } from './Queue'
+import { ImportPanel, downloadTemplate, printLabels } from './AssetImport'
 
 interface Asset {
   id: string
@@ -142,6 +143,14 @@ function Hardware({ assets, people, reload, setError }: {
   }
 
   return (
+    <>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <ImportPanel existing={assets} onDone={reload} />
+      <button className="btn" onClick={downloadTemplate}>Download template</button>
+      <button className="btn" onClick={() => printLabels(assets.filter((a) => a.status !== 'retired'))}>
+        Print all QR labels
+      </button>
+    </div>
     <div className="card">
       {assets.map((a) => {
         const s = STATUS_CHIP[a.status]
@@ -187,6 +196,12 @@ function Hardware({ assets, people, reload, setError }: {
                 Return
               </button>
             )}
+            <button
+              className="btn mono" style={{ padding: '5px 8px', fontSize: 10.5 }}
+              title="Print QR label" onClick={() => printLabels([a])}
+            >
+              QR
+            </button>
           </div>
         )
       })}
@@ -200,6 +215,7 @@ function Hardware({ assets, people, reload, setError }: {
         <button className="btn" onClick={add} disabled={!form.tag.trim()}>+ Add asset</button>
       </div>
     </div>
+    </>
   )
 }
 
