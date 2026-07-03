@@ -12,7 +12,11 @@ Access = role permission × department scope. Roles derive from Entra ID securit
 | Approver (DoA) | Own DoA band | + approvals routed to them; read-only queue context |
 | Dept Admin | Own department | + catalog builder, SLA settings for their dept |
 | Executive | Global, read-only | Cross-department insights, audit log |
-| Platform Admin | Global | Everything + DoA matrix editor + Users & Directory |
+| User Admin | Global | Users & Directory: manage users, role assignments, AD group mappings, approval delegation, teams |
+| System Admin | Global | System console: feature toggles, email templates + inbound routing, DoA matrix, SLA policies, workflows, announcements, audit viewer, integrations |
+
+> 2026-07-03: the former Platform Admin role was split into User Admin and
+> System Admin (separation of duties). See docs/admin-console.md.
 
 ## Entra ID group → role mapping
 | AD security group | Platform role |
@@ -24,7 +28,8 @@ Access = role permission × department scope. Roles derive from Entra ID securit
 | SG-RLC-DoA-Approvers | Approver (band from DoA matrix) |
 | SG-RLC-Dept-Admins-* | Dept Admin · per dept |
 | SG-RLC-Executives | Executive |
-| SG-RLC-Platform-Admins | Platform Admin |
+| SG-RLC-User-Admins | User Admin |
+| SG-RLC-System-Admins | System Admin |
 | (all licensed users) | Requester |
 
 ## DoA bands (SAR)
