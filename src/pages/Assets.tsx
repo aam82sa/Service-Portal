@@ -521,15 +521,36 @@ function People({ people, assets, licenses, onOpenRequest }: {
     })),
   ]
 
-  const W = 400
-  const H = 380
+  const W = 430
+  const H = 410
   const cx = W / 2
-  const cy = H / 2 - 6
-  const R = Math.min(140, 90 + nodes.length * 4)
-  const pos = (i: number) => {
-    const angle = (i / Math.max(1, nodes.length)) * 2 * Math.PI - Math.PI / 2
-    return { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) }
+  const cy = H / 2
+  const SECTORS: Record<GraphNode['type'], [number, number]> = {
+    asset: [90, 180],
+    license: [-145, -35],
+    request: [-15, 75],
   }
+  const grouped: Record<GraphNode['type'], GraphNode[]> = { asset: [], license: [], request: [] }
+  nodes.forEach((n) => grouped[n.type].push(n))
+  const posOf = (n: GraphNode) => {
+    const arr = grouped[n.type]
+    const i = arr.indexOf(n)
+    const [a0, a1] = SECTORS[n.type]
+    const t = arr.length === 1 ? 0.5 : i / (arr.length - 1)
+    const ang = ((a0 + t * (a1 - a0)) * Math.PI) / 180
+    const r = arr.length > 2 ? (i % 2 === 0 ? 120 : 165) : 135
+    return { x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang) }
+  }
+  const edge = (p: { x: number; y: number }, i: number) => {
+    const mx = (cx + p.x) / 2
+    const my = (cy + p.y) / 2
+    const dx = p.x - cx
+    const dy = p.y - cy
+    const norm = Math.hypot(dx, dy) || 1
+    const off = i % 2 === 0 ? 16 : -16
+    return `M ${cx} ${cy} Q ${mx + (-dy / norm) * off} ${my + (dx / norm) * off} ${p.x} ${p.y}`
+  }
+  const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
   const initials = selected.display_name.split(' ').map((x) => x[0]).slice(0, 2).join('')
 
   return (
@@ -538,27 +559,36 @@ function People({ people, assets, licenses, onOpenRequest }: {
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div className="card" style={{ flex: '1.2 1 380px', padding: 10 }}>
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%' }} role="img" aria-label={`Relationship map for ${selected.display_name}`}>
-            {nodes.map((n, i) => {
-              const p = pos(i)
-              return <line key={`e${n.id}`} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={n.color} strokeWidth="1.2" opacity="0.45" />
-            })}
-            <circle cx={cx} cy={cy} r="34" fill="var(--ink)" />
-            <circle cx={cx} cy={cy} r="38" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="4 4" />
-            <text x={cx} y={cy + 5} textAnchor="middle" fill="#fff" fontSize="15" fontWeight="600" fontFamily="Space Grotesk">{initials}</text>
-            <text x={cx} y={cy + 58} textAnchor="middle" fill="var(--ink)" fontSize="11.5" fontWeight="600" fontFamily="Inter">{selected.display_name}</text>
-            {nodes.map((n, i) => {
-              const p = pos(i)
+            {nodes.map((n, i) => (
+              <path
+                key={`e${n.id}`} d={edge(posOf(n), i)} fill="none"
+                stroke={n.color} strokeWidth={node?.id === n.id ? 2.2 : 1.4}
+                opacity={node && node.id !== n.id ? 0.2 : 0.55} strokeLinecap="round"
+              />
+            ))}
+            <circle cx={cx} cy={cy} r="46" fill="var(--surface)" />
+            <circle cx={cx} cy={cy} r="46" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="5 5" />
+            <circle cx={cx} cy={cy} r="33" fill="var(--ink)" />
+            <text x={cx} y={cy + 5.5} textAnchor="middle" fill="#fff" fontSize="16" fontWeight="600" fontFamily="Space Grotesk">{initials}</text>
+            {nodes.map((n) => {
+              const p = posOf(n)
               const active = node?.id === n.id
+              const dim = node && !active
+              const lbl = trunc(n.label, 15)
+              const pw = lbl.length * 5.6 + 16
               return (
-                <g key={n.id} style={{ cursor: 'pointer' }} onClick={() => setNode(n)}>
-                  <circle cx={p.x} cy={p.y} r="17" fill={active ? n.color : 'var(--card)'} stroke={n.color} strokeWidth={active ? 2 : 1.4} />
-                  <text x={p.x} y={p.y + 3.5} textAnchor="middle" fontSize="9.5" fontWeight="600" fontFamily="JetBrains Mono" fill={active ? '#fff' : n.color}>{n.code}</text>
-                  <text x={p.x} y={p.y + 30} textAnchor="middle" fontSize="8.5" fill="var(--muted)" fontFamily="Inter">
-                    {n.label.length > 16 ? n.label.slice(0, 15) + '…' : n.label}
-                  </text>
+                <g key={n.id} style={{ cursor: 'pointer' }} opacity={dim ? 0.45 : 1} onClick={() => setNode(active ? null : n)}>
+                  <circle cx={p.x} cy={p.y} r="21" fill={active ? n.color : 'var(--card)'} stroke={n.color} strokeWidth="2" />
+                  <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize="10.5" fontWeight="600" fontFamily="JetBrains Mono" fill={active ? '#fff' : n.color}>{n.code}</text>
+                  <rect x={p.x - pw / 2} y={p.y + 27} width={pw} height={17} rx="8.5" fill={active ? n.color : n.soft} />
+                  <text x={p.x} y={p.y + 39} textAnchor="middle" fontSize="9" fontWeight="600" fontFamily="Inter" fill={active ? '#fff' : n.color}>{lbl}</text>
                 </g>
               )
             })}
+            <rect x="12" y={H - 34} width={selected.display_name.length * 6.6 + 24} height="24" rx="12" fill="var(--ink)" />
+            <text x={12 + (selected.display_name.length * 6.6 + 24) / 2} y={H - 18} textAnchor="middle" fill="#fff" fontSize="10.5" fontWeight="600" fontFamily="Inter">
+              {selected.display_name}
+            </text>
           </svg>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', paddingBottom: 6 }}>
             <span className="chip" style={{ background: 'var(--it-soft)', color: 'var(--it)' }}>hardware · {myAssets.length}</span>
