@@ -20,7 +20,7 @@ export default function App() {
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
-  const canInsights = hasRole('team_lead') || hasRole('executive') || hasRole('system_admin')
+  const canInsights = true
   const canAssets =
     hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || hasRole('system_admin')
   const go = (p: Page) => {
