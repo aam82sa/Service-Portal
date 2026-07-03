@@ -2,5 +2,7 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
 supabase/.temp/
+.claude/launch.json
 .DS_Store

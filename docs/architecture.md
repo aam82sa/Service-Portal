@@ -11,8 +11,19 @@ new → triaged → in_progress → pending_approval → (pending_requester | es
 
 ## Email events
 request_created, assigned, pending_approval (actionable), approved/rejected,
-resolved (with rating link), sla_warning, sla_breached, escalated
+resolved (with rating link), sla_warning, sla_breached, escalated.
+Templates are admin-editable with per-department overrides; inbound
+email-to-ticket via Graph webhook. See docs/admin-console.md §2–3.
 
-## Build phases
-1. Schema + RLS  2. Auth + group sync  3. Catalog + lifecycle
-4. DoA engine  5. Graph email  6. My Work + workspace  7. Insights
+## Admin console
+Two global admin roles (user_admin / system_admin), feature toggles enforced in
+the DB layer, no-code form builder, graphical workflow designer with server-side
+transition enforcement. Full spec: docs/admin-console.md.
+
+## Build phases (re-sequenced 2026-07-03)
+1. Schema + RLS (incl. flags, calendars, teams, delegation, versioned forms/workflows)
+2. Auth + group sync (dev sign-in first, Entra SSO swap-in)
+3. Catalog + lifecycle (workflow engine as data)
+4. DoA engine + delegation  5. Graph email out + in (email-to-ticket)
+6. Admin console UI  7. Workflow designer canvas
+8. My Work + workspace  9. Insights
