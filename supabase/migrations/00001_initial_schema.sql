@@ -9,7 +9,7 @@ create type request_status as enum
   ('new', 'triaged', 'in_progress', 'pending_approval', 'pending_requester', 'escalated', 'resolved', 'closed', 'cancelled');
 create type priority as enum ('P1', 'P2', 'P3', 'P4');
 create type platform_role as enum
-  ('requester', 'agent', 'team_lead', 'approver', 'dept_admin', 'executive', 'platform_admin');
+  ('requester', 'agent', 'team_lead', 'approver', 'dept_admin', 'executive', 'user_admin', 'system_admin');
 create type approval_decision as enum ('pending', 'approved', 'rejected', 'info_requested');
 
 -- ============ Directory (mastered in Entra ID) ============
@@ -161,7 +161,7 @@ create policy req_dept_scope on requests for select
   using (
     has_role('agent', dept) or has_role('team_lead', dept)
     or has_role('dept_admin', dept)
-    or has_role('executive') or has_role('platform_admin')
+    or has_role('executive') or has_role('system_admin')
   );
 
 -- Approvers: requests with a pending approval addressed to them
