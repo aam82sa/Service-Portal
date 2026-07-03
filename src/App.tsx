@@ -4,14 +4,16 @@ import { SignIn } from './auth/SignIn'
 import { Portal } from './pages/Portal'
 import { MyRequests } from './pages/MyRequests'
 import { Queue } from './pages/Queue'
+import { Approvals } from './pages/Approvals'
 import { AdminPage } from './admin/AdminPage'
 
-type Page = 'portal' | 'requests' | 'queue' | 'admin'
+type Page = 'portal' | 'requests' | 'queue' | 'approvals' | 'admin'
 
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, signOut } = useAuth()
   const [page, setPage] = useState<Page>('portal')
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
+  const isApprover = hasRole('approver')
 
   if (loading) {
     return (
@@ -43,16 +45,22 @@ export default function App() {
         >
           My requests
         </button>
+        {(isStaff || isApprover) && <div className="nav-group">Workspace</div>}
         {isStaff && (
-          <>
-            <div className="nav-group">Workspace</div>
-            <button
-              className={`nav-item${activePage === 'queue' ? ' active' : ''}`}
-              onClick={() => setPage('queue')}
-            >
-              Department queue
-            </button>
-          </>
+          <button
+            className={`nav-item${activePage === 'queue' ? ' active' : ''}`}
+            onClick={() => setPage('queue')}
+          >
+            Department queue
+          </button>
+        )}
+        {isApprover && (
+          <button
+            className={`nav-item${activePage === 'approvals' ? ' active' : ''}`}
+            onClick={() => setPage('approvals')}
+          >
+            Approvals
+          </button>
         )}
         {isAdmin && (
           <>
@@ -79,6 +87,7 @@ export default function App() {
         {activePage === 'portal' && <Portal />}
         {activePage === 'requests' && <MyRequests />}
         {activePage === 'queue' && isStaff && <Queue />}
+        {activePage === 'approvals' && isApprover && <Approvals />}
         {activePage === 'admin' && isAdmin && <AdminPage />}
       </main>
     </div>
