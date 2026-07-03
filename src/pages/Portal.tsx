@@ -6,6 +6,7 @@ import { SEVERITY_STYLE } from '../admin/Announcements'
 
 interface ServiceWithForm extends Service {
   form_schema: FormField[]
+  parent_id: string | null
 }
 
 interface Banner {
@@ -42,7 +43,7 @@ export function Portal() {
   useEffect(() => {
     supabase
       .from('services')
-      .select('id, dept, code, name, description, form_schema')
+      .select('id, dept, code, name, description, form_schema, parent_id')
       .eq('is_active', true)
       .order('dept')
       .order('name')
@@ -54,7 +55,15 @@ export function Portal() {
   }, [])
 
   if (selected) {
-    return <RequestForm service={selected} onDone={() => setSelected(null)} />
+    const effective =
+      (selected.form_schema ?? []).length === 0 && selected.parent_id
+        ? {
+            ...selected,
+            form_schema:
+              services.find((s) => s.id === selected.parent_id)?.form_schema ?? [],
+          }
+        : selected
+    return <RequestForm service={effective} onDone={() => setSelected(null)} />
   }
 
   return (

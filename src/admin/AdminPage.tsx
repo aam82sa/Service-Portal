@@ -8,10 +8,11 @@ import { EmailStudio } from './EmailStudio'
 import { SlaCalendar } from './SlaCalendar'
 import { Delegations } from './Delegations'
 import { Announcements } from './Announcements'
+import { ServiceBuilder } from './ServiceBuilder'
 
 type Section =
   | 'functions' | 'email' | 'sla' | 'announcements'
-  | 'forms' | 'workflows' | 'users' | 'delegation'
+  | 'services' | 'forms' | 'workflows' | 'users' | 'delegation'
 
 /**
  * Admin console. Sections render per role:
@@ -34,6 +35,7 @@ export function AdminPage() {
   }
   if (isSys || isDept) {
     const group = isSys ? 'System admin' : 'Department admin'
+    sections.push({ id: 'services', label: 'Service builder', group })
     sections.push({ id: 'forms', label: 'Form builder', group })
     sections.push({ id: 'workflows', label: 'Workflow designer', group })
   }
@@ -81,6 +83,7 @@ export function AdminPage() {
         {section === 'email' && isSys && <EmailStudio />}
         {section === 'sla' && isSys && <SlaCalendar />}
         {section === 'announcements' && isSys && <Announcements />}
+        {section === 'services' && (isSys || isDept) && <ServiceBuilder />}
         {section === 'forms' && (isSys || isDept) && <FormBuilder />}
         {section === 'workflows' && (isSys || isDept) && <WorkflowDesigner />}
         {section === 'users' && isUsr && <UsersRoles />}
