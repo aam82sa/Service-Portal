@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RLC Services Hub — Prototype v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#10192E; --ink-2:#1A2540; --ink-3:#243356;
+  --surface:#F4F5F8; --card:#FFFFFF; --line:#E4E7EE;
+  --text:#1B2437; --muted:#6B7280;
+  --accent:#D97757; --accent-soft:#FBEFE9;
+  --green:#2E9E6B; --green-soft:#E7F5EE;
+  --amber:#DE9B2D; --amber-soft:#FBF2DF;
+  --red:#D64545; --red-soft:#FBEAEA;
+  --it:#3E6DD8; --it-soft:#EAF0FC;
+  --admin:#8A5FC9; --admin-soft:#F2EDFA;
+  --log:#2E9E6B; --log-soft:#E7F5EE;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:var(--surface);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:'Space Grotesk',sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* Shell */
+.app{display:flex;min-height:100vh}
+.sidebar{width:236px;background:var(--ink);color:#C9D2E4;display:flex;flex-direction:column;padding:20px 14px;position:fixed;top:0;bottom:0;left:0;z-index:10;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 20px}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;color:#fff;font-size:15px}
+.brand-name{font-family:'Space Grotesk';font-weight:600;color:#fff;font-size:15px;line-height:1.15}
+.brand-name span{display:block;font-family:'Inter';font-weight:400;font-size:10.5px;color:#8B96AE;letter-spacing:.06em;text-transform:uppercase}
+.nav-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5D6A85;padding:14px 10px 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;font-weight:500;color:#AEB9CE;transition:all .15s;font-size:13.5px;border:none;background:none;width:100%;text-align:left;font-family:'Inter'}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item .role-tag{margin-left:auto;font-size:9.5px;padding:2px 6px;border-radius:99px;background:var(--ink-2);color:#7C89A5}
+.nav-item .badge{margin-left:auto;font-family:'JetBrains Mono';font-size:10px;padding:2px 7px;border-radius:99px;background:var(--accent);color:#fff;font-weight:600}
+.sidebar-foot{margin-top:auto;padding:12px 10px;border-top:1px solid var(--ink-2)}
+.role-select-wrap{margin-bottom:12px}
+.role-select-wrap label{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#5D6A85;margin-bottom:5px}
+.role-select{width:100%;background:var(--ink-2);border:1px solid var(--ink-3);color:#fff;border-radius:8px;padding:8px 10px;font-family:'Inter';font-size:12.5px;font-weight:500;cursor:pointer}
+.userline{display:flex;align-items:center;gap:10px}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#D97757,#B85A3C);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:11px;flex-shrink:0}
+.userline .u b{display:block;color:#fff;font-size:12.5px;font-weight:600}
+.userline .u span{font-size:10.5px;color:#7C89A5}
+
+.main{margin-left:236px;flex:1;min-width:0}
+.topbar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 28px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:5}
+.topbar h1{font-size:17px;font-weight:600}
+.topbar .crumb{color:var(--muted);font-size:12.5px}
+.viewing-as{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.viewing-as b{color:var(--text);background:var(--accent-soft);padding:4px 11px;border-radius:99px;font-size:11.5px;color:#8A4A31}
+.btn{border:none;border-radius:9px;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer;font-family:'Inter';transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#C4653F}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:transparent;color:var(--red);border:1.5px solid var(--red)}
+.content{padding:24px 28px;max-width:1240px;width:100%}
+
+/* Shared */
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600}
+.chip-it{background:var(--it-soft);color:var(--it)}
+.chip-admin{background:var(--admin-soft);color:var(--admin)}
+.chip-log{background:var(--log-soft);color:var(--log)}
+.chip-green{background:var(--green-soft);color:var(--green)}
+.chip-amber{background:var(--amber-soft);color:#B57C17}
+.chip-red{background:var(--red-soft);color:var(--red)}
+.chip-neutral{background:#EEF0F4;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+.dept-rail{width:4px;border-radius:4px;align-self:stretch;flex-shrink:0}
+.rail-it{background:var(--it)}.rail-admin{background:var(--admin)}.rail-log{background:var(--log)}
+
+/* KPI strip — on every page */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.kpi{padding:16px 20px}
+.kpi .lbl{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.kpi .num{font-family:'Space Grotesk';font-size:28px;font-weight:600;letter-spacing:-.03em;margin:5px 0 2px}
+.kpi .sub{font-size:11.5px;color:var(--muted)}
+.kpi .sub.up{color:var(--green)}.kpi .sub.down{color:var(--red)}
+
+/* Formal service tiles (no emoji) */
+.svc-abbr{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-size:12px;font-weight:600;flex-shrink:0;letter-spacing:.02em}
+.section-h{display:flex;align-items:baseline;gap:12px;margin:24px 0 13px}
+.section-h h3{font-size:15.5px;font-weight:600}
+.section-h span{font-size:12px;color:var(--muted)}
+.section-h .see{margin-left:auto;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:13px}
+.svc-card{display:flex;gap:13px;padding:15px;cursor:pointer;transition:all .15s}
+.svc-card:hover{border-color:#C9CFDA;box-shadow:0 4px 14px rgba(16,25,46,.06)}
+.svc-card b{display:block;font-size:13.5px;margin-bottom:3px}
+.svc-card p{font-size:12px;color:var(--muted);line-height:1.45}
+.svc-card .sla-note{font-family:'JetBrains Mono';font-size:10.5px;color:#98A0AE;margin-top:6px}
+
+/* Rows */
+.row{display:flex;align-items:center;gap:15px;padding:13px 18px;transition:background .12s}
+.row:hover{background:#FAFBFC}
+.row + .row{border-top:1px solid var(--line)}
+.row .id{font-family:'JetBrains Mono';font-size:12px;font-weight:600;width:84px;flex-shrink:0;color:var(--muted)}
+.row .t{flex:1;min-width:0}
+.row .t b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .t span{font-size:11.5px;color:var(--muted)}
+.row .who{display:flex;align-items:center;gap:8px;width:145px;flex-shrink:0}
+.row .who .avatar{width:26px;height:26px;font-size:10px;border-radius:8px}
+.row .who span{font-size:12px;color:var(--muted)}
+.sla-ring{position:relative;width:42px;height:42px;flex-shrink:0}
+.sla-ring svg{transform:rotate(-90deg)}
+.sla-ring .val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-size:9px;font-weight:600}
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filter{padding:7px 14px;border-radius:99px;border:1px solid var(--line);background:var(--card);font-size:12.5px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Inter'}
+.filter.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* Approvals */
+.appr-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.appr-card{padding:20px}
+.appr-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.appr-head .id{font-family:'JetBrains Mono';font-size:11.5px;color:var(--muted);font-weight:600}
+.appr-head b{font-size:15px;display:block;margin-top:2px}
+.appr-amount{font-family:'Space Grotesk';font-size:23px;font-weight:600;margin-left:auto;text-align:right}
+.appr-amount span{display:block;font-family:'Inter';font-size:10.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+.appr-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;padding:13px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:14px}
+.appr-meta .m span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500}
+.appr-meta .m b{font-size:13px;font-weight:600}
+.doa-chain{display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.doa-step{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;color:var(--muted)}
+.doa-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;font-family:'JetBrains Mono'}
+.doa-done{background:var(--green);color:#fff}
+.doa-now{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--accent-soft)}
+.doa-wait{background:#E8EAF0;color:#9AA1AF}
+.doa-line{width:22px;height:2px;background:var(--line)}
+.doa-line.done{background:var(--green)}
+.appr-actions{display:flex;gap:10px}
+.appr-actions .btn{flex:1}
+
+/* Exec */
+.exec-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+.panel{padding:20px 22px}
+.panel h4{font-size:14px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.panel h4 span{margin-left:auto;font-size:11px;color:var(--muted);font-weight:400}
+.bar-row{display:flex;align-items:center;gap:12px;margin-bottom:13px}
+.bar-row .lbl{width:110px;font-size:12.5px;font-weight:500;flex-shrink:0}
+.bar-track{flex:1;height:10px;background:#EEF0F4;border-radius:99px;overflow:hidden}
+.bar-fill{height:100%;border-radius:99px}
+.bar-row .val{font-family:'JetBrains Mono';font-size:11.5px;font-weight:600;width:44px;text-align:right}
+.vol-chart{display:flex;align-items:flex-end;gap:10px;height:140px;padding-top:8px}
+.vol-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%}
+.vol-seg{border-radius:4px 4px 2px 2px;min-height:4px}
+.legend{display:flex;gap:16px;margin-top:14px;font-size:11.5px;color:var(--muted)}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px}
+.alert-row{display:flex;align-items:center;gap:12px;padding:11px 0}
+.alert-row + .alert-row{border-top:1px solid var(--line)}
+.alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.alert-row b{font-size:12.5px}
+.alert-row span{font-size:11.5px;color:var(--muted);display:block}
+.alert-row .mono{margin-left:auto;font-size:11px;color:var(--muted)}
+.note-banner{background:var(--accent-soft);border:1px solid #F0D5C8;border-radius:11px;padding:11px 16px;font-size:12.5px;color:#8A4A31;margin-bottom:18px}
+
+/* Users / directory */
+.sync-banner{display:flex;align-items:center;gap:14px;background:var(--ink);color:#fff;border-radius:var(--radius);padding:16px 22px;margin-bottom:18px}
+.sync-pulse{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(46,158,107,.22);flex-shrink:0}
+.sync-banner b{font-size:13.5px;display:block}
+.sync-banner span{font-size:11.5px;color:#9AA6BE}
+.sync-banner .mono{margin-left:auto;font-size:11px;color:#9AA6BE}
+table{width:100%;border-collapse:collapse}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:11px 16px;border-bottom:1px solid var(--line);font-weight:600}
+td{padding:11px 16px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+td .avatar{width:26px;height:26px;font-size:10px;border-radius:8px;display:inline-flex;vertical-align:middle;margin-right:9px}
+td b{font-weight:600}
+td .sub{display:block;font-size:11px;color:var(--muted);font-family:'JetBrains Mono')}
+.mapping{display:grid;grid-template-columns:1fr auto 1fr;gap:8px 14px;align-items:center;padding:8px 0}
+.map-box{border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:500;background:#FAFBFC}
+.map-box .mono{display:block;font-size:10.5px;color:var(--muted)}
+.map-arrow{color:var(--muted);font-size:14px}
+
+/* Access matrix */
+.matrix-wrap{overflow-x:auto}
+.matrix td,.matrix th{text-align:center;padding:10px 12px}
+.matrix td:first-child,.matrix th:first-child{text-align:left;white-space:nowrap}
+.acc{display:inline-block;width:20px;height:20px;border-radius:6px;line-height:20px;font-size:10px;font-weight:700;font-family:'JetBrains Mono'}
+.acc-full{background:var(--green-soft);color:var(--green)}
+.acc-scope{background:var(--it-soft);color:var(--it)}
+.acc-read{background:var(--amber-soft);color:#B57C17}
+.acc-none{background:#F1F2F5;color:#C2C7D0}
+.matrix-legend{display:flex;gap:18px;margin-top:14px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+
+@media(max-width:960px){
+  .sidebar{display:none}.main{margin-left:0}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .appr-grid,.exec-grid{grid-template-columns:1fr}
+  .row .who{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark">R</div>
+    <div class="brand-name">Services Hub<span>RLC Internal</span></div>
+  </div>
+
+  <div class="nav-label">Navigation</div>
+  <button class="nav-item" data-view="mywork" data-roles="itagent,depthead,sysadmin">My Work <span class="badge">7</span></button>
+  <button class="nav-item" data-view="portal" data-roles="employee,itagent,depthead,exec,sysadmin">Service Portal</button>
+  <button class="nav-item" data-view="workspace" data-roles="itagent,depthead,sysadmin">Department Workspace</button>
+  <button class="nav-item" data-view="approvals" data-roles="depthead,sysadmin">Approvals <span class="badge">2</span></button>
+  <button class="nav-item" data-view="exec" data-roles="exec,depthead,sysadmin">Insights</button>
+
+  <div class="nav-label" data-roles-label="sysadmin">Platform administration</div>
+  <button class="nav-item" data-view="users" data-roles="sysadmin">Users &amp; Directory</button>
+  <button class="nav-item" data-view="access" data-roles="sysadmin">Access Matrix</button>
+
+  <div class="sidebar-foot">
+    <div class="role-select-wrap">
+      <label>Simulate role (demo)</label>
+      <select class="role-select" id="roleSelect">
+        <option value="employee">Employee — Requester</option>
+        <option value="itagent">IT Agent</option>
+        <option value="depthead">Department Head — Approver</option>
+        <option value="exec">Executive</option>
+        <option value="sysadmin" selected>Platform Admin</option>
+      </select>
+    </div>
+    <div class="userline">
+      <div class="avatar">AD</div>
+      <div class="u"><b>Ady</b><span id="roleLabel">Platform Admin</span></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <h1 id="pageTitle">My Work</h1>
+      <div class="crumb" id="pageCrumb">Your personalized operational view</div>
+    </div>
+    <div class="viewing-as">Signed in via Entra ID · <b id="viewingAs">Platform Admin</b></div>
+    <button class="btn btn-primary">+ New request</button>
+  </div>
+
+  <div class="content">
+
+  <!-- ============ MY WORK (personalized) ============ -->
+  <div class="view" id="view-mywork">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Assigned to me</div><div class="num">7</div><div class="sub">2 due today</div></div>
+      <div class="card kpi"><div class="lbl">Close to SLA breach</div><div class="num" style="color:var(--red)">2</div><div class="sub">breach in under 2 hours</div></div>
+      <div class="card kpi"><div class="lbl">Escalated to me</div><div class="num" style="color:var(--amber)">1</div><div class="sub">from Logistics team</div></div>
+      <div class="card kpi"><div class="lbl">Awaiting my approval</div><div class="num">2</div><div class="sub">oldest waiting 19h</div></div>
+    </div>
+
+    <div class="section-h"><h3>Close to SLA breach</h3><span>act on these first</span></div>
+    <div class="card">
+      <div class="row">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--red)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="92" stroke-linecap="round"/></svg><div class="val" style="color:var(--red)">1.2h</div></div>
+        <div class="id">REQ-2493</div>
+        <div class="t"><b>Email service degraded — Finance floor</b><span>Incident · P1 · assigned to me · opened 2h 48m ago</span></div>
+        <span class="chip chip-red">P1 · Critical</span>
+      </div>
+      <div class="row">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--red)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="88" stroke-linecap="round"/></svg><div class="val" style="color:var(--red)">1.8h</div></div>
+        <div class="id">REQ-2490</div>
+        <div class="t"><b>VPN access — external auditor onboarding</b><span>Access · P2 · assigned to me · security review pending</span></div>
+        <span class="chip chip-amber">P2 · High</span>
+      </div>
+    </div>
+
+    <div class="section-h"><h3>Escalated cases</h3><span>raised beyond first line</span></div>
+    <div class="card">
+      <div class="row">
+        <div class="dept-rail rail-log"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--amber)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="64" stroke-linecap="round"/></svg><div class="val" style="color:#B57C17">5h</div></div>
+        <div class="id">REQ-2455</div>
+        <div class="t"><b>Vehicle lease renewal — fleet contract dispute</b><span>Escalated by F. Badr · SLA breached once · vendor unresponsive</span></div>
+        <span class="chip chip-amber">Escalated · L2</span>
+      </div>
+    </div>
+
+    <div class="section-h"><h3>Assigned to me</h3><span>7 open</span><span class="see">View all</span></div>
+    <div class="card">
+      <div class="row">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="26" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">1.5d</div></div>
+        <div class="id">REQ-2486</div>
+        <div class="t"><b>Software install — Power BI Pro (3 licenses)</b><span>License pool check in progress</span></div>
+        <span class="chip chip-it">In progress</span>
+      </div>
+      <div class="row">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="18" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">2.2d</div></div>
+        <div class="id">REQ-2482</div>
+        <div class="t"><b>Monitor upgrade — Compliance team (4 units)</b><span>Stock confirmed · delivery scheduling</span></div>
+        <span class="chip chip-it">In progress</span>
+      </div>
+      <div class="row">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="12" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">3d</div></div>
+        <div class="id">REQ-2476</div>
+        <div class="t"><b>Shared mailbox — procurement@rlc</b><span>Waiting on requester confirmation</span></div>
+        <span class="chip chip-neutral">Pending requester</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SERVICE PORTAL ============ -->
+  <div class="view" id="view-portal" style="display:none">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">My open requests</div><div class="num">3</div><div class="sub">1 pending approval</div></div>
+      <div class="card kpi"><div class="lbl">Avg. response time</div><div class="num">2.4h</div><div class="sub up">faster than target</div></div>
+      <div class="card kpi"><div class="lbl">Resolved this month</div><div class="num">9</div><div class="sub">across all departments</div></div>
+      <div class="card kpi"><div class="lbl">Catalog services</div><div class="num">27</div><div class="sub">IT · Administration · Logistics</div></div>
+    </div>
+
+    <div class="section-h"><h3>IT Services</h3><span>12 services · avg. resolution 1.4 days</span></div>
+    <div class="cat-grid">
+      <div class="card svc-card"><div class="dept-rail rail-it"></div><div class="svc-abbr" style="background:var(--it-soft);color:var(--it)">HW</div><div><b>Hardware request</b><p>Laptops, monitors, peripherals and accessories.</p><div class="sla-note">SLA · 3 business days</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-it"></div><div class="svc-abbr" style="background:var(--it-soft);color:var(--it)">AC</div><div><b>System access</b><p>New accounts, permission changes, VPN access.</p><div class="sla-note">SLA · 8 working hours</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-it"></div><div class="svc-abbr" style="background:var(--it-soft);color:var(--it)">IN</div><div><b>Report an incident</b><p>Something broken or not working as expected.</p><div class="sla-note">SLA · 4 working hours (P2)</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-it"></div><div class="svc-abbr" style="background:var(--it-soft);color:var(--it)">SW</div><div><b>Software install</b><p>Licensed applications and approved tools.</p><div class="sla-note">SLA · 2 business days</div></div></div>
+    </div>
+
+    <div class="section-h"><h3>Administration</h3><span>8 services</span></div>
+    <div class="cat-grid">
+      <div class="card svc-card"><div class="dept-rail rail-admin"></div><div class="svc-abbr" style="background:var(--admin-soft);color:var(--admin)">LT</div><div><b>Official letters</b><p>Salary certificates, employment letters, attestations.</p><div class="sla-note">SLA · 2 business days</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-admin"></div><div class="svc-abbr" style="background:var(--admin-soft);color:var(--admin)">FC</div><div><b>Facilities request</b><p>Meeting rooms, office moves, maintenance.</p><div class="sla-note">SLA · 1 business day</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-admin"></div><div class="svc-abbr" style="background:var(--admin-soft);color:var(--admin)">BD</div><div><b>Access cards &amp; badges</b><p>New, replacement, or visitor badges.</p><div class="sla-note">SLA · 1 business day</div></div></div>
+    </div>
+
+    <div class="section-h"><h3>Logistics</h3><span>7 services</span></div>
+    <div class="cat-grid">
+      <div class="card svc-card"><div class="dept-rail rail-log"></div><div class="svc-abbr" style="background:var(--log-soft);color:var(--log)">TR</div><div><b>Transport booking</b><p>Vehicles and drivers for business trips.</p><div class="sla-note">SLA · 4 working hours</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-log"></div><div class="svc-abbr" style="background:var(--log-soft);color:var(--log)">PR</div><div><b>Purchase request</b><p>Goods and services with DoA-routed approval.</p><div class="sla-note">SLA · varies by threshold</div></div></div>
+      <div class="card svc-card"><div class="dept-rail rail-log"></div><div class="svc-abbr" style="background:var(--log-soft);color:var(--log)">CR</div><div><b>Courier &amp; deliveries</b><p>Document dispatch and incoming shipments.</p><div class="sla-note">SLA · same day</div></div></div>
+    </div>
+
+    <div class="section-h"><h3>My requests</h3><span>3 open</span></div>
+    <div class="card">
+      <div class="row"><div class="dept-rail rail-it"></div><div class="id">REQ-2481</div><div class="t"><b>MacBook Pro 14" — replacement</b><span>Submitted 2 days ago · with IT Hardware team</span></div><span class="chip chip-amber">Pending approval</span></div>
+      <div class="row"><div class="dept-rail rail-admin"></div><div class="id">REQ-2467</div><div class="t"><b>Salary certificate — bank format</b><span>Submitted yesterday · with HR Admin</span></div><span class="chip chip-it">In progress</span></div>
+      <div class="row"><div class="dept-rail rail-log"></div><div class="id">REQ-2440</div><div class="t"><b>Airport transfer — Thursday 06:30</b><span>Resolved in 3h 12m · rate this service</span></div><span class="chip chip-green">Resolved</span></div>
+    </div>
+  </div>
+
+  <!-- ============ DEPARTMENT WORKSPACE ============ -->
+  <div class="view" id="view-workspace" style="display:none">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Department queue</div><div class="num">21</div><div class="sub" id="wsScopeNote">IT Services — your scope</div></div>
+      <div class="card kpi"><div class="lbl">SLA at risk</div><div class="num" style="color:var(--amber)">3</div><div class="sub">breach in under 2 hours</div></div>
+      <div class="card kpi"><div class="lbl">Unassigned</div><div class="num">4</div><div class="sub">oldest waiting 5h</div></div>
+      <div class="card kpi"><div class="lbl">Resolved this week</div><div class="num" style="color:var(--green)">52</div><div class="sub up">12% above last week</div></div>
+    </div>
+
+    <div class="note-banner" id="scopeBanner">Scoped view — as an IT Agent you see the IT Services queue only. Administration and Logistics queues are not accessible to this role.</div>
+
+    <div class="filters">
+      <button class="filter on">All in my scope</button>
+      <button class="filter">SLA at risk</button>
+      <button class="filter">Unassigned</button>
+      <button class="filter">Escalated</button>
+      <button class="filter">Pending approval</button>
+    </div>
+
+    <div class="card">
+      <div class="row" data-dept="it">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--red)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="92" stroke-linecap="round"/></svg><div class="val" style="color:var(--red)">1.2h</div></div>
+        <div class="id">REQ-2493</div>
+        <div class="t"><b>Email service degraded — Finance floor</b><span>Incident · P1 · opened 2h 48m ago</span></div>
+        <div class="who"><div class="avatar" style="background:#3E6DD8">MK</div><span>M. Khalid</span></div>
+        <span class="chip chip-red">P1 · Critical</span>
+      </div>
+      <div class="row" data-dept="log">
+        <div class="dept-rail rail-log"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--amber)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="64" stroke-linecap="round"/></svg><div class="val" style="color:#B57C17">6h</div></div>
+        <div class="id">REQ-2489</div>
+        <div class="t"><b>Purchase request — warehouse shelving (SAR 46,500)</b><span>Logistics · awaiting DoA step 2 of 3</span></div>
+        <div class="who"><div class="avatar" style="background:#2E9E6B">SA</div><span>S. Alharbi</span></div>
+        <span class="chip chip-amber">P3 · Normal</span>
+      </div>
+      <div class="row" data-dept="admin">
+        <div class="dept-rail rail-admin"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="30" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">1.8d</div></div>
+        <div class="id">REQ-2487</div>
+        <div class="t"><b>Office relocation — Compliance team (6 desks)</b><span>Facilities · scheduled for Sunday</span></div>
+        <div class="who"><div class="avatar" style="background:#8A5FC9">RN</div><span>R. Nasser</span></div>
+        <span class="chip chip-neutral">P4 · Low</span>
+      </div>
+      <div class="row" data-dept="it">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="22" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">2.5d</div></div>
+        <div class="id">REQ-2481</div>
+        <div class="t"><b>MacBook Pro 14" — replacement for Ady</b><span>Hardware · pending approval, then procurement</span></div>
+        <div class="who"><div class="avatar">—</div><span>Unassigned</span></div>
+        <span class="chip chip-amber">P3 · Normal</span>
+      </div>
+      <div class="row" data-dept="it">
+        <div class="dept-rail rail-it"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="16" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">2.8d</div></div>
+        <div class="id">REQ-2477</div>
+        <div class="t"><b>New joiner setup — 2 accounts, laptops, badges</b><span>Access · linked to Administration badge request</span></div>
+        <div class="who"><div class="avatar" style="background:#3E6DD8">MK</div><span>M. Khalid</span></div>
+        <span class="chip chip-it">In progress</span>
+      </div>
+      <div class="row" data-dept="log">
+        <div class="dept-rail rail-log"></div>
+        <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="14" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">3.1h</div></div>
+        <div class="id">REQ-2478</div>
+        <div class="t"><b>Courier — signed contracts to Riyadh HQ</b><span>Same-day dispatch · driver assigned</span></div>
+        <div class="who"><div class="avatar" style="background:#2E9E6B">FB</div><span>F. Badr</span></div>
+        <span class="chip chip-it">In progress</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ APPROVALS ============ -->
+  <div class="view" id="view-approvals" style="display:none">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Awaiting my approval</div><div class="num">2</div><div class="sub">oldest waiting 19h</div></div>
+      <div class="card kpi"><div class="lbl">Approved this month</div><div class="num">14</div><div class="sub">avg. decision time 6.2h</div></div>
+      <div class="card kpi"><div class="lbl">Total value pending</div><div class="num">56.3k</div><div class="sub">SAR · within your DoA band</div></div>
+      <div class="card kpi"><div class="lbl">Rejected / returned</div><div class="num">3</div><div class="sub">this month</div></div>
+    </div>
+    <div class="note-banner">Approvals are routed by the Delegation of Authority matrix — service type and value threshold decide the chain. You can also approve directly from the email notification.</div>
+    <div class="appr-grid">
+      <div class="card appr-card">
+        <div class="appr-head">
+          <div><div class="id">REQ-2489 · Logistics</div><b>Warehouse shelving — heavy duty racks</b></div>
+          <div class="appr-amount">SAR 46,500<span>Estimated value</span></div>
+        </div>
+        <div class="appr-meta">
+          <div class="m"><span>Requester</span><b>S. Alharbi · Logistics</b></div>
+          <div class="m"><span>Cost center</span><b>LOG-OPS-114</b></div>
+          <div class="m"><span>DoA band</span><b>Tier 2 · 25k–100k</b></div>
+          <div class="m"><span>Waiting since</span><b>Yesterday, 14:20</b></div>
+        </div>
+        <div class="doa-chain">
+          <div class="doa-step"><div class="doa-dot doa-done">1</div>Line manager</div>
+          <div class="doa-line done"></div>
+          <div class="doa-step"><div class="doa-dot doa-now">2</div><b style="color:var(--text)">You · Dept. head</b></div>
+          <div class="doa-line"></div>
+          <div class="doa-step"><div class="doa-dot doa-wait">3</div>Finance controller</div>
+        </div>
+        <div class="appr-actions">
+          <button class="btn btn-green">Approve</button>
+          <button class="btn btn-red">Reject</button>
+          <button class="btn btn-ghost">Request info</button>
+        </div>
+      </div>
+      <div class="card appr-card">
+        <div class="appr-head">
+          <div><div class="id">REQ-2481 · IT Services</div><b>MacBook Pro 14" — replacement device</b></div>
+          <div class="appr-amount">SAR 9,800<span>Catalog price</span></div>
+        </div>
+        <div class="appr-meta">
+          <div class="m"><span>Requester</span><b>Ady · Compliance</b></div>
+          <div class="m"><span>Cost center</span><b>GOV-CMP-021</b></div>
+          <div class="m"><span>DoA band</span><b>Tier 1 · under 25k</b></div>
+          <div class="m"><span>Waiting since</span><b>Today, 09:05</b></div>
+        </div>
+        <div class="doa-chain">
+          <div class="doa-step"><div class="doa-dot doa-now">1</div><b style="color:var(--text)">You · Line manager</b></div>
+          <div class="doa-line"></div>
+          <div class="doa-step"><div class="doa-dot doa-wait">2</div>IT asset manager</div>
+        </div>
+        <div class="appr-actions">
+          <button class="btn btn-green">Approve</button>
+          <button class="btn btn-red">Reject</button>
+          <button class="btn btn-ghost">Request info</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EXEC INSIGHTS ============ -->
+  <div class="view" id="view-exec" style="display:none">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Open requests</div><div class="num">128</div><div class="sub">across 3 departments</div></div>
+      <div class="card kpi"><div class="lbl">SLA compliance</div><div class="num" style="color:var(--green)">94.2%</div><div class="sub up">1.8 pts above last month</div></div>
+      <div class="card kpi"><div class="lbl">Avg. resolution</div><div class="num">1.6d</div><div class="sub up">0.3d faster than May</div></div>
+      <div class="card kpi"><div class="lbl">Pending approvals</div><div class="num" style="color:var(--amber)">11</div><div class="sub">2 aging over 48h</div></div>
+    </div>
+    <div class="exec-grid">
+      <div class="card panel">
+        <h4>Request volume — last 6 weeks <span>by department</span></h4>
+        <div class="vol-chart">
+          <div class="vol-col"><div class="vol-seg" style="background:var(--log);height:14%"></div><div class="vol-seg" style="background:var(--admin);height:18%"></div><div class="vol-seg" style="background:var(--it);height:38%"></div></div>
+          <div class="vol-col"><div class="vol-seg" style="background:var(--log);height:16%"></div><div class="vol-seg" style="background:var(--admin);height:15%"></div><div class="vol-seg" style="background:var(--it);height:44%"></div></div>
+          <div class="vol-col"><div class="vol-seg" style="background:var(--log);height:12%"></div><div class="vol-seg" style="background:var(--admin);height:20%"></div><div class="vol-seg" style="background:var(--it);height:35%"></div></div>
+          <div class="vol-col"><div class="vol-seg" style="background:var(--log);height:19%"></div><div class="vol-seg" style="background:var(--admin);height:17%"></div><div class="vol-seg" style="background:var(--it);height:48%"></div></div>
+          <div class="vol-col"><div class="vol-seg" style="background:var(--log);height:15%"></div><div class="vol-seg" style="background:var(--admin);height:21%"></div><div class="vol-seg" style="background:var(--it);height:41%"></div></div>
+          <div class="vol-col"><div class="vol-seg" style="background:var(--log);height:17%"></div><div class="vol-seg" style="background:var(--admin);height:16%"></div><div class="vol-seg" style="background:var(--it);height:52%"></div></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:7px">
+          <div style="flex:1;text-align:center" class="mono" >W22</div><div style="flex:1;text-align:center" class="mono">W23</div><div style="flex:1;text-align:center" class="mono">W24</div><div style="flex:1;text-align:center" class="mono">W25</div><div style="flex:1;text-align:center" class="mono">W26</div><div style="flex:1;text-align:center" class="mono">W27</div>
+        </div>
+        <div class="legend"><span><i style="background:var(--it)"></i>IT</span><span><i style="background:var(--admin)"></i>Administration</span><span><i style="background:var(--log)"></i>Logistics</span></div>
+      </div>
+      <div class="card panel">
+        <h4>SLA compliance by department <span>this month</span></h4>
+        <div class="bar-row"><div class="lbl">IT Services</div><div class="bar-track"><div class="bar-fill" style="width:96%;background:var(--green)"></div></div><div class="val" style="color:var(--green)">96%</div></div>
+        <div class="bar-row"><div class="lbl">Administration</div><div class="bar-track"><div class="bar-fill" style="width:93%;background:var(--green)"></div></div><div class="val" style="color:var(--green)">93%</div></div>
+        <div class="bar-row"><div class="lbl">Logistics</div><div class="bar-track"><div class="bar-fill" style="width:88%;background:var(--amber)"></div></div><div class="val" style="color:#B57C17">88%</div></div>
+        <h4 style="margin-top:22px">Needs attention</h4>
+        <div class="alert-row"><div class="alert-dot" style="background:var(--red)"></div><div><b>P1 incident open 2h 48m</b><span>Email service — Finance floor</span></div><div class="mono">REQ-2493</div></div>
+        <div class="alert-row"><div class="alert-dot" style="background:var(--amber)"></div><div><b>Approval aging 52h</b><span>Vehicle lease renewal — Tier 3 DoA</span></div><div class="mono">REQ-2412</div></div>
+        <div class="alert-row"><div class="alert-dot" style="background:var(--amber)"></div><div><b>Logistics SLA trending down</b><span>3 transport requests breached this week</span></div><div class="mono">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ USERS & DIRECTORY (Entra ID) ============ -->
+  <div class="view" id="view-users" style="display:none">
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Directory users</div><div class="num">412</div><div class="sub">synced from Entra ID</div></div>
+      <div class="card kpi"><div class="lbl">Active this week</div><div class="num">287</div><div class="sub">70% adoption</div></div>
+      <div class="card kpi"><div class="lbl">Agents &amp; approvers</div><div class="num">38</div><div class="sub">across 3 departments</div></div>
+      <div class="card kpi"><div class="lbl">Sync health</div><div class="num" style="color:var(--green)">OK</div><div class="sub">0 conflicts · 0 orphans</div></div>
+    </div>
+
+    <div class="sync-banner">
+      <div class="sync-pulse"></div>
+      <div><b>Microsoft Entra ID — directory sync active</b><span>SCIM provisioning · users, departments and groups are mastered in AD. No local user creation.</span></div>
+      <div class="mono">Last sync 12 min ago · every 40 min</div>
+    </div>
+
+    <div class="section-h"><h3>Group-to-role mapping</h3><span>AD security groups drive platform roles automatically</span></div>
+    <div class="card" style="padding:14px 22px;margin-bottom:20px">
+      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-ServiceDesk-IT</span>IT Service Desk group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--it);background:var(--it-soft)">Agent · IT Services scope</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-Admin-Services</span>Administration services group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--admin);background:var(--admin-soft)">Agent · Administration scope</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-Logistics-Ops</span>Logistics operations group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--log);background:var(--log-soft)">Agent · Logistics scope</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-DoA-Approvers</span>DoA approvers group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--accent);background:var(--accent-soft)">Approver · per DoA matrix band</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-Executives</span>Executive leadership group</div><div class="map-arrow">→</div><div class="map-box">Executive · read-only insights</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">All licensed users</span>Default — every employee</div><div class="map-arrow">→</div><div class="map-box">Requester · service portal</div></div>
+    </div>
+
+    <div class="section-h"><h3>Directory users</h3><span>read-only — managed in Entra ID</span></div>
+    <div class="card">
+      <table>
+        <thead><tr><th>User</th><th>Department (AD)</th><th>AD groups</th><th>Platform role</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><span class="avatar">AD</span><b>Ady</b><span class="sub" style="display:inline;margin-left:8px">ady@rlc.sa</span></td><td>Governance &amp; Compliance</td><td class="mono" style="font-size:11px">SG-DoA-Approvers, SG-Executives</td><td><span class="chip chip-amber">Approver</span> <span class="chip chip-neutral">Executive</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#3E6DD8">MK</span><b>M. Khalid</b><span class="sub" style="display:inline;margin-left:8px">m.khalid@rlc.sa</span></td><td>Information Technology</td><td class="mono" style="font-size:11px">SG-ServiceDesk-IT</td><td><span class="chip chip-it">Agent · IT</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#8A5FC9">RN</span><b>R. Nasser</b><span class="sub" style="display:inline;margin-left:8px">r.nasser@rlc.sa</span></td><td>Administration</td><td class="mono" style="font-size:11px">SG-Admin-Services</td><td><span class="chip chip-admin">Agent · Administration</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#2E9E6B">FB</span><b>F. Badr</b><span class="sub" style="display:inline;margin-left:8px">f.badr@rlc.sa</span></td><td>Logistics</td><td class="mono" style="font-size:11px">SG-Logistics-Ops</td><td><span class="chip chip-log">Agent · Logistics</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#6B7280">SA</span><b>S. Alharbi</b><span class="sub" style="display:inline;margin-left:8px">s.alharbi@rlc.sa</span></td><td>Logistics</td><td class="mono" style="font-size:11px">—</td><td><span class="chip chip-neutral">Requester</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#9AA1AF">TQ</span><b>T. Qassim</b><span class="sub" style="display:inline;margin-left:8px">t.qassim@rlc.sa</span></td><td>Finance</td><td class="mono" style="font-size:11px">SG-DoA-Approvers</td><td><span class="chip chip-amber">Approver</span></td><td><span class="chip chip-neutral">Disabled in AD</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ ACCESS MATRIX ============ -->
+  <div class="view" id="view-access" style="display:none">
+    <div class="note-banner">Access is enforced in two layers — role permissions (below) and department scope (agents only see their own department's queue). Both derive from Entra ID group membership and are enforced at the database level with row-level security.</div>
+    <div class="card matrix-wrap" style="padding:6px 0">
+      <table class="matrix">
+        <thead><tr>
+          <th>Module</th><th>Requester<br>(all staff)</th><th>Agent<br>(per dept.)</th><th>Team Lead<br>(per dept.)</th><th>Approver<br>(DoA)</th><th>Dept. Admin</th><th>Executive</th><th>Platform Admin</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><b>Service portal</b> — browse &amp; submit</td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>My requests</b> — own only</td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>My Work</b> — personalized queue</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Department workspace</b> — queues</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-read">R</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-read">R</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Assign / reassign</b> tickets</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Escalations</b> — receive &amp; resolve</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-read">R</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Approvals</b> — decide per DoA band</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-read">R</span></td></tr>
+          <tr><td><b>Catalog builder</b> — services &amp; SLAs</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>DoA matrix editor</b></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Insights</b> — cross-department</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-scope">S</span></td><td><span class="acc acc-full">F</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Users &amp; directory</b> — Entra ID</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-full">F</span></td></tr>
+          <tr><td><b>Audit log</b> — immutable events</td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-none">–</span></td><td><span class="acc acc-read">R</span></td><td><span class="acc acc-read">R</span></td><td><span class="acc acc-full">F</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="matrix-legend">
+      <span><span class="acc acc-full">F</span> Full access</span>
+      <span><span class="acc acc-scope">S</span> Scoped — own department / own DoA band only</span>
+      <span><span class="acc acc-read">R</span> Read-only</span>
+      <span><span class="acc acc-none">–</span> No access</span>
+    </div>
+  </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+const titles={
+  mywork:["My Work","Your personalized operational view"],
+  portal:["Service Portal","Request any service across IT, Administration & Logistics"],
+  workspace:["Department Workspace","Scoped queue with live SLA countdowns"],
+  approvals:["My Approvals","Routed by the Delegation of Authority matrix"],
+  exec:["Executive Insights","Cross-department service performance"],
+  users:["Users & Directory","Centrally managed in Microsoft Entra ID"],
+  access:["Access Matrix","Role permissions and department scoping"]
+};
+const roleNames={employee:"Employee — Requester",itagent:"IT Agent",depthead:"Department Head — Approver",exec:"Executive",sysadmin:"Platform Admin"};
+const roleHome={employee:"portal",itagent:"mywork",depthead:"approvals",exec:"exec",sysadmin:"mywork"};
+
+const navItems=[...document.querySelectorAll('.nav-item[data-view]')];
+const adminLabel=document.querySelector('[data-roles-label]');
+
+function show(view){
+  navItems.forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  document.querySelectorAll('.view').forEach(el=>el.style.display='none');
+  const el=document.getElementById('view-'+view);
+  if(el) el.style.display='block';
+  document.getElementById('pageTitle').textContent=titles[view][0];
+  document.getElementById('pageCrumb').textContent=titles[view][1];
+  window.scrollTo({top:0});
+}
+
+function applyRole(role){
+  document.getElementById('roleLabel').textContent=roleNames[role];
+  document.getElementById('viewingAs').textContent=roleNames[role];
+  navItems.forEach(b=>{
+    const allowed=b.dataset.roles.split(',').includes(role);
+    b.style.display=allowed?'flex':'none';
+  });
+  if(adminLabel) adminLabel.style.display=(role==='sysadmin')?'block':'none';
+
+  // Department scoping demo: IT agent sees only IT rows in workspace
+  const rows=document.querySelectorAll('#view-workspace .row[data-dept]');
+  const banner=document.getElementById('scopeBanner');
+  const scopeNote=document.getElementById('wsScopeNote');
+  if(role==='itagent'){
+    rows.forEach(r=>r.style.display=(r.dataset.dept==='it')?'flex':'none');
+    banner.style.display='block';
+    banner.textContent='Scoped view — as an IT Agent you see the IT Services queue only. Administration and Logistics queues are not accessible to this role.';
+    scopeNote.textContent='IT Services — your scope';
+  } else {
+    rows.forEach(r=>r.style.display='flex');
+    banner.style.display=(role==='sysadmin'||role==='depthead')?'block':'none';
+    banner.textContent='Unscoped view — this role can see queues across all departments.';
+    scopeNote.textContent='All departments';
+  }
+  show(roleHome[role]);
+}
+
+navItems.forEach(btn=>btn.addEventListener('click',()=>show(btn.dataset.view)));
+document.getElementById('roleSelect').addEventListener('change',e=>applyRole(e.target.value));
+applyRole('sysadmin');
+</script>
+</body>
+</html>
