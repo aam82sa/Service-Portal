@@ -27,7 +27,7 @@ const NEXT_ACTIONS: Record<string, { label: string; to: string; primary?: boolea
   resolved: [{ label: 'Close', to: 'closed', primary: true }],
 }
 
-function SlaRing({ createdAt, due }: { createdAt: string; due: string | null }) {
+export function SlaRing({ createdAt, due }: { createdAt: string; due: string | null }) {
   if (!due) return null
   const total = new Date(due).getTime() - new Date(createdAt).getTime()
   const left = new Date(due).getTime() - Date.now()
@@ -54,7 +54,7 @@ function SlaRing({ createdAt, due }: { createdAt: string; due: string | null }) 
   )
 }
 
-export function Queue() {
+export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
   const { session } = useAuth()
   const [rows, setRows] = useState<QueueRow[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -104,7 +104,7 @@ export function Queue() {
               <span className="mono" style={{ fontSize: 12, color: 'var(--ink)', width: 84 }}>
                 {r.ref}
               </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => onOpen(r.id)}>
                 <div className="row-title">{r.title}</div>
                 <div className="row-desc">
                   {r.requester?.display_name ?? 'Unknown'} ·{' '}

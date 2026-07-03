@@ -25,7 +25,7 @@ const STATUS_CHIP: Record<string, { bg: string; fg: string }> = {
   cancelled: { bg: 'var(--surface)', fg: 'var(--muted)' },
 }
 
-export function MyRequests() {
+export function MyRequests({ onOpen }: { onOpen: (id: string) => void }) {
   const { session } = useAuth()
   const [rows, setRows] = useState<RequestRow[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -53,7 +53,12 @@ export function MyRequests() {
           const chip = STATUS_CHIP[r.status] ?? STATUS_CHIP.closed
           const c = DEPT_COLOR[r.dept]
           return (
-            <div className="row" key={r.id}>
+            <div
+              className="row"
+              key={r.id}
+              style={{ cursor: 'pointer' }}
+              onClick={() => onOpen(r.id)}
+            >
               <span
                 style={{ width: 4, alignSelf: 'stretch', background: c.rail, borderRadius: 2 }}
               />

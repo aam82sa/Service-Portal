@@ -5,16 +5,25 @@ import { Portal } from './pages/Portal'
 import { MyRequests } from './pages/MyRequests'
 import { Queue } from './pages/Queue'
 import { Approvals } from './pages/Approvals'
+import { MyWork } from './pages/MyWork'
+import { Insights } from './pages/Insights'
+import { RequestDetail } from './pages/RequestDetail'
 import { AdminPage } from './admin/AdminPage'
 
-type Page = 'portal' | 'requests' | 'queue' | 'approvals' | 'admin'
+type Page = 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'admin'
 
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, signOut } = useAuth()
   const [page, setPage] = useState<Page>('portal')
+  const [detailId, setDetailId] = useState<string | null>(null)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
+  const canInsights = hasRole('team_lead') || hasRole('executive') || hasRole('system_admin')
+  const go = (p: Page) => {
+    setDetailId(null)
+    setPage(p)
+  }
 
   if (loading) {
     return (
@@ -36,21 +45,29 @@ export default function App() {
         </div>
         <button
           className={`nav-item${activePage === 'portal' ? ' active' : ''}`}
-          onClick={() => setPage('portal')}
+          onClick={() => go('portal')}
         >
           Portal
         </button>
         <button
           className={`nav-item${activePage === 'requests' ? ' active' : ''}`}
-          onClick={() => setPage('requests')}
+          onClick={() => go('requests')}
         >
           My requests
         </button>
         {(isStaff || isApprover) && <div className="nav-group">Workspace</div>}
+        {(isStaff || isApprover) && (
+          <button
+            className={`nav-item${activePage === 'mywork' ? ' active' : ''}`}
+            onClick={() => go('mywork')}
+          >
+            My work
+          </button>
+        )}
         {isStaff && (
           <button
             className={`nav-item${activePage === 'queue' ? ' active' : ''}`}
-            onClick={() => setPage('queue')}
+            onClick={() => go('queue')}
           >
             Department queue
           </button>
@@ -58,9 +75,17 @@ export default function App() {
         {isApprover && (
           <button
             className={`nav-item${activePage === 'approvals' ? ' active' : ''}`}
-            onClick={() => setPage('approvals')}
+            onClick={() => go('approvals')}
           >
             Approvals
+          </button>
+        )}
+        {canInsights && (
+          <button
+            className={`nav-item${activePage === 'insights' ? ' active' : ''}`}
+            onClick={() => go('insights')}
+          >
+            Insights
           </button>
         )}
         {canAdmin && (
@@ -85,11 +110,19 @@ export default function App() {
         </div>
       </aside>
       <main className="main">
-        {activePage === 'portal' && <Portal />}
-        {activePage === 'requests' && <MyRequests />}
-        {activePage === 'queue' && isStaff && <Queue />}
-        {activePage === 'approvals' && isApprover && <Approvals />}
-        {activePage === 'admin' && canAdmin && <AdminPage />}
+        {detailId ? (
+          <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
+        ) : (
+          <>
+            {activePage === 'portal' && <Portal />}
+            {activePage === 'requests' && <MyRequests onOpen={setDetailId} />}
+            {activePage === 'mywork' && (isStaff || isApprover) && <MyWork onOpen={setDetailId} />}
+            {activePage === 'queue' && isStaff && <Queue onOpen={setDetailId} />}
+            {activePage === 'approvals' && isApprover && <Approvals />}
+            {activePage === 'insights' && canInsights && <Insights />}
+            {activePage === 'admin' && canAdmin && <AdminPage />}
+          </>
+        )}
       </main>
     </div>
   )
