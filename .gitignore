@@ -4,4 +4,5 @@ dist/
 .env.*
 !.env.example
 supabase/.temp/
+.claude/launch.json
 .DS_Store
