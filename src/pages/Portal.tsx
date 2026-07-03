@@ -2,16 +2,42 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEPT_COLOR, type Service } from '../lib/types'
 import { RequestForm, type FormField } from './RequestForm'
+import { SEVERITY_STYLE } from '../admin/Announcements'
 
 interface ServiceWithForm extends Service {
   form_schema: FormField[]
 }
 
+interface Banner {
+  id: string
+  title: string
+  body: string | null
+  severity: keyof typeof SEVERITY_STYLE
+}
+
 export function Portal() {
   const [services, setServices] = useState<ServiceWithForm[]>([])
   const [selected, setSelected] = useState<ServiceWithForm | null>(null)
+  const [banners, setBanners] = useState<Banner[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('feature_flags')
+      .select('is_enabled')
+      .eq('key', 'announcements')
+      .single()
+      .then(({ data }) => {
+        if (!data?.is_enabled) return
+        supabase
+          .from('announcements')
+          .select('id, title, body, severity, starts_at, ends_at')
+          .lte('starts_at', new Date().toISOString())
+          .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
+          .then(({ data: anns }) => setBanners((anns as Banner[]) ?? []))
+      })
+  }, [])
 
   useEffect(() => {
     supabase
@@ -33,6 +59,21 @@ export function Portal() {
 
   return (
     <>
+      {banners.map((b) => {
+        const s = SEVERITY_STYLE[b.severity] ?? SEVERITY_STYLE.info
+        return (
+          <div
+            key={b.id}
+            style={{
+              background: s.bg, color: s.fg, borderRadius: 10,
+              padding: '10px 16px', marginBottom: 12, fontSize: 13,
+            }}
+          >
+            <span style={{ fontWeight: 500 }}>{b.title}</span>
+            {b.body && <span> — {b.body}</span>}
+          </div>
+        )
+      })}
       <h2 className="page-head">Service portal</h2>
       <p className="page-sub">Browse the catalog and submit a request.</p>
       <div className="svc-grid">

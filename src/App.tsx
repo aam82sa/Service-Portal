@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { SignIn } from './auth/SignIn'
 import { Portal } from './pages/Portal'
@@ -24,6 +24,13 @@ export default function App() {
     setDetailId(null)
     setPage(p)
   }
+
+  useEffect(() => {
+    if (!session) {
+      setPage('portal')
+      setDetailId(null)
+    }
+  }, [session])
 
   if (loading) {
     return (

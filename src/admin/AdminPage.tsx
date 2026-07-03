@@ -4,8 +4,14 @@ import { FeatureToggles } from './FeatureToggles'
 import { UsersRoles } from './UsersRoles'
 import { FormBuilder } from './FormBuilder'
 import { WorkflowDesigner } from './WorkflowDesigner'
+import { EmailStudio } from './EmailStudio'
+import { SlaCalendar } from './SlaCalendar'
+import { Delegations } from './Delegations'
+import { Announcements } from './Announcements'
 
-type Section = 'functions' | 'forms' | 'workflows' | 'users'
+type Section =
+  | 'functions' | 'email' | 'sla' | 'announcements'
+  | 'forms' | 'workflows' | 'users' | 'delegation'
 
 /**
  * Admin console. Sections render per role:
@@ -20,13 +26,21 @@ export function AdminPage() {
   const isUsr = hasRole('user_admin')
 
   const sections: { id: Section; label: string; group: string }[] = []
-  if (isSys) sections.push({ id: 'functions', label: 'Functions', group: 'System admin' })
+  if (isSys) {
+    sections.push({ id: 'functions', label: 'Functions', group: 'System admin' })
+    sections.push({ id: 'email', label: 'Email studio', group: 'System admin' })
+    sections.push({ id: 'sla', label: 'SLA calendar', group: 'System admin' })
+    sections.push({ id: 'announcements', label: 'Announcements', group: 'System admin' })
+  }
   if (isSys || isDept) {
     const group = isSys ? 'System admin' : 'Department admin'
     sections.push({ id: 'forms', label: 'Form builder', group })
     sections.push({ id: 'workflows', label: 'Workflow designer', group })
   }
-  if (isUsr) sections.push({ id: 'users', label: 'Users and roles', group: 'User admin' })
+  if (isUsr) {
+    sections.push({ id: 'users', label: 'Users and roles', group: 'User admin' })
+    sections.push({ id: 'delegation', label: 'Delegation', group: 'User admin' })
+  }
 
   const [section, setSection] = useState<Section>(sections[0]?.id ?? 'functions')
 
@@ -64,9 +78,13 @@ export function AdminPage() {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {section === 'functions' && isSys && <FeatureToggles />}
+        {section === 'email' && isSys && <EmailStudio />}
+        {section === 'sla' && isSys && <SlaCalendar />}
+        {section === 'announcements' && isSys && <Announcements />}
         {section === 'forms' && (isSys || isDept) && <FormBuilder />}
         {section === 'workflows' && (isSys || isDept) && <WorkflowDesigner />}
         {section === 'users' && isUsr && <UsersRoles />}
+        {section === 'delegation' && isUsr && <Delegations />}
       </div>
     </div>
   )
