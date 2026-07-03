@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { SignIn } from './auth/SignIn'
 import { Portal } from './pages/Portal'
+import { MyRequests } from './pages/MyRequests'
 import { AdminPage } from './admin/AdminPage'
 
-type Page = 'portal' | 'admin'
+type Page = 'portal' | 'requests' | 'admin'
 
 export default function App() {
   const { session, profile, loading, isAdmin, signOut } = useAuth()
@@ -34,6 +35,12 @@ export default function App() {
         >
           Portal
         </button>
+        <button
+          className={`nav-item${activePage === 'requests' ? ' active' : ''}`}
+          onClick={() => setPage('requests')}
+        >
+          My requests
+        </button>
         {isAdmin && (
           <>
             <div className="nav-group">Administration</div>
@@ -57,6 +64,7 @@ export default function App() {
       </aside>
       <main className="main">
         {activePage === 'portal' && <Portal />}
+        {activePage === 'requests' && <MyRequests />}
         {activePage === 'admin' && isAdmin && <AdminPage />}
       </main>
     </div>
