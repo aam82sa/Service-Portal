@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { SignIn } from './auth/SignIn'
+import { Home } from './pages/Home'
 import { Portal } from './pages/Portal'
 import { MyRequests } from './pages/MyRequests'
 import { Queue } from './pages/Queue'
@@ -11,7 +12,7 @@ import { RequestDetail } from './pages/RequestDetail'
 import { Assets } from './pages/Assets'
 import { AdminPage } from './admin/AdminPage'
 
-type Page = 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
+type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
 
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, signOut } = useAuth()
@@ -23,6 +24,8 @@ export default function App() {
   const canInsights = true
   const canAssets =
     hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || hasRole('system_admin')
+  const isRequesterOnly =
+    !isStaff && !isApprover && !canAdmin && !hasRole('executive')
   const go = (p: Page) => {
     setDetailId(null)
     setPage(p)
@@ -34,6 +37,11 @@ export default function App() {
       setDetailId(null)
     }
   }, [session])
+
+  useEffect(() => {
+    if (!loading && session && isRequesterOnly) setPage('home')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, session])
 
   if (loading) {
     return (
@@ -53,6 +61,14 @@ export default function App() {
           <span className="brand-badge">RLC</span>
           Services Hub
         </div>
+        {isRequesterOnly && (
+          <button
+            className={`nav-item${activePage === 'home' ? ' active' : ''}`}
+            onClick={() => go('home')}
+          >
+            Home
+          </button>
+        )}
         <button
           className={`nav-item${activePage === 'portal' ? ' active' : ''}`}
           onClick={() => go('portal')}
@@ -132,12 +148,13 @@ export default function App() {
           <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
         ) : (
           <>
+            {activePage === 'home' && <Home onNavigate={(p) => go(p)} />}
             {activePage === 'portal' && <Portal />}
             {activePage === 'requests' && <MyRequests onOpen={setDetailId} />}
             {activePage === 'mywork' && (isStaff || isApprover) && <MyWork onOpen={setDetailId} />}
             {activePage === 'queue' && isStaff && <Queue onOpen={setDetailId} />}
             {activePage === 'approvals' && isApprover && <Approvals />}
-            {activePage === 'insights' && canInsights && <Insights />}
+            {activePage === 'insights' && canInsights && <Insights onOpen={setDetailId} />}
             {activePage === 'assets' && canAssets && <Assets onOpenRequest={setDetailId} />}
             {activePage === 'admin' && canAdmin && <AdminPage />}
           </>
