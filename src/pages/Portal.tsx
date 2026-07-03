@@ -4,6 +4,7 @@ import { DEPT_COLOR, type Service } from '../lib/types'
 
 export function Portal() {
   const [services, setServices] = useState<Service[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -16,6 +17,7 @@ export function Portal() {
       .then(({ data, error: e }) => {
         if (e) setError(e.message)
         else setServices((data as Service[]) ?? [])
+        setLoaded(true)
       })
   }, [])
 
@@ -42,7 +44,10 @@ export function Portal() {
           )
         })}
       </div>
-      {services.length === 0 && !error && <p className="page-sub">Loading catalog…</p>}
+      {!loaded && !error && <p className="page-sub">Loading catalog…</p>}
+      {loaded && services.length === 0 && !error && (
+        <p className="page-sub">No services in the catalog yet.</p>
+      )}
       {error && <p className="error-note">{error}</p>}
     </>
   )
