@@ -3,13 +3,15 @@ import { useAuth } from './auth/AuthProvider'
 import { SignIn } from './auth/SignIn'
 import { Portal } from './pages/Portal'
 import { MyRequests } from './pages/MyRequests'
+import { Queue } from './pages/Queue'
 import { AdminPage } from './admin/AdminPage'
 
-type Page = 'portal' | 'requests' | 'admin'
+type Page = 'portal' | 'requests' | 'queue' | 'admin'
 
 export default function App() {
-  const { session, profile, loading, isAdmin, signOut } = useAuth()
+  const { session, profile, loading, isAdmin, hasRole, signOut } = useAuth()
   const [page, setPage] = useState<Page>('portal')
+  const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
 
   if (loading) {
     return (
@@ -41,6 +43,17 @@ export default function App() {
         >
           My requests
         </button>
+        {isStaff && (
+          <>
+            <div className="nav-group">Workspace</div>
+            <button
+              className={`nav-item${activePage === 'queue' ? ' active' : ''}`}
+              onClick={() => setPage('queue')}
+            >
+              Department queue
+            </button>
+          </>
+        )}
         {isAdmin && (
           <>
             <div className="nav-group">Administration</div>
@@ -65,6 +78,7 @@ export default function App() {
       <main className="main">
         {activePage === 'portal' && <Portal />}
         {activePage === 'requests' && <MyRequests />}
+        {activePage === 'queue' && isStaff && <Queue />}
         {activePage === 'admin' && isAdmin && <AdminPage />}
       </main>
     </div>
