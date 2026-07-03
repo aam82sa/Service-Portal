@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEPT_COLOR, type DeptCode } from '../lib/types'
 
-interface ApprovalStep {
+export interface ApprovalStep {
   id: string
   request_id: string
   step_order: number
@@ -21,7 +21,7 @@ interface PendingRequest {
   steps: ApprovalStep[]
 }
 
-function Chain({ steps }: { steps: ApprovalStep[] }) {
+export function Chain({ steps }: { steps: ApprovalStep[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
       {steps.map((s, i) => {
