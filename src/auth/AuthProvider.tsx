@@ -78,7 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = useCallback(
     (role: Role, dept?: DeptCode) =>
-      roles.some((r) => r.role === role && (!dept || !r.dept || r.dept === dept)),
+      roles.some(
+        (r) =>
+          (r.role === role ||
+            (r.role === 'dept_head' && (role === 'approver' || role === 'dept_admin'))) &&
+          (!dept || !r.dept || r.dept === dept)
+      ),
     [roles]
   )
 

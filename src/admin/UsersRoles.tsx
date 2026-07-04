@@ -10,6 +10,7 @@ interface ProfileWithRoles extends Profile {
 const ROLE_CHIP: Record<string, { bg: string; fg: string }> = {
   agent: { bg: 'var(--it-soft)', fg: 'var(--it)' },
   team_lead: { bg: 'var(--admin-soft)', fg: 'var(--admin)' },
+  dept_head: { bg: 'var(--accent-soft)', fg: 'var(--accent)' },
   approver: { bg: 'var(--accent-soft)', fg: 'var(--accent)' },
   dept_admin: { bg: 'var(--amber-soft)', fg: 'var(--amber)' },
   executive: { bg: 'var(--surface)', fg: 'var(--muted)' },
@@ -17,8 +18,8 @@ const ROLE_CHIP: Record<string, { bg: string; fg: string }> = {
   system_admin: { bg: 'var(--red-soft)', fg: 'var(--red)' },
 }
 
-const GRANTABLE: Role[] = ['agent', 'team_lead', 'approver', 'dept_admin', 'executive', 'user_admin', 'system_admin']
-const DEPT_SCOPED: Role[] = ['agent', 'team_lead', 'dept_admin']
+const GRANTABLE: Role[] = ['agent', 'team_lead', 'dept_head', 'user_admin', 'system_admin']
+const DEPT_SCOPED: Role[] = ['agent', 'team_lead', 'dept_head']
 
 export function UsersRoles() {
   const { hasRole, session } = useAuth()
@@ -68,11 +69,25 @@ export function UsersRoles() {
 
   return (
     <>
-      <h2 className="page-head">Users and roles</h2>
+      <h2 className="page-head">User management</h2>
       <p className="page-sub">
-        Directory mastered in Entra ID; roles normally follow AD security groups. Manual
-        grants and revocations here are audit-logged. Everyone is implicitly a requester.
+        Add users to role groups — page access is granted to roles, never to individuals.
+        Everyone is implicitly a requester; manual changes are audit-logged.
       </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {(['requester', 'agent', 'team_lead', 'dept_head', 'user_admin', 'system_admin'] as Role[]).map((r) => {
+          const n = r === 'requester'
+            ? users.length
+            : users.filter((u) => u.role_assignments.some((ra) => ra.role === r)).length
+          const chip = ROLE_CHIP[r] ?? { bg: 'var(--surface)', fg: 'var(--muted)' }
+          return (
+            <div key={r} className="card" style={{ padding: '10px 16px', minWidth: 108 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-head)', color: chip.fg }}>{n}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{r.replace('_', ' ')}{r === 'requester' ? ' (all)' : ''}</div>
+            </div>
+          )
+        })}
+      </div>
       <div className="card">
         {users.map((u) => (
           <div className="row" key={u.id} style={{ flexWrap: 'wrap' }}>

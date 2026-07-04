@@ -12,9 +12,7 @@ const ROLES: { id: Role; label: string }[] = [
   { id: 'requester', label: 'Requester' },
   { id: 'agent', label: 'Agent' },
   { id: 'team_lead', label: 'Team lead' },
-  { id: 'approver', label: 'Approver' },
-  { id: 'dept_admin', label: 'Dept admin' },
-  { id: 'executive', label: 'Executive' },
+  { id: 'dept_head', label: 'Dept head' },
   { id: 'user_admin', label: 'User admin' },
   { id: 'system_admin', label: 'Sys admin' },
 ]
@@ -62,9 +60,10 @@ export function PageAccess() {
     <>
       <h2 className="page-head">Page access</h2>
       <p className="page-sub">
-        Which roles can open which pages. Requester means every signed-in user. Changes are
-        audit-logged and enforced in the navigation and page rendering; data access is
-        additionally protected by database policies.
+        Which role groups can open which pages. Requester means every signed-in user. Changes
+        are audit-logged and enforced in navigation and page rendering; data access is
+        additionally protected by database policies. Legacy roles (approver, dept admin,
+        executive) are absorbed by Dept head and keep working in the background.
       </p>
       <div className="card" style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
