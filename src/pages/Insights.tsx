@@ -283,9 +283,14 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-          <span className="chip" style={{ background: 'var(--green-soft)', color: 'var(--green)', border: '1px solid var(--green)' }}>
-            ✓ live from database · {rows.length} records
-          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" style={{ padding: '4px 12px', fontSize: 11 }} onClick={() => window.print()}>
+              Print / PDF
+            </button>
+            <span className="chip" style={{ background: 'var(--green-soft)', color: 'var(--green)', border: '1px solid var(--green)' }}>
+              ✓ live from database · {rows.length} records
+            </span>
+          </div>
           <span style={{ fontSize: 10, color: 'var(--muted)' }}>
             {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </span>
@@ -308,6 +313,13 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
         <div style={{ background: 'var(--amber-soft)', border: '1px solid var(--amber)', borderRadius: 10, padding: '10px 16px', marginBottom: 12, fontSize: 12.5, color: 'var(--amber)' }}>
           <b>{expiring.length} license{expiring.length > 1 ? 's' : ''} expiring within 90 days:</b>{' '}
           {expiring.map((l) => `${l.name} (${l.expires_on})`).join(' · ')}
+        </div>
+      )}
+      {dept360 && open.filter((r) => !r.sla_resolution_due).length > 0 && (
+        <div style={{ background: 'var(--amber-soft)', border: '1px solid var(--amber)', borderRadius: 10, padding: '10px 16px', marginBottom: 12, fontSize: 12.5, color: 'var(--amber)' }}>
+          <b>Data quality note:</b> {open.filter((r) => !r.sla_resolution_due).length} open request
+          {open.filter((r) => !r.sla_resolution_due).length > 1 ? 's have' : ' has'} no SLA due date —
+          set SLA targets on their services to improve tracking.
         </div>
       )}
       {alerts.length > 0 && dept360 && (
