@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../lib/types'
 import { SlaRing } from './Queue'
 import { Chain, type ApprovalStep } from './Approvals'
@@ -44,11 +45,19 @@ function eventText(e: Ev): string {
   }
 }
 
+const ALL_STATUSES = [
+  'new', 'triaged', 'in_progress', 'pending_approval', 'pending_requester',
+  'escalated', 'resolved', 'closed', 'cancelled',
+]
+
 export function RequestDetail({ requestId, onBack }: { requestId: string; onBack: () => void }) {
+  const { hasRole } = useAuth()
   const [req, setReq] = useState<Detail | null>(null)
   const [events, setEvents] = useState<Ev[]>([])
   const [comment, setComment] = useState('')
+  const [overrideTo, setOverrideTo] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const isSysAdmin = hasRole('system_admin')
 
   const load = useCallback(() => {
     supabase
@@ -71,6 +80,20 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
   }, [requestId])
 
   useEffect(load, [load])
+
+  const applyOverride = async () => {
+    if (!overrideTo) return
+    setError(null)
+    const { error: e } = await supabase
+      .from('requests')
+      .update({ status: overrideTo })
+      .eq('id', requestId)
+    if (e) setError(e.message)
+    else {
+      setOverrideTo('')
+      load()
+    }
+  }
 
   const send = async () => {
     if (!comment.trim()) return
@@ -138,6 +161,30 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
               DoA approval chain{req.amount != null ? ` · ${req.amount.toLocaleString()} SAR` : ''}
             </div>
             <Chain steps={chain} />
+          </div>
+        )}
+
+        {isSysAdmin && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>
+              system admin override
+            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--muted)', flex: 1, minWidth: 160 }}>
+              Any transition allowed, including closed requests — every change is written to
+              the audit log and alerts the IT head.
+            </span>
+            <select
+              className="input" style={{ width: 190 }}
+              value={overrideTo} onChange={(e) => setOverrideTo(e.target.value)}
+            >
+              <option value="">Change status to…</option>
+              {ALL_STATUSES.filter((s) => s !== req.status).map((s) => (
+                <option key={s} value={s}>{s.replace('_', ' ')}</option>
+              ))}
+            </select>
+            <button className="btn primary" onClick={applyOverride} disabled={!overrideTo}>
+              Apply
+            </button>
           </div>
         )}
       </div>
