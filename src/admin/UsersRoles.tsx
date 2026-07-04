@@ -26,6 +26,9 @@ export function UsersRoles() {
   const canEdit = hasRole('user_admin')
   const [users, setUsers] = useState<ProfileWithRoles[]>([])
   const [drafts, setDrafts] = useState<Record<string, { role: Role; dept: DeptCode | '' }>>({})
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulk, setBulk] = useState<{ role: Role | ''; dept: DeptCode }>({ role: '', dept: 'IT' })
+  const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -39,6 +42,48 @@ export function UsersRoles() {
       })
   }, [])
   useEffect(load, [load])
+
+  const toggleSelect = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const bulkApply = async () => {
+    if (!bulk.role || selected.size === 0) return
+    setError(null)
+    setNote(null)
+    const dept = DEPT_SCOPED.includes(bulk.role) ? bulk.dept : null
+    const targets = users.filter(
+      (u) =>
+        selected.has(u.id) &&
+        !u.role_assignments.some((ra) => ra.role === bulk.role && (ra.dept ?? null) === dept)
+    )
+    if (targets.length === 0) {
+      setNote('All selected users already hold that role.')
+      return
+    }
+    const { error: e } = await supabase.from('role_assignments').insert(
+      targets.map((u) => ({
+        profile_id: u.id,
+        role: bulk.role,
+        dept,
+        source_ad_group: 'manual-bulk',
+      }))
+    )
+    if (e) setError(e.message)
+    else {
+      setNote(
+        `Granted ${String(bulk.role).replace('_', ' ')}${dept ? ` · ${dept}` : ''} to ${targets.length} user${targets.length > 1 ? 's' : ''}` +
+          (selected.size - targets.length > 0 ? ` (${selected.size - targets.length} already had it)` : '')
+      )
+      setSelected(new Set())
+      setBulk({ role: '', dept: 'IT' })
+    }
+    load()
+  }
 
   const grant = async (u: ProfileWithRoles) => {
     const d = drafts[u.id]
@@ -89,8 +134,67 @@ export function UsersRoles() {
         })}
       </div>
       <div className="card">
+        {canEdit && (
+          <div className="row" style={{ background: 'var(--surface)' }}>
+            <input
+              type="checkbox"
+              checked={selected.size === users.length && users.length > 0}
+              onChange={() =>
+                setSelected(selected.size === users.length ? new Set() : new Set(users.map((u) => u.id)))
+              }
+              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
+              aria-label="Select all users"
+            />
+            <span style={{ fontSize: 11.5, color: 'var(--muted)', width: 180 }}>
+              {selected.size > 0 ? `${selected.size} user${selected.size > 1 ? 's' : ''} selected` : 'Select users for bulk roles'}
+            </span>
+            {selected.size > 0 && (
+              <>
+                <select
+                  className="input" style={{ width: 150, padding: '5px 8px', fontSize: 11.5 }}
+                  value={bulk.role}
+                  onChange={(e) => setBulk({ ...bulk, role: e.target.value as Role })}
+                >
+                  <option value="" disabled>Apply role…</option>
+                  {GRANTABLE.map((r) => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+                </select>
+                {bulk.role && DEPT_SCOPED.includes(bulk.role) && (
+                  <select
+                    className="input" style={{ width: 90, padding: '5px 8px', fontSize: 11.5 }}
+                    value={bulk.dept}
+                    onChange={(e) => setBulk({ ...bulk, dept: e.target.value as DeptCode })}
+                  >
+                    <option value="IT">IT</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                )}
+                <button
+                  className="btn primary" style={{ padding: '5px 14px', fontSize: 11.5 }}
+                  disabled={!bulk.role} onClick={bulkApply}
+                >
+                  Apply to {selected.size}
+                </button>
+                <button
+                  className="btn" style={{ padding: '5px 10px', fontSize: 11.5 }}
+                  onClick={() => setSelected(new Set())}
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {users.map((u) => (
           <div className="row" key={u.id} style={{ flexWrap: 'wrap' }}>
+            {canEdit && (
+              <input
+                type="checkbox"
+                checked={selected.has(u.id)}
+                onChange={() => toggleSelect(u.id)}
+                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
+                aria-label={`Select ${u.display_name}`}
+              />
+            )}
             <div
               style={{
                 width: 32, height: 32, borderRadius: '50%', background: 'var(--it-soft)',
@@ -155,6 +259,7 @@ export function UsersRoles() {
         ))}
         {users.length === 0 && !error && <div className="row row-desc">Loading users…</div>}
       </div>
+      {note && <p style={{ fontSize: 11.5, color: 'var(--green)', marginTop: 8 }}>{note}</p>}
       {error && <p className="error-note">{error}</p>}
     </>
   )
