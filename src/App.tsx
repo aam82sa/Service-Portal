@@ -15,17 +15,30 @@ import { AdminPage } from './admin/AdminPage'
 type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
 
 export default function App() {
-  const { session, profile, loading, isAdmin, hasRole, signOut } = useAuth()
+  const { session, profile, loading, isAdmin, hasRole, canSee, signOut } = useAuth()
   const [page, setPage] = useState<Page>('portal')
   const [detailId, setDetailId] = useState<string | null>(null)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
-  const canInsights = true
-  const canAssets =
-    hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || hasRole('system_admin')
   const isRequesterOnly =
     !isStaff && !isApprover && !canAdmin && !hasRole('executive')
+
+  // Page access panel decides visibility; role checks remain the fallback
+  // until the panel data is loaded (or if a page is missing from it).
+  const see: Record<Page, boolean> = {
+    home: canSee('home') ?? true,
+    portal: canSee('portal') ?? true,
+    requests: canSee('requests') ?? true,
+    mywork: canSee('mywork') ?? (isStaff || isApprover),
+    queue: canSee('queue') ?? isStaff,
+    approvals: canSee('approvals') ?? isApprover,
+    insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || hasRole('system_admin')),
+    assets:
+      canSee('assets') ??
+      (hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || hasRole('system_admin')),
+    admin: canSee('admin') ?? canAdmin,
+  }
   const go = (p: Page) => {
     setDetailId(null)
     setPage(p)
@@ -52,7 +65,7 @@ export default function App() {
   }
   if (!session) return <SignIn />
 
-  const activePage = page === 'admin' && !canAdmin ? 'portal' : page
+  const activePage = see[page] ? page : 'portal'
 
   return (
     <div className="shell">
@@ -61,7 +74,7 @@ export default function App() {
           <span className="brand-badge">RLC</span>
           Services Hub
         </div>
-        {isRequesterOnly && (
+        {see.home && (
           <button
             className={`nav-item${activePage === 'home' ? ' active' : ''}`}
             onClick={() => go('home')}
@@ -69,20 +82,26 @@ export default function App() {
             Home
           </button>
         )}
-        <button
-          className={`nav-item${activePage === 'portal' ? ' active' : ''}`}
-          onClick={() => go('portal')}
-        >
-          Portal
-        </button>
-        <button
-          className={`nav-item${activePage === 'requests' ? ' active' : ''}`}
-          onClick={() => go('requests')}
-        >
-          My requests
-        </button>
-        {(isStaff || isApprover) && <div className="nav-group">Workspace</div>}
-        {(isStaff || isApprover) && (
+        {see.portal && (
+          <button
+            className={`nav-item${activePage === 'portal' ? ' active' : ''}`}
+            onClick={() => go('portal')}
+          >
+            Portal
+          </button>
+        )}
+        {see.requests && (
+          <button
+            className={`nav-item${activePage === 'requests' ? ' active' : ''}`}
+            onClick={() => go('requests')}
+          >
+            My requests
+          </button>
+        )}
+        {(see.mywork || see.queue || see.approvals || see.insights || see.assets) && (
+          <div className="nav-group">Workspace</div>
+        )}
+        {see.mywork && (
           <button
             className={`nav-item${activePage === 'mywork' ? ' active' : ''}`}
             onClick={() => go('mywork')}
@@ -90,7 +109,7 @@ export default function App() {
             My work
           </button>
         )}
-        {isStaff && (
+        {see.queue && (
           <button
             className={`nav-item${activePage === 'queue' ? ' active' : ''}`}
             onClick={() => go('queue')}
@@ -98,7 +117,7 @@ export default function App() {
             Department queue
           </button>
         )}
-        {isApprover && (
+        {see.approvals && (
           <button
             className={`nav-item${activePage === 'approvals' ? ' active' : ''}`}
             onClick={() => go('approvals')}
@@ -106,7 +125,7 @@ export default function App() {
             Approvals
           </button>
         )}
-        {canInsights && (
+        {see.insights && (
           <button
             className={`nav-item${activePage === 'insights' ? ' active' : ''}`}
             onClick={() => go('insights')}
@@ -114,7 +133,7 @@ export default function App() {
             Insights
           </button>
         )}
-        {canAssets && (
+        {see.assets && (
           <button
             className={`nav-item${activePage === 'assets' ? ' active' : ''}`}
             onClick={() => go('assets')}
@@ -122,12 +141,12 @@ export default function App() {
             IT assets
           </button>
         )}
-        {canAdmin && (
+        {see.admin && (
           <>
             <div className="nav-group">Administration</div>
             <button
               className={`nav-item${activePage === 'admin' ? ' active' : ''}`}
-              onClick={() => setPage('admin')}
+              onClick={() => go('admin')}
             >
               Admin console
             </button>
@@ -148,15 +167,15 @@ export default function App() {
           <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
         ) : (
           <>
-            {activePage === 'home' && <Home onNavigate={(p) => go(p)} />}
+            {activePage === 'home' && see.home && <Home onNavigate={(p) => go(p)} />}
             {activePage === 'portal' && <Portal />}
-            {activePage === 'requests' && <MyRequests onOpen={setDetailId} />}
-            {activePage === 'mywork' && (isStaff || isApprover) && <MyWork onOpen={setDetailId} />}
-            {activePage === 'queue' && isStaff && <Queue onOpen={setDetailId} />}
-            {activePage === 'approvals' && isApprover && <Approvals />}
-            {activePage === 'insights' && canInsights && <Insights onOpen={setDetailId} />}
-            {activePage === 'assets' && canAssets && <Assets onOpenRequest={setDetailId} />}
-            {activePage === 'admin' && canAdmin && <AdminPage />}
+            {activePage === 'requests' && see.requests && <MyRequests onOpen={setDetailId} />}
+            {activePage === 'mywork' && see.mywork && <MyWork onOpen={setDetailId} />}
+            {activePage === 'queue' && see.queue && <Queue onOpen={setDetailId} />}
+            {activePage === 'approvals' && see.approvals && <Approvals />}
+            {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
+            {activePage === 'assets' && see.assets && <Assets onOpenRequest={setDetailId} />}
+            {activePage === 'admin' && see.admin && <AdminPage />}
           </>
         )}
       </main>

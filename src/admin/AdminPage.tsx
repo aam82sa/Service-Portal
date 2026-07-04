@@ -9,9 +9,10 @@ import { SlaCalendar } from './SlaCalendar'
 import { Delegations } from './Delegations'
 import { Announcements } from './Announcements'
 import { ServiceBuilder } from './ServiceBuilder'
+import { PageAccess } from './PageAccess'
 
 type Section =
-  | 'functions' | 'email' | 'sla' | 'announcements'
+  | 'functions' | 'access' | 'email' | 'sla' | 'announcements'
   | 'services' | 'forms' | 'workflows' | 'users' | 'delegation'
 
 /**
@@ -29,6 +30,7 @@ export function AdminPage() {
   const sections: { id: Section; label: string; group: string }[] = []
   if (isSys) {
     sections.push({ id: 'functions', label: 'Functions', group: 'System admin' })
+    sections.push({ id: 'access', label: 'Page access', group: 'System admin' })
     sections.push({ id: 'email', label: 'Email studio', group: 'System admin' })
     sections.push({ id: 'sla', label: 'SLA calendar', group: 'System admin' })
     sections.push({ id: 'announcements', label: 'Announcements', group: 'System admin' })
@@ -80,6 +82,7 @@ export function AdminPage() {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {section === 'functions' && isSys && <FeatureToggles />}
+        {section === 'access' && isSys && <PageAccess />}
         {section === 'email' && isSys && <EmailStudio />}
         {section === 'sla' && isSys && <SlaCalendar />}
         {section === 'announcements' && isSys && <Announcements />}
