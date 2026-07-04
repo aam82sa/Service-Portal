@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import { DEPT_COLOR, type Service } from '../lib/types'
+import { DEPT_COLOR, type Service } from '../../lib/types'
 
 type Status =
   | 'new' | 'triaged' | 'in_progress' | 'pending_approval' | 'pending_requester'

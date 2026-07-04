@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import QRCode from 'qrcode'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 
 export interface ImportRow {
   tag: string

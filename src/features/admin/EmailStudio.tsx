@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import type { DeptCode } from '../lib/types'
-import { DEPT_COLOR } from '../lib/types'
+import { supabase } from '../../lib/supabase'
+import type { DeptCode } from '../../lib/types'
+import { DEPT_COLOR } from '../../lib/types'
 
 interface Template {
   id: string

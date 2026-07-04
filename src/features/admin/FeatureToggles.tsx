@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import type { FeatureFlag } from '../lib/types'
+import { supabase } from '../../lib/supabase'
+import type { FeatureFlag } from '../../lib/types'
 import { useAuth } from '../auth/AuthProvider'
 
 const CATEGORY_CHIP: Record<string, { bg: string; fg: string }> = {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { DEPT_COLOR, type DeptCode } from '../lib/types'
+import { supabase } from '../../lib/supabase'
+import { DEPT_COLOR, type DeptCode } from '../../lib/types'
 
 export interface ApprovalStep {
   id: string
