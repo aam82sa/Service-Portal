@@ -4,9 +4,10 @@ export type Role =
   | 'requester'
   | 'agent'
   | 'team_lead'
-  | 'approver'
-  | 'dept_admin'
-  | 'executive'
+  | 'dept_head'
+  | 'approver'      // legacy — absorbed by dept_head
+  | 'dept_admin'    // legacy — absorbed by dept_head
+  | 'executive'     // legacy
   | 'user_admin'
   | 'system_admin'
 
