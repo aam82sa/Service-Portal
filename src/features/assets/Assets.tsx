@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import { SlaRing } from './Queue'
+import { SlaRing } from '../requests/Queue'
 import { ImportPanel, downloadTemplate, printLabels } from './AssetImport'
 
 interface Asset {

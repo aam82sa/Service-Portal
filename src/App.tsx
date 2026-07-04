@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react'
-import { useAuth } from './auth/AuthProvider'
-import { SignIn } from './auth/SignIn'
-import { Home } from './pages/Home'
-import { Portal } from './pages/Portal'
-import { MyRequests } from './pages/MyRequests'
-import { Queue } from './pages/Queue'
-import { Approvals } from './pages/Approvals'
-import { MyWork } from './pages/MyWork'
-import { Insights } from './pages/Insights'
-import { RequestDetail } from './pages/RequestDetail'
-import { Assets } from './pages/Assets'
-import { AdminPage } from './admin/AdminPage'
+import { Suspense, lazy, useEffect, useState } from 'react'
+import { useAuth } from './features/auth/AuthProvider'
+import { SignIn } from './features/auth/SignIn'
+import { Home } from './features/home/Home'
+import { Portal } from './features/catalog/Portal'
+import { MyRequests } from './features/requests/MyRequests'
+import { Queue } from './features/requests/Queue'
+import { Approvals } from './features/requests/Approvals'
+import { MyWork } from './features/requests/MyWork'
+import { RequestDetail } from './features/requests/RequestDetail'
+
+// Heavy features load on demand: assets pulls xlsx+qrcode, admin pulls the
+// designer tools, insights pulls the charts. Keeps the first load small.
+const Assets = lazy(() => import('./features/assets/Assets').then((m) => ({ default: m.Assets })))
+const AdminPage = lazy(() => import('./features/admin/AdminPage').then((m) => ({ default: m.AdminPage })))
+const Insights = lazy(() => import('./features/insights/Insights').then((m) => ({ default: m.Insights })))
 
 type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
 
@@ -163,6 +166,7 @@ export default function App() {
         </div>
       </aside>
       <main className="main">
+        <Suspense fallback={<p className="page-sub">Loading…</p>}>
         {detailId ? (
           <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
         ) : (
@@ -178,6 +182,7 @@ export default function App() {
             {activePage === 'admin' && see.admin && <AdminPage />}
           </>
         )}
+        </Suspense>
       </main>
     </div>
   )

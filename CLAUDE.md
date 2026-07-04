@@ -34,6 +34,20 @@ dashboards. Benchmarked against ServiceNow / Freshservice / Jira SM patterns.
 - Every state change writes to `request_events` (immutable audit log).
 - Currency: SAR. Week starts Sunday (Saudi work week Sun–Thu) for SLA business-hours math.
 
+## Code structure (added 2026-07-04 — keep it this way)
+- `src/features/<domain>/` — one folder per functionality:
+  auth · home · catalog (portal, request form) · requests (my requests, queue,
+  my work, approvals, detail) · assets · insights · admin (all console sections
+  incl. service/form/workflow builders)
+- `src/components/ui.tsx` — shared primitives (Chip, Toggle, MetricCard,
+  SectionLabel). New/edited code uses these instead of inline-styled spans.
+- `src/lib/` — supabase client + shared types only
+- Heavy routes (assets, admin, insights) are lazy-loaded in App.tsx; keep new
+  heavy dependencies behind a lazy() boundary.
+- When changing a feature, read ONLY its folder + src/lib/types.ts; never
+  re-read the whole src tree.
+- CI (.github/workflows/ci.yml) builds every PR — keep it green.
+
 ## Git workflow (important — minimize token usage)
 - `main` is protected; never commit to it directly
 - Branch per module: `feature/<module>` (e.g. feature/approvals-engine)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { authMode, isConfigured } from '../lib/supabase'
+import { authMode, isConfigured } from '../../lib/supabase'
 import { useAuth } from './AuthProvider'
 
 const DEV_USERS = [

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import type { Role } from '../lib/types'
+import { supabase } from '../../lib/supabase'
+import type { Role } from '../../lib/types'
 
 interface PageRow {
   page: string

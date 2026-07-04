@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { DEPT_COLOR, type Service } from '../lib/types'
+import { supabase } from '../../lib/supabase'
+import { DEPT_COLOR, type Service } from '../../lib/types'
 import { RequestForm, type FormField } from './RequestForm'
 import { SEVERITY_STYLE } from '../admin/Announcements'
 

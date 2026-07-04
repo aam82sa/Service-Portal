@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import type { DeptCode, Profile, Role, RoleAssignment } from '../lib/types'
+import type { DeptCode, Profile, Role, RoleAssignment } from '../../lib/types'
 
 interface ProfileWithRoles extends Profile {
   role_assignments: RoleAssignment[]

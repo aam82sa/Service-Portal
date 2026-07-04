@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import { DEPT_COLOR, type DeptCode, type Service } from '../lib/types'
-import type { FormField } from '../pages/RequestForm'
+import { DEPT_COLOR, type DeptCode, type Service } from '../../lib/types'
+import type { FormField } from '../catalog/RequestForm'
 
 interface ServiceRow extends Service {
   form_schema: FormField[]

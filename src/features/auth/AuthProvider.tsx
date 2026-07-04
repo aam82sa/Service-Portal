@@ -7,8 +7,8 @@ import {
   type ReactNode,
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
-import type { DeptCode, Profile, Role, RoleAssignment } from '../lib/types'
+import { supabase } from '../../lib/supabase'
+import type { DeptCode, Profile, Role, RoleAssignment } from '../../lib/types'
 
 interface AuthState {
   session: Session | null
