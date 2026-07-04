@@ -42,7 +42,7 @@ export function AdminPage() {
     sections.push({ id: 'workflows', label: 'Workflow designer', group })
   }
   if (isUsr) {
-    sections.push({ id: 'users', label: 'Users and roles', group: 'User admin' })
+    sections.push({ id: 'users', label: 'User management', group: 'User admin' })
     sections.push({ id: 'delegation', label: 'Delegation', group: 'User admin' })
   }
 
