@@ -3,16 +3,16 @@ import { authMode, isConfigured } from '../../lib/supabase'
 import { useAuth } from './AuthProvider'
 
 const DEV_USERS = [
-  { email: 'requester@dev.rlc.sa', label: 'Rana Requester — requester' },
-  { email: 'agent.it@dev.rlc.sa', label: 'Ahmed Agent — agent, IT' },
-  { email: 'lead.it@dev.rlc.sa', label: 'Latifa Lead — team lead, IT' },
-  { email: 'approver@dev.rlc.sa', label: 'Aziz Approver — dept head' },
-  { email: 'deptadmin.it@dev.rlc.sa', label: 'Dana DeptAdmin — dept head, IT' },
-  { email: 'useradmin@dev.rlc.sa', label: 'Umar UserAdmin — user admin' },
-  { email: 'sysadmin@dev.rlc.sa', label: 'Sara SysAdmin — system admin' },
-  { email: 'tester1@dev.rlc.sa', label: 'Tester One — requester' },
-  { email: 'tester2@dev.rlc.sa', label: 'Tester Two — requester' },
-  { email: 'tester3@dev.rlc.sa', label: 'Tester Three — requester' },
+  { email: 'requester@dev.abccorp.com', label: 'Rana Requester — requester' },
+  { email: 'agent.it@dev.abccorp.com', label: 'Ahmed Agent — agent, IT' },
+  { email: 'lead.it@dev.abccorp.com', label: 'Latifa Lead — team lead, IT' },
+  { email: 'approver@dev.abccorp.com', label: 'Aziz Approver — dept head' },
+  { email: 'deptadmin.it@dev.abccorp.com', label: 'Dana DeptAdmin — dept head, IT' },
+  { email: 'useradmin@dev.abccorp.com', label: 'Umar UserAdmin — user admin' },
+  { email: 'sysadmin@dev.abccorp.com', label: 'Sara SysAdmin — system admin' },
+  { email: 'tester1@dev.abccorp.com', label: 'Tester One — requester' },
+  { email: 'tester2@dev.abccorp.com', label: 'Tester Two — requester' },
+  { email: 'tester3@dev.abccorp.com', label: 'Tester Three — requester' },
 ]
 
 const passwordFor = (email: string) =>
@@ -41,7 +41,7 @@ export function SignIn() {
     <div className="signin-wrap">
       <div className="signin-card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <span className="brand-badge">RLC</span>
+          <span className="brand-badge">ABC</span>
           <h2 style={{ fontSize: 18 }}>Services Hub</h2>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 22px' }}>

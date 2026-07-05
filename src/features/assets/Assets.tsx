@@ -314,7 +314,7 @@ function Hardware({ assets, people, reload, setError }: {
           )
         })}
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <input className="input mono" style={{ width: 130 }} placeholder="RLC-LT-0006" value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} />
+          <input className="input mono" style={{ width: 130 }} placeholder="ABC-LT-0006" value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} />
           <select className="input" style={{ width: 110 }} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
             {Object.keys(CAT_CODE).map((c) => <option key={c} value={c}>{c}</option>)}
           </select>

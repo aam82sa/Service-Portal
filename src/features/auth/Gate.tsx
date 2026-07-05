@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react'
  * account login + RLS underneath.
  */
 const PASSCODE = (import.meta.env.VITE_SITE_PASSCODE as string | undefined)?.trim()
-const STORE_KEY = 'rlc-gate'
+const STORE_KEY = 'ABC-gate'
 
 export function Gate({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState(
@@ -31,7 +31,7 @@ export function Gate({ children }: { children: ReactNode }) {
     <div className="signin-wrap">
       <div className="signin-card" style={{ width: 340 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <span className="brand-badge">RLC</span>
+          <span className="brand-badge">ABC</span>
           <h2 style={{ fontSize: 17 }}>Services Hub</h2>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: 12.5, margin: '0 0 18px' }}>

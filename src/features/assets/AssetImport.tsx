@@ -28,7 +28,7 @@ const HEADER_ALIASES: Record<string, string> = {
 }
 
 export function downloadTemplate() {
-  const csv = 'tag,category,model,serial\nRLC-LT-0100,laptop,Dell Latitude 7440,DL7440-0001\nRLC-MN-0100,monitor,Dell U2723QE,U27-0001\n'
+  const csv = 'tag,category,model,serial\nABC-LT-0100,laptop,Dell Latitude 7440,DL7440-0001\nABC-MN-0100,monitor,Dell U2723QE,U27-0001\n'
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
   a.download = 'asset-import-template.csv'
