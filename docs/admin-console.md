@@ -13,7 +13,7 @@ functions; the access matrix and architecture docs reference it.
 
 - The Admin page (and its nav entry) renders **only** for holders of one of these
   roles; RLS blocks the underlying data regardless of UI.
-- Suggested AD groups: `SG-RLC-User-Admins`, `SG-RLC-System-Admins`.
+- Suggested AD groups: `SG-ABC-User-Admins`, `SG-ABC-System-Admins`.
 - Dept Admins keep their per-department catalog/SLA scope (forms and workflows
   for their own department's services).
 

@@ -1,6 +1,6 @@
-# RLC Services Hub
+# ABC Corp Services Hub
 
-Internal services management platform for RLC — IT Services, Administration, and Logistics.
+Internal services management platform for ABC Corp — IT Services, Administration, and Logistics.
 ITIL-aligned service catalog, request lifecycle, SLA engine, DoA approvals, and executive insights.
 
 ## Stack

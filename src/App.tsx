@@ -97,7 +97,7 @@ export default function App() {
     <div className="shell">
       <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
         <div className="brand">
-          <span className="brand-badge">RLC</span>
+          <span className="brand-badge">ABC</span>
           <span className="brand-name">Services Hub</span>
           <button
             className="collapse-btn"

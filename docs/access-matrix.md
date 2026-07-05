@@ -21,15 +21,15 @@ Access = role permission × department scope. Roles derive from Entra ID securit
 ## Entra ID group → role mapping
 | AD security group | Platform role |
 |---|---|
-| SG-RLC-ServiceDesk-IT | Agent · IT |
-| SG-RLC-Admin-Services | Agent · Administration |
-| SG-RLC-Logistics-Ops | Agent · Logistics |
-| SG-RLC-TeamLeads-* | Team Lead · per dept |
-| SG-RLC-DoA-Approvers | Approver (band from DoA matrix) |
-| SG-RLC-Dept-Admins-* | Dept Admin · per dept |
-| SG-RLC-Executives | Executive |
-| SG-RLC-User-Admins | User Admin |
-| SG-RLC-System-Admins | System Admin |
+| SG-ABC-ServiceDesk-IT | Agent · IT |
+| SG-ABC-Admin-Services | Agent · Administration |
+| SG-ABC-Logistics-Ops | Agent · Logistics |
+| SG-ABC-TeamLeads-* | Team Lead · per dept |
+| SG-ABC-DoA-Approvers | Approver (band from DoA matrix) |
+| SG-ABC-Dept-Admins-* | Dept Admin · per dept |
+| SG-ABC-Executives | Executive |
+| SG-ABC-User-Admins | User Admin |
+| SG-ABC-System-Admins | System Admin |
 | (all licensed users) | Requester |
 
 ## DoA bands (SAR)

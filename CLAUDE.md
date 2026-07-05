@@ -1,7 +1,7 @@
-# RLC Services Hub — Project Instructions for Claude Code
+# ABC Corp Services Hub — Project Instructions for Claude Code
 
 ## What this is
-Internal services management platform for RLC covering three departments:
+Internal services management platform for ABC Corp covering three departments:
 IT Services, Administration, and Logistics. ITIL-aligned: service catalog,
 request lifecycle, SLA engine, DoA (Delegation of Authority) approvals,
 dashboards. Benchmarked against ServiceNow / Freshservice / Jira SM patterns.
