@@ -7,3 +7,4 @@ supabase/.temp/
 .claude/launch.json
 .DS_Store
 .claude/settings.local.json
+.vite/
