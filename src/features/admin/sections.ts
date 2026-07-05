@@ -1,7 +1,7 @@
 import type { DeptCode, Role } from '../../lib/types'
 
 export type AdminSection =
-  | 'overview' | 'functions' | 'access' | 'email' | 'sla' | 'announcements'
+  | 'functions' | 'access' | 'email' | 'sla' | 'announcements'
   | 'services' | 'forms' | 'workflows' | 'users' | 'delegation'
 
 export interface AdminSectionDef {
@@ -21,7 +21,6 @@ export function getAdminSections(hasRole: HasRole): AdminSectionDef[] {
   const out: AdminSectionDef[] = []
 
   if (isSys) {
-    out.push({ id: 'overview', label: 'Overview', ico: 'Ov', group: 'System admin' })
     out.push({ id: 'functions', label: 'Functions', ico: 'Fn', group: 'System admin' })
     out.push({ id: 'access', label: 'Page access', ico: 'Pa', group: 'System admin' })
     out.push({ id: 'email', label: 'Email studio', ico: 'Em', group: 'System admin' })

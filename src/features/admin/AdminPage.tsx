@@ -1,5 +1,4 @@
 import { useAuth } from '../auth/AuthProvider'
-import { AdminOverview } from './AdminOverview'
 import { FeatureToggles } from './FeatureToggles'
 import { UsersRoles } from './UsersRoles'
 import { FormBuilder } from './FormBuilder'
@@ -22,7 +21,6 @@ export function AdminPage({ section }: { section: AdminSection }) {
   if (!allowed) return <p className="page-sub">This section is not available for your role.</p>
 
   switch (section) {
-    case 'overview': return <AdminOverview />
     case 'functions': return <FeatureToggles />
     case 'access': return <PageAccess />
     case 'email': return <EmailStudio />

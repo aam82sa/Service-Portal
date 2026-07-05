@@ -9,6 +9,7 @@ interface Announcement {
   severity: 'info' | 'warning' | 'critical'
   starts_at: string
   ends_at: string | null
+  is_active: boolean
 }
 
 export const SEVERITY_STYLE = {
@@ -78,8 +79,18 @@ export function Announcements() {
     load()
   }
 
+  const toggleStatus = async (a: Announcement) => {
+    const { error: e } = await supabase
+      .from('announcements')
+      .update({ is_active: !a.is_active })
+      .eq('id', a.id)
+    if (e) setError(e.message)
+    load()
+  }
+
   const now = Date.now()
   const live = (a: Announcement) =>
+    a.is_active &&
     new Date(a.starts_at).getTime() <= now && (!a.ends_at || new Date(a.ends_at).getTime() > now)
 
   return (
@@ -109,8 +120,14 @@ export function Announcements() {
                 {new Date(a.starts_at).toLocaleDateString()} – {a.ends_at ? new Date(a.ends_at).toLocaleDateString() : 'open-ended'}
               </span>
               <span className="chip" style={{ background: live(a) ? 'var(--green-soft)' : 'var(--surface)', color: live(a) ? 'var(--green)' : 'var(--muted)' }}>
-                {live(a) ? 'live' : 'inactive'}
+                {live(a) ? 'live' : a.is_active ? 'scheduled off-window' : 'switched off'}
               </span>
+              <button
+                className={`toggle${a.is_active ? ' on' : ''}`}
+                onClick={() => toggleStatus(a)}
+                aria-label={`announcement active: ${a.is_active}`}
+                title="Switch announcement on or off"
+              />
               <button className="btn" style={{ padding: '2px 10px' }} onClick={() => startEdit(a)}>Edit</button>
               <button className="btn" style={{ padding: '2px 8px', color: 'var(--red)' }} onClick={() => remove(a.id)} aria-label="Remove announcement">×</button>
             </div>

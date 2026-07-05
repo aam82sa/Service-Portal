@@ -54,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return
     let cancelled = false
+    setLoading(true) // landing decisions must wait until roles + access are known
     ;(async () => {
       const [{ data: prof }, { data: ras }, { data: pa }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', session.user.id).single(),

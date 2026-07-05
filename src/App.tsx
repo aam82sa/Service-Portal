@@ -8,6 +8,7 @@ import { Queue } from './features/requests/Queue'
 import { Approvals } from './features/requests/Approvals'
 import { MyWork } from './features/requests/MyWork'
 import { RequestDetail } from './features/requests/RequestDetail'
+import { Icon, type IconName } from './components/icons'
 import { getAdminSections, type AdminSection } from './features/admin/sections'
 
 // Heavy features load on demand: assets pulls xlsx+qrcode, admin pulls the
@@ -17,35 +18,35 @@ const AdminPage = lazy(() => import('./features/admin/AdminPage').then((m) => ({
 const Insights = lazy(() => import('./features/insights/Insights').then((m) => ({ default: m.Insights })))
 
 type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
+export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people' }
+export type Navigate = (page: Page, opts?: NavOpts) => void
 
-const NAV: { id: Page; label: string; ico: string; group?: string }[] = [
-  { id: 'home', label: 'Home', ico: 'Ho' },
-  { id: 'portal', label: 'Portal', ico: 'Po' },
-  { id: 'requests', label: 'My requests', ico: 'Rq' },
-  { id: 'mywork', label: 'My work', ico: 'Wk', group: 'Workspace' },
-  { id: 'queue', label: 'Department queue', ico: 'Qu', group: 'Workspace' },
-  { id: 'approvals', label: 'Approvals', ico: 'Ap', group: 'Workspace' },
-  { id: 'insights', label: 'Insights', ico: 'In', group: 'Workspace' },
-  { id: 'assets', label: 'IT assets', ico: 'As', group: 'Workspace' },
-  { id: 'admin', label: 'Admin console', ico: 'Ad', group: 'Administration' },
+const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
+  { id: 'home', label: 'Overview', ico: 'home' },
+  { id: 'portal', label: 'Portal', ico: 'grid' },
+  { id: 'requests', label: 'My requests', ico: 'list' },
+  { id: 'mywork', label: 'My work', ico: 'briefcase', group: 'Workspace' },
+  { id: 'queue', label: 'Department queue', ico: 'inbox', group: 'Workspace' },
+  { id: 'approvals', label: 'Approvals', ico: 'check', group: 'Workspace' },
+  { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
+  { id: 'assets', label: 'IT assets', ico: 'device', group: 'Workspace' },
+  { id: 'admin', label: 'Admin console', ico: 'gear', group: 'Administration' },
 ]
 
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, canSee, signOut } = useAuth()
-  const [page, setPage] = useState<Page>('portal')
+  const [page, setPage] = useState<Page>('home')
   const [adminSection, setAdminSection] = useState<AdminSection | null>(null)
+  const [assetsTab, setAssetsTab] = useState<'hardware' | 'licenses' | 'people'>('hardware')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
   const isSys = hasRole('system_admin')
-  const isRequesterOnly = !isStaff && !isApprover && !canAdmin && !hasRole('executive')
 
-  // Page access panel decides visibility; role checks remain the fallback
-  // until the panel data is loaded (or if a page is missing from it).
   const see: Record<Page, boolean> = {
-    home: canSee('home') ?? !isSys,
+    home: canSee('home') ?? true,
     portal: canSee('portal') ?? !isSys,
     requests: canSee('requests') ?? !isSys,
     mywork: canSee('mywork') ?? (isStaff || isApprover),
@@ -58,24 +59,25 @@ export default function App() {
     admin: canSee('admin') ?? canAdmin,
   }
   const adminSections = getAdminSections(hasRole)
-  const firstVisible: Page = NAV.find((n) => see[n.id])?.id ?? 'portal'
+  const firstVisible: Page = NAV.find((n) => see[n.id])?.id ?? 'home'
 
-  const go = (p: Page) => {
+  const go: Navigate = (p, opts) => {
     setDetailId(null)
+    if (opts?.admin) setAdminSection(opts.admin)
+    if (opts?.assetsTab) setAssetsTab(opts.assetsTab)
     setPage(p)
   }
 
   useEffect(() => {
     if (!session) {
-      setPage('portal')
+      setPage('home')
       setDetailId(null)
     }
   }, [session])
 
   useEffect(() => {
     if (loading || !session) return
-    if (isSys || (canAdmin && !isStaff)) setPage('admin')
-    else if (isRequesterOnly) setPage('home')
+    setPage(see.home ? 'home' : firstVisible)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, session])
 
@@ -118,10 +120,10 @@ export default function App() {
                 onClick={() => go(n.id)}
                 title={n.label}
               >
-                <span className="nav-ico mono">{n.ico}</span>
+                <Icon name={n.ico} size={collapsed ? 20 : 16} />
                 <span className="nav-label">{n.label}</span>
               </button>
-              {n.id === 'admin' && activePage === 'admin' &&
+              {n.id === 'admin' && activePage === 'admin' && !collapsed &&
                 adminSections.map((s) => (
                   <button
                     key={s.id}
@@ -129,7 +131,6 @@ export default function App() {
                     onClick={() => { setDetailId(null); setAdminSection(s.id) }}
                     title={s.label}
                   >
-                    <span className="nav-ico mono">{s.ico}</span>
                     <span className="nav-label">{s.label}</span>
                   </button>
                 ))}
@@ -152,16 +153,18 @@ export default function App() {
           <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
         ) : (
           <>
-            {activePage === 'home' && see.home && <Home onNavigate={(p) => go(p)} />}
+            {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={setDetailId} />}
             {activePage === 'portal' && see.portal && <Portal />}
             {activePage === 'requests' && see.requests && <MyRequests onOpen={setDetailId} />}
             {activePage === 'mywork' && see.mywork && <MyWork onOpen={setDetailId} />}
             {activePage === 'queue' && see.queue && <Queue onOpen={setDetailId} />}
             {activePage === 'approvals' && see.approvals && <Approvals />}
             {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
-            {activePage === 'assets' && see.assets && <Assets onOpenRequest={setDetailId} />}
+            {activePage === 'assets' && see.assets && (
+              <Assets onOpenRequest={setDetailId} initialSection={assetsTab} />
+            )}
             {activePage === 'admin' && see.admin && (
-              <AdminPage section={adminSection ?? adminSections[0]?.id ?? 'overview'} />
+              <AdminPage section={adminSection ?? adminSections[0]?.id ?? 'functions'} />
             )}
           </>
         )}
