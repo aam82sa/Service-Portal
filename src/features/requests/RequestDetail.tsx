@@ -22,6 +22,12 @@ interface Detail {
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
   approvals: ApprovalStep[]
+  project_id: string | null
+}
+
+interface ConversionState {
+  id: string
+  status: 'pending_dept_head' | 'approved' | 'rejected'
 }
 
 interface Ev {
@@ -51,11 +57,12 @@ const ALL_STATUSES = [
 ]
 
 export function RequestDetail({ requestId, onBack }: { requestId: string; onBack: () => void }) {
-  const { hasRole } = useAuth()
+  const { profile, hasRole } = useAuth()
   const [req, setReq] = useState<Detail | null>(null)
   const [events, setEvents] = useState<Ev[]>([])
   const [comment, setComment] = useState('')
   const [overrideTo, setOverrideTo] = useState('')
+  const [conversion, setConversion] = useState<ConversionState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isSysAdmin = hasRole('system_admin')
 
@@ -77,6 +84,13 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
       .eq('request_id', requestId)
       .order('id')
       .then(({ data }) => setEvents((data as unknown as Ev[]) ?? []))
+    supabase
+      .from('project_conversion_requests')
+      .select('id, status')
+      .eq('source_request_id', requestId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => setConversion((data?.[0] as ConversionState) ?? null))
   }, [requestId])
 
   useEffect(load, [load])
@@ -108,10 +122,28 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
     }
   }
 
+  const escalate = async () => {
+    if (!req || !profile) return
+    setError(null)
+    const { error: e } = await supabase.from('project_conversion_requests').insert({
+      source_request_id: req.id,
+      source_department: req.dept,
+      requested_by: profile.id,
+      proposed_pm_id: profile.id,
+    })
+    if (e) setError(e.message)
+    load()
+  }
+
   if (!req) return <p className="page-sub">{error ?? 'Loading…'}</p>
   const c = DEPT_COLOR[req.dept]
   const fields = (req.service?.form_schema ?? []).filter((f) => req.payload?.[f.key])
   const chain = [...(req.approvals ?? [])].sort((a, b) => a.step_order - b.step_order)
+  const isDeptStaff =
+    hasRole('agent', req.dept) || hasRole('team_lead', req.dept) || hasRole('dept_head', req.dept)
+  const canEscalate =
+    isDeptStaff && !req.project_id && !conversion &&
+    !['resolved', 'closed', 'cancelled'].includes(req.status)
 
   return (
     <>
@@ -161,6 +193,35 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
               DoA approval chain{req.amount != null ? ` · ${req.amount.toLocaleString()} SAR` : ''}
             </div>
             <Chain steps={chain} />
+          </div>
+        )}
+
+        {(canEscalate || conversion || req.project_id) && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {req.project_id && (
+              <span className="chip" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                part of a project
+              </span>
+            )}
+            {!req.project_id && conversion?.status === 'pending_dept_head' && (
+              <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>
+                project conversion awaiting department head
+              </span>
+            )}
+            {!req.project_id && conversion?.status === 'rejected' && (
+              <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>
+                project conversion rejected
+              </span>
+            )}
+            {canEscalate && (
+              <>
+                <span style={{ fontSize: 11.5, color: 'var(--muted)', flex: 1, minWidth: 160 }}>
+                  Bigger than one ticket? Escalate it into a managed project — your department
+                  head approves the conversion.
+                </span>
+                <button className="btn" onClick={escalate}>Escalate to project</button>
+              </>
+            )}
           </div>
         )}
 

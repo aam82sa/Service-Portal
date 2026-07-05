@@ -16,8 +16,10 @@ import { getAdminSections, type AdminSection } from './features/admin/sections'
 const Assets = lazy(() => import('./features/assets/Assets').then((m) => ({ default: m.Assets })))
 const AdminPage = lazy(() => import('./features/admin/AdminPage').then((m) => ({ default: m.AdminPage })))
 const Insights = lazy(() => import('./features/insights/Insights').then((m) => ({ default: m.Insights })))
+const Projects = lazy(() => import('./features/pmo/Projects').then((m) => ({ default: m.Projects })))
+const ProjectDetail = lazy(() => import('./features/pmo/ProjectDetail').then((m) => ({ default: m.ProjectDetail })))
 
-type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
+type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'pmo' | 'insights' | 'assets' | 'admin'
 export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people' }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
@@ -28,6 +30,7 @@ const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
   { id: 'mywork', label: 'My work', ico: 'briefcase', group: 'Workspace' },
   { id: 'queue', label: 'Department queue', ico: 'inbox', group: 'Workspace' },
   { id: 'approvals', label: 'Approvals', ico: 'check', group: 'Workspace' },
+  { id: 'pmo', label: 'Projects', ico: 'folder', group: 'Workspace' },
   { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
   { id: 'assets', label: 'IT assets', ico: 'device', group: 'Workspace' },
   { id: 'admin', label: 'Admin console', ico: 'gear', group: 'Administration' },
@@ -39,6 +42,7 @@ export default function App() {
   const [adminSection, setAdminSection] = useState<AdminSection | null>(null)
   const [assetsTab, setAssetsTab] = useState<'hardware' | 'licenses' | 'people'>('hardware')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [projectId, setProjectId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
@@ -52,6 +56,10 @@ export default function App() {
     mywork: canSee('mywork') ?? (isStaff || isApprover),
     queue: canSee('queue') ?? isStaff,
     approvals: canSee('approvals') ?? isApprover,
+    pmo:
+      canSee('pmo') ??
+      (hasRole('project_manager') || hasRole('pmo_admin') || hasRole('executive') ||
+        hasRole('dept_head') || isStaff || isSys),
     insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || isSys),
     assets:
       canSee('assets') ??
@@ -63,6 +71,7 @@ export default function App() {
 
   const go: Navigate = (p, opts) => {
     setDetailId(null)
+    setProjectId(null)
     if (opts?.admin) setAdminSection(opts.admin)
     if (opts?.assetsTab) setAssetsTab(opts.assetsTab)
     setPage(p)
@@ -151,6 +160,8 @@ export default function App() {
         <Suspense fallback={<p className="page-sub">Loading…</p>}>
         {detailId ? (
           <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
+        ) : projectId ? (
+          <ProjectDetail projectId={projectId} onBack={() => setProjectId(null)} />
         ) : (
           <>
             {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={setDetailId} />}
@@ -159,6 +170,7 @@ export default function App() {
             {activePage === 'mywork' && see.mywork && <MyWork onOpen={setDetailId} />}
             {activePage === 'queue' && see.queue && <Queue onOpen={setDetailId} />}
             {activePage === 'approvals' && see.approvals && <Approvals />}
+            {activePage === 'pmo' && see.pmo && <Projects onOpen={setProjectId} />}
             {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
             {activePage === 'assets' && see.assets && (
               <Assets onOpenRequest={setDetailId} initialSection={assetsTab} />
