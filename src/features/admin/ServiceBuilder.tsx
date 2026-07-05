@@ -18,7 +18,7 @@ interface Svc {
   form_schema: FormField[]
 }
 
-const PORTALS: DeptCode[] = ['IT', 'ADMIN']
+const PORTALS: DeptCode[] = ['IT', 'ADMIN', 'PROC']
 
 export function ServiceBuilder() {
   const { hasRole } = useAuth()

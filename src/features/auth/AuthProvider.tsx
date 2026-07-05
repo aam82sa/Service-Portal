@@ -41,7 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session) setLoading(false)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s)
+      // supabase-js re-emits on every tab focus with a fresh object;
+      // only propagate real session changes or the app remounts in a loop.
+      setSession((prev) =>
+        prev && s && prev.access_token === s.access_token ? prev : s
+      )
       if (!s) {
         setProfile(null)
         setRoles([])
