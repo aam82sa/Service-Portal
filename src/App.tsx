@@ -8,6 +8,7 @@ import { Queue } from './features/requests/Queue'
 import { Approvals } from './features/requests/Approvals'
 import { MyWork } from './features/requests/MyWork'
 import { RequestDetail } from './features/requests/RequestDetail'
+import { getAdminSections, type AdminSection } from './features/admin/sections'
 
 // Heavy features load on demand: assets pulls xlsx+qrcode, admin pulls the
 // designer tools, insights pulls the charts. Keeps the first load small.
@@ -17,32 +18,48 @@ const Insights = lazy(() => import('./features/insights/Insights').then((m) => (
 
 type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'insights' | 'assets' | 'admin'
 
+const NAV: { id: Page; label: string; ico: string; group?: string }[] = [
+  { id: 'home', label: 'Home', ico: 'Ho' },
+  { id: 'portal', label: 'Portal', ico: 'Po' },
+  { id: 'requests', label: 'My requests', ico: 'Rq' },
+  { id: 'mywork', label: 'My work', ico: 'Wk', group: 'Workspace' },
+  { id: 'queue', label: 'Department queue', ico: 'Qu', group: 'Workspace' },
+  { id: 'approvals', label: 'Approvals', ico: 'Ap', group: 'Workspace' },
+  { id: 'insights', label: 'Insights', ico: 'In', group: 'Workspace' },
+  { id: 'assets', label: 'IT assets', ico: 'As', group: 'Workspace' },
+  { id: 'admin', label: 'Admin console', ico: 'Ad', group: 'Administration' },
+]
+
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, canSee, signOut } = useAuth()
   const [page, setPage] = useState<Page>('portal')
+  const [adminSection, setAdminSection] = useState<AdminSection | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
-  const isRequesterOnly =
-    !isStaff && !isApprover && !canAdmin && !hasRole('executive')
+  const isSys = hasRole('system_admin')
+  const isRequesterOnly = !isStaff && !isApprover && !canAdmin && !hasRole('executive')
 
   // Page access panel decides visibility; role checks remain the fallback
   // until the panel data is loaded (or if a page is missing from it).
   const see: Record<Page, boolean> = {
-    home: canSee('home') ?? true,
-    portal: canSee('portal') ?? true,
-    requests: canSee('requests') ?? true,
+    home: canSee('home') ?? !isSys,
+    portal: canSee('portal') ?? !isSys,
+    requests: canSee('requests') ?? !isSys,
     mywork: canSee('mywork') ?? (isStaff || isApprover),
     queue: canSee('queue') ?? isStaff,
     approvals: canSee('approvals') ?? isApprover,
-    insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || hasRole('system_admin')),
+    insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || isSys),
     assets:
       canSee('assets') ??
-      (hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || hasRole('system_admin')),
+      (hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || isSys),
     admin: canSee('admin') ?? canAdmin,
   }
+  const adminSections = getAdminSections(hasRole)
+  const firstVisible: Page = NAV.find((n) => see[n.id])?.id ?? 'portal'
+
   const go = (p: Page) => {
     setDetailId(null)
     setPage(p)
@@ -56,7 +73,9 @@ export default function App() {
   }, [session])
 
   useEffect(() => {
-    if (!loading && session && isRequesterOnly) setPage('home')
+    if (loading || !session) return
+    if (isSys || (canAdmin && !isStaff)) setPage('admin')
+    else if (isRequesterOnly) setPage('home')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, session])
 
@@ -69,8 +88,9 @@ export default function App() {
   }
   if (!session) return <SignIn />
 
-  const activePage = see[page] ? page : 'portal'
+  const activePage = see[page] ? page : firstVisible
 
+  let lastGroup: string | undefined
   return (
     <div className="shell">
       <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
@@ -86,91 +106,43 @@ export default function App() {
             {collapsed ? '»' : '«'}
           </button>
         </div>
-        {see.home && (
-          <button
-            className={`nav-item${activePage === 'home' ? ' active' : ''}`}
-            onClick={() => go('home')}
-          >
-            Home
-          </button>
-        )}
-        {see.portal && (
-          <button
-            className={`nav-item${activePage === 'portal' ? ' active' : ''}`}
-            onClick={() => go('portal')}
-          >
-            Portal
-          </button>
-        )}
-        {see.requests && (
-          <button
-            className={`nav-item${activePage === 'requests' ? ' active' : ''}`}
-            onClick={() => go('requests')}
-          >
-            My requests
-          </button>
-        )}
-        {(see.mywork || see.queue || see.approvals || see.insights || see.assets) && (
-          <div className="nav-group">Workspace</div>
-        )}
-        {see.mywork && (
-          <button
-            className={`nav-item${activePage === 'mywork' ? ' active' : ''}`}
-            onClick={() => go('mywork')}
-          >
-            My work
-          </button>
-        )}
-        {see.queue && (
-          <button
-            className={`nav-item${activePage === 'queue' ? ' active' : ''}`}
-            onClick={() => go('queue')}
-          >
-            Department queue
-          </button>
-        )}
-        {see.approvals && (
-          <button
-            className={`nav-item${activePage === 'approvals' ? ' active' : ''}`}
-            onClick={() => go('approvals')}
-          >
-            Approvals
-          </button>
-        )}
-        {see.insights && (
-          <button
-            className={`nav-item${activePage === 'insights' ? ' active' : ''}`}
-            onClick={() => go('insights')}
-          >
-            Insights
-          </button>
-        )}
-        {see.assets && (
-          <button
-            className={`nav-item${activePage === 'assets' ? ' active' : ''}`}
-            onClick={() => go('assets')}
-          >
-            IT assets
-          </button>
-        )}
-        {see.admin && (
-          <>
-            <div className="nav-group">Administration</div>
-            <button
-              className={`nav-item${activePage === 'admin' ? ' active' : ''}`}
-              onClick={() => go('admin')}
-            >
-              Admin console
-            </button>
-          </>
-        )}
+        {NAV.filter((n) => see[n.id]).map((n) => {
+          const header =
+            n.group && n.group !== lastGroup ? <div className="nav-group" key={`g-${n.group}`}>{n.group}</div> : null
+          lastGroup = n.group ?? lastGroup
+          return (
+            <div key={n.id}>
+              {header}
+              <button
+                className={`nav-item${activePage === n.id ? ' active' : ''}`}
+                onClick={() => go(n.id)}
+                title={n.label}
+              >
+                <span className="nav-ico mono">{n.ico}</span>
+                <span className="nav-label">{n.label}</span>
+              </button>
+              {n.id === 'admin' && activePage === 'admin' &&
+                adminSections.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`nav-item sub${(adminSection ?? adminSections[0]?.id) === s.id ? ' active' : ''}`}
+                    onClick={() => { setDetailId(null); setAdminSection(s.id) }}
+                    title={s.label}
+                  >
+                    <span className="nav-ico mono">{s.ico}</span>
+                    <span className="nav-label">{s.label}</span>
+                  </button>
+                ))}
+            </div>
+          )
+        })}
         <div className="sidebar-foot">
           <div style={{ color: '#fff', fontWeight: 500 }}>{profile?.display_name}</div>
           <div className="mono" style={{ fontSize: 10.5, margin: '2px 0 10px' }}>
             {profile?.upn}
           </div>
           <button className="nav-item" onClick={signOut} style={{ padding: '6px 0' }}>
-            Sign out
+            <span className="nav-label">Sign out</span>
           </button>
         </div>
       </aside>
@@ -181,14 +153,16 @@ export default function App() {
         ) : (
           <>
             {activePage === 'home' && see.home && <Home onNavigate={(p) => go(p)} />}
-            {activePage === 'portal' && <Portal />}
+            {activePage === 'portal' && see.portal && <Portal />}
             {activePage === 'requests' && see.requests && <MyRequests onOpen={setDetailId} />}
             {activePage === 'mywork' && see.mywork && <MyWork onOpen={setDetailId} />}
             {activePage === 'queue' && see.queue && <Queue onOpen={setDetailId} />}
             {activePage === 'approvals' && see.approvals && <Approvals />}
             {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
             {activePage === 'assets' && see.assets && <Assets onOpenRequest={setDetailId} />}
-            {activePage === 'admin' && see.admin && <AdminPage />}
+            {activePage === 'admin' && see.admin && (
+              <AdminPage section={adminSection ?? adminSections[0]?.id ?? 'overview'} />
+            )}
           </>
         )}
         </Suspense>

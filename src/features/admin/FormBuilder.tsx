@@ -267,6 +267,60 @@ export function FormBuilder() {
           </span>
         </div>
       </div>
+
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', margin: '14px 0 6px' }}>
+        Layout canvas — drag fields where they should appear · click ⇔ to resize
+      </div>
+      <div className="card" style={{ padding: '14px 16px', background: 'var(--surface)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 4%' }}>
+          {fields.map((f, i) => (
+            <div
+              key={i}
+              draggable
+              onDragStart={(e) => e.dataTransfer.setData('text/plain', String(i))}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault()
+                const from = Number(e.dataTransfer.getData('text/plain'))
+                if (Number.isNaN(from) || from === i) return
+                setFields((fs) => {
+                  const next = [...fs]
+                  const [item] = next.splice(from, 1)
+                  next.splice(i, 0, item)
+                  return next
+                })
+                setDirty(true)
+              }}
+              style={{
+                width: f.width === 'half' ? '48%' : '100%',
+                background: 'var(--card)', border: '1.5px dashed var(--line)', borderRadius: 9,
+                padding: '8px 10px', cursor: 'grab',
+                opacity: f.visible === false ? 0.45 : 1,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>⠿</span>
+                <span style={{ fontSize: 11.5, fontWeight: 500, flex: 1 }}>
+                  {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
+                </span>
+                <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)', fontSize: 9.5 }}>{f.type}</span>
+                <button
+                  className="btn" style={{ padding: '1px 7px', fontSize: 11 }}
+                  title="Toggle full / half width"
+                  onClick={() => patch(i, { width: f.width === 'half' ? 'full' : 'half' })}
+                >
+                  ⇔
+                </button>
+              </div>
+              <div style={{
+                marginTop: 5, background: 'var(--surface)', borderRadius: 6,
+                height: f.type === 'longtext' ? 34 : 20, border: '1px solid var(--line)',
+              }} />
+            </div>
+          ))}
+          {fields.length === 0 && <span className="row-desc">No fields yet — add them above.</span>}
+        </div>
+      </div>
       {error && <p className="error-note">{error}</p>}
     </>
   )
