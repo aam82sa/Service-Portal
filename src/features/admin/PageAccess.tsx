@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../auth/AuthProvider'
 import type { Role } from '../../lib/types'
 
 interface PageRow {
@@ -18,6 +19,7 @@ const ROLES: { id: Role; label: string }[] = [
 ]
 
 export function PageAccess() {
+  const { refreshAccess } = useAuth()
   const [rows, setRows] = useState<PageRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -52,7 +54,8 @@ export function PageAccess() {
       setError(e.message)
       load()
     } else {
-      setNote(`Saved — ${row.name} updated. Users see the change on their next page load.`)
+      setNote(`Saved — ${row.name} updated. Applied immediately; other signed-in users pick it up when they refocus or reload.`)
+      refreshAccess()
     }
   }
 

@@ -21,9 +21,11 @@ export function Announcements() {
   const { session } = useAuth()
   const [rows, setRows] = useState<Announcement[]>([])
   const [form, setForm] = useState({ title: '', body: '', severity: 'info' as Announcement['severity'], ends: '' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [flagOn, setFlagOn] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = () =>
+  const load = () => {
     supabase
       .from('announcements')
       .select('*')
@@ -32,20 +34,40 @@ export function Announcements() {
         if (e) setError(e.message)
         else setRows((data as Announcement[]) ?? [])
       })
+    supabase
+      .from('feature_flags')
+      .select('is_enabled')
+      .eq('key', 'announcements')
+      .single()
+      .then(({ data }) => setFlagOn(data?.is_enabled ?? null))
+  }
   useEffect(() => { load() }, [])
+
+  const startEdit = (a: Announcement) => {
+    setEditingId(a.id)
+    setForm({
+      title: a.title,
+      body: a.body ?? '',
+      severity: a.severity,
+      ends: a.ends_at ? a.ends_at.slice(0, 10) : '',
+    })
+  }
 
   const add = async () => {
     setError(null)
-    const { error: e } = await supabase.from('announcements').insert({
+    const payload = {
       title: form.title.trim(),
       body: form.body.trim() || null,
       severity: form.severity,
       ends_at: form.ends ? new Date(form.ends).toISOString() : null,
-      created_by: session!.user.id,
-    })
+    }
+    const { error: e } = editingId
+      ? await supabase.from('announcements').update(payload).eq('id', editingId)
+      : await supabase.from('announcements').insert({ ...payload, created_by: session!.user.id })
     if (e) setError(e.message)
     else {
       setForm({ title: '', body: '', severity: 'info', ends: '' })
+      setEditingId(null)
       load()
     }
   }
@@ -67,6 +89,12 @@ export function Announcements() {
         Banners shown on the portal while the announcements function is enabled. Critical
         severity is for outages.
       </p>
+      {flagOn === false && (
+        <div style={{ background: 'var(--red-soft)', color: 'var(--red)', borderRadius: 10, padding: '10px 16px', marginBottom: 12, fontSize: 12.5 }}>
+          The <b>Announcements</b> function is switched OFF — banners will not appear on the
+          portal until you enable it under Functions.
+        </div>
+      )}
       <div className="card">
         {rows.map((a) => {
           const s = SEVERITY_STYLE[a.severity]
@@ -83,6 +111,7 @@ export function Announcements() {
               <span className="chip" style={{ background: live(a) ? 'var(--green-soft)' : 'var(--surface)', color: live(a) ? 'var(--green)' : 'var(--muted)' }}>
                 {live(a) ? 'live' : 'inactive'}
               </span>
+              <button className="btn" style={{ padding: '2px 10px' }} onClick={() => startEdit(a)}>Edit</button>
               <button className="btn" style={{ padding: '2px 8px', color: 'var(--red)' }} onClick={() => remove(a.id)} aria-label="Remove announcement">×</button>
             </div>
           )
@@ -97,7 +126,14 @@ export function Announcements() {
             <option value="critical">critical</option>
           </select>
           <input className="input" type="date" style={{ width: 140 }} title="End date (optional)" value={form.ends} onChange={(e) => setForm({ ...form, ends: e.target.value })} />
-          <button className="btn primary" onClick={add} disabled={!form.title.trim()}>Publish</button>
+          <button className="btn primary" onClick={add} disabled={!form.title.trim()}>
+            {editingId ? 'Save changes' : 'Publish'}
+          </button>
+          {editingId && (
+            <button className="btn" onClick={() => { setEditingId(null); setForm({ title: '', body: '', severity: 'info', ends: '' }) }}>
+              Cancel edit
+            </button>
+          )}
         </div>
       </div>
       {error && <p className="error-note">{error}</p>}

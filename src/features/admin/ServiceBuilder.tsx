@@ -23,10 +23,11 @@ const PORTALS: DeptCode[] = ['IT', 'ADMIN']
 export function ServiceBuilder() {
   const { hasRole } = useAuth()
   const [services, setServices] = useState<Svc[]>([])
+  const [slaProfiles, setSlaProfiles] = useState<{ id: string; name: string }[]>([])
   const [form, setForm] = useState({
-    name: '', code: '', description: '', dept: 'IT' as DeptCode,
+    name: '', description: '', dept: 'IT' as DeptCode,
     parent: '', requiresApproval: false, respH: '4', resoH: '48',
-    formSource: 'blank', workflowSource: 'defaults',
+    formSource: 'blank', workflowSource: 'defaults', slaProfile: '',
   })
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -40,7 +41,11 @@ export function ServiceBuilder() {
         if (e) setError(e.message)
         else setServices((data as Svc[]) ?? [])
       })
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    supabase.from('sla_profiles').select('id, name').order('name')
+      .then(({ data }) => setSlaProfiles((data as { id: string; name: string }[]) ?? []))
+  }, [])
 
   const editable = (d: DeptCode) => hasRole('system_admin') || hasRole('dept_admin', d)
   const mains = services.filter((s) => !s.parent_id && s.dept === form.dept)
@@ -57,19 +62,20 @@ export function ServiceBuilder() {
       .from('services')
       .insert({
         name: form.name.trim(),
-        code: form.code.trim().toUpperCase(),
         description: form.description.trim() || null,
         dept: form.dept,
         parent_id: form.parent || null,
         requires_approval: form.requiresApproval,
+        sla_profile_id: form.slaProfile || null,
         sla_response_minutes: Math.round(Number(form.respH) * 60) || null,
         sla_resolution_minutes: Math.round(Number(form.resoH) * 60) || null,
         form_schema: schema,
       })
-      .select('id')
+      .select('id, code')
       .single()
     if (e) return setError(e.message)
     const newId = (data as { id: string }).id
+    const newCode = (data as { code: string }).code
     if (form.workflowSource.startsWith('copy:')) {
       const src = form.workflowSource.slice(5)
       const { data: wf } = await supabase
@@ -81,8 +87,8 @@ export function ServiceBuilder() {
         if (we) setError(`Service created, but workflow copy failed: ${we.message}`)
       }
     }
-    setNote(`Service created — refine it in the Form builder and Workflow designer`)
-    setForm({ ...form, name: '', code: '', description: '', parent: '' })
+    setNote(`Service created with reference ${newCode} — refine it in the Form builder and Workflow designer`)
+    setForm({ ...form, name: '', description: '', parent: '' })
     load()
   }
 
@@ -92,8 +98,8 @@ export function ServiceBuilder() {
     load()
   }
 
-  const withPublished = services.filter((s) => true) // workflow copy options come from all services
-  const valid = form.name.trim().length > 1 && /^[A-Za-z]{2,3}$/.test(form.code.trim())
+  const withPublished = services.filter(() => true) // workflow copy options come from all services
+  const valid = form.name.trim().length > 1
 
   return (
     <>
@@ -106,7 +112,13 @@ export function ServiceBuilder() {
       <div className="card" style={{ padding: 18, marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
           <input className="input" style={{ flex: 2, minWidth: 180 }} placeholder="Service name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input className="input mono" style={{ width: 80 }} placeholder="Code" maxLength={3} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+          <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)', alignSelf: 'center' }}>
+            ref auto-generated
+          </span>
+          <select className="input" style={{ width: 140 }} value={form.slaProfile} onChange={(e) => setForm({ ...form, slaProfile: e.target.value })}>
+            <option value="">SLA: per-service hours</option>
+            {slaProfiles.map((p) => <option key={p.id} value={p.id}>SLA: {p.name}</option>)}
+          </select>
           <select className="input" style={{ width: 150 }} value={form.dept} onChange={(e) => setForm({ ...form, dept: e.target.value as DeptCode, parent: '' })}>
             {PORTALS.map((d) => <option key={d} value={d}>{DEPT_COLOR[d].label}</option>)}
           </select>

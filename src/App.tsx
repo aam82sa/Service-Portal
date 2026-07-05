@@ -21,6 +21,7 @@ export default function App() {
   const { session, profile, loading, isAdmin, hasRole, canSee, signOut } = useAuth()
   const [page, setPage] = useState<Page>('portal')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
@@ -72,10 +73,18 @@ export default function App() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
         <div className="brand">
           <span className="brand-badge">RLC</span>
-          Services Hub
+          <span className="brand-name">Services Hub</span>
+          <button
+            className="collapse-btn"
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+            title={collapsed ? 'Expand menu' : 'Collapse menu'}
+          >
+            {collapsed ? '»' : '«'}
+          </button>
         </div>
         {see.home && (
           <button

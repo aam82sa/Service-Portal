@@ -146,17 +146,36 @@ export function FormBuilder() {
       })()}
       <div className="card">
         <div className="row" style={{ fontSize: 11, color: 'var(--muted)' }}>
-          <span style={{ width: 44 }}>Order</span>
+          <span style={{ width: 60 }}>Drag / order</span>
           <span style={{ flex: 1 }}>Label</span>
           <span style={{ width: 110 }}>Type</span>
+          <span style={{ width: 64 }}>Width</span>
           <span style={{ width: 60 }}>Visible</span>
           <span style={{ width: 66 }}>Required</span>
           <span style={{ width: 30 }} />
         </div>
         {fields.map((f, i) => (
-          <div key={i}>
+          <div
+            key={i}
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData('text/plain', String(i))}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault()
+              const from = Number(e.dataTransfer.getData('text/plain'))
+              if (Number.isNaN(from) || from === i) return
+              setFields((fs) => {
+                const next = [...fs]
+                const [item] = next.splice(from, 1)
+                next.splice(i, 0, item)
+                return next
+              })
+              setDirty(true)
+            }}
+          >
           <div className="row" style={{ opacity: f.visible === false ? 0.55 : 1 }}>
-            <span style={{ width: 44, display: 'flex', gap: 2 }}>
+            <span style={{ width: 60, display: 'flex', gap: 2, alignItems: 'center' }}>
+              <span style={{ cursor: 'grab', color: 'var(--muted)', fontSize: 14, padding: '0 2px' }} title="Drag to reorder">⠿</span>
               <button className="btn" style={{ padding: '2px 6px' }} onClick={() => move(i, -1)} aria-label="Move up">↑</button>
               <button className="btn" style={{ padding: '2px 6px' }} onClick={() => move(i, 1)} aria-label="Move down">↓</button>
             </span>
@@ -176,6 +195,14 @@ export function FormBuilder() {
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
+            <button
+              className="btn mono"
+              style={{ width: 64, padding: '4px 6px', fontSize: 10.5 }}
+              title="Toggle field width in the form"
+              onClick={() => patch(i, { width: f.width === 'half' ? 'full' : 'half' })}
+            >
+              {f.width === 'half' ? '◧ half' : '▭ full'}
+            </button>
             <span style={{ width: 60 }}>
               <button
                 className={`toggle${f.visible !== false ? ' on' : ''}`}

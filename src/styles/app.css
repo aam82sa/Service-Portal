@@ -53,6 +53,19 @@ h1, h2, h3 { font-family: var(--font-head); color: var(--ink); margin: 0; }
   color: #fff; font-family: var(--font-head); font-weight: 600;
   padding: 0 8px 18px;
 }
+.collapse-btn {
+  margin-left: auto; background: var(--ink-2); color: #B9C2D6;
+  border: none; border-radius: 7px; width: 24px; height: 24px;
+  cursor: pointer; font-size: 13px; line-height: 1; flex-shrink: 0;
+}
+.collapse-btn:hover { background: var(--ink-3); color: #fff; }
+.sidebar.collapsed { width: 56px; padding: 20px 8px; }
+.sidebar.collapsed .brand { padding: 0 0 18px; justify-content: center; flex-direction: column; gap: 10px; }
+.sidebar.collapsed .brand-name,
+.sidebar.collapsed .nav-item,
+.sidebar.collapsed .nav-group,
+.sidebar.collapsed .sidebar-foot { display: none; }
+.sidebar.collapsed .collapse-btn { margin-left: 0; }
 .brand-badge {
   font-family: var(--font-mono); font-size: 11px;
   background: var(--accent); color: #fff;

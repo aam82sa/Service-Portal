@@ -43,7 +43,9 @@ export function AdminPage() {
   }
   if (isUsr) {
     sections.push({ id: 'users', label: 'User management', group: 'User admin' })
-    sections.push({ id: 'delegation', label: 'Delegation', group: 'User admin' })
+  }
+  if (isUsr || hasRole('dept_head')) {
+    sections.push({ id: 'delegation', label: 'Delegation', group: isUsr ? 'User admin' : 'Department head' })
   }
 
   const [section, setSection] = useState<Section>(sections[0]?.id ?? 'functions')
@@ -90,7 +92,7 @@ export function AdminPage() {
         {section === 'forms' && (isSys || isDept) && <FormBuilder />}
         {section === 'workflows' && (isSys || isDept) && <WorkflowDesigner />}
         {section === 'users' && isUsr && <UsersRoles />}
-        {section === 'delegation' && isUsr && <Delegations />}
+        {section === 'delegation' && (isUsr || hasRole('dept_head')) && <Delegations />}
       </div>
     </div>
   )
