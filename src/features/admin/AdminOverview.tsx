@@ -85,7 +85,7 @@ export function AdminOverview({ onNavigate }: { onNavigate: Navigate }) {
   const statusCounts = reqs.reduce<Record<string, number>>((a, r) => { a[r.status] = (a[r.status] ?? 0) + 1; return a }, {})
   const catCounts = assets.reduce<Record<string, number>>((a, x) => { a[x.category] = (a[x.category] ?? 0) + 1; return a }, {})
   const maxCat = Math.max(1, ...Object.values(catCounts))
-  const deptCounts = [['IT', open.filter((r) => r.dept === 'IT').length], ['ADMIN', open.filter((r) => r.dept === 'ADMIN').length]] as const
+  const deptCounts = [['IT', open.filter((r) => r.dept === 'IT').length], ['ADMIN', open.filter((r) => r.dept === 'ADMIN').length], ['PROC', open.filter((r) => r.dept === 'PROC').length]] as const
   const maxDept = Math.max(1, ...deptCounts.map(([, n]) => n))
 
   return (
@@ -129,8 +129,8 @@ export function AdminOverview({ onNavigate }: { onNavigate: Navigate }) {
             Open requests by department
           </div>
           {deptCounts.map(([d, n]) => (
-            <HBar key={d} name={d === 'IT' ? 'IT Services' : 'Administration'} value={n} max={maxDept}
-              color={d === 'IT' ? 'var(--it)' : 'var(--admin)'} onClick={() => onNavigate('insights')} />
+            <HBar key={d} name={d === 'IT' ? 'IT Services' : d === 'PROC' ? 'Procurement' : 'Administration'} value={n} max={maxDept}
+              color={d === 'IT' ? 'var(--it)' : d === 'PROC' ? 'var(--green)' : 'var(--admin)'} onClick={() => onNavigate('insights')} />
           ))}
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', margin: '10px 0 8px' }}>
             Assets by category

@@ -230,7 +230,7 @@ export function Home({ onNavigate, onOpenRequest }: {
             </div>
           ))}
         </div>
-        {(['IT', 'ADMIN'] as DeptCode[]).map((d) => {
+        {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => {
           const c = DEPT_COLOR[d]
           const s = deptRow(d)
           return (
@@ -243,7 +243,7 @@ export function Home({ onNavigate, onOpenRequest }: {
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: c.rail, flexShrink: 0 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{c.label}</div>
-                  <div style={ms}>{d === 'IT' ? 'Hardware · Access · Software' : 'Travel · Facilities · Fleet'}</div>
+                  <div style={ms}>{d === 'IT' ? 'Hardware · Access · Software' : d === 'PROC' ? 'Purchasing · Vendors · Orders' : 'Travel · Facilities · Fleet'}</div>
                 </div>
               </div>
               <div style={cell}>

@@ -1,4 +1,4 @@
-export type DeptCode = 'IT' | 'ADMIN' | 'LOG'
+export type DeptCode = 'IT' | 'ADMIN' | 'PROC' | 'LOG'
 
 export type Role =
   | 'requester'
@@ -44,5 +44,9 @@ export interface Service {
 export const DEPT_COLOR: Record<DeptCode, { rail: string; soft: string; label: string }> = {
   IT: { rail: 'var(--it)', soft: 'var(--it-soft)', label: 'IT Services' },
   ADMIN: { rail: 'var(--admin)', soft: 'var(--admin-soft)', label: 'Administration' },
+  PROC: { rail: 'var(--green)', soft: 'var(--green-soft)', label: 'Procurement' },
   LOG: { rail: 'var(--log)', soft: 'var(--log-soft)', label: 'Logistics' },
 }
+
+/** Active portal departments (containers). LOG is dormant (folded into ADMIN). */
+export const PORTAL_DEPTS: DeptCode[] = ['IT', 'ADMIN', 'PROC']

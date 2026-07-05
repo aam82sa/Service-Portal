@@ -377,7 +377,7 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 7 }}>Department</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <button style={pill(dept === 'all')} onClick={() => setFilter(() => setDept('all'))}>All</button>
-              {(['IT', 'ADMIN'] as DeptCode[]).map((d) => (
+              {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => (
                 <button key={d} style={pill(dept === d, DEPT_COLOR[d].rail)} onClick={() => setFilter(() => setDept(dept === d ? 'all' : d))}>
                   {DEPT_COLOR[d].label}
                 </button>
@@ -473,11 +473,11 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 8 }}>
               By department
             </div>
-            {(['IT', 'ADMIN'] as DeptCode[]).map((d) => (
+            {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => (
               <HBar
                 key={d} name={DEPT_COLOR[d].label}
                 value={filtered.filter((r) => r.dept === d).length}
-                max={Math.max(1, ...(['IT', 'ADMIN'] as DeptCode[]).map((x) => filtered.filter((r) => r.dept === x).length))}
+                max={Math.max(1, ...(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((x) => filtered.filter((r) => r.dept === x).length))}
                 color={DEPT_COLOR[d].rail}
               />
             ))}
