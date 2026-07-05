@@ -34,3 +34,22 @@ Access = role permission × department scope. Roles derive from Entra ID securit
 
 ## DoA bands (SAR)
 Tier 1 < 25,000 · Tier 2 25,000–100,000 · Tier 3 > 100,000
+
+## PMO module roles (Phase 6a — docs/pmo-gap-decisions.md §J)
+| Role | Scope | Access |
+|---|---|---|
+| Project Manager | Assigned projects (`project_manager_id`) | Create projects; edit WBS, schedule, budget, risks, issues; submit charters and change requests |
+| PMO Admin | All projects (configuration) | Project/WBS templates, portfolio and program structure; not a fulfillment role |
+
+Existing roles gain project-scoped access without new groups: Sponsor = Approver
+(via `sponsor_id`), Team Member = Requester/Agent (via `resource_assignments`),
+Portfolio Executive = Executive (read-only), Department Head decides
+task-to-project conversions for their department.
+
+| AD security group | Platform role |
+|---|---|
+| SG-ABC-Project-Managers | Project Manager |
+| SG-ABC-PMO-Admins | PMO Admin |
+
+Group mapping applies in SSO mode only; dev mode seeds these through
+`role_assignments` like every other role.

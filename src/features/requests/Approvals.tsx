@@ -21,6 +21,15 @@ interface PendingRequest {
   steps: ApprovalStep[]
 }
 
+interface PendingCharter {
+  id: string
+  objective: string
+  estimated_budget: number | null
+  doa_tier: string | null
+  project: { code: string; name: string } | null
+  steps: ApprovalStep[]
+}
+
 export function Chain({ steps }: { steps: ApprovalStep[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
@@ -54,6 +63,7 @@ export function Chain({ steps }: { steps: ApprovalStep[] }) {
 
 export function Approvals() {
   const [items, setItems] = useState<PendingRequest[]>([])
+  const [charters, setCharters] = useState<PendingCharter[]>([])
   const [comments, setComments] = useState<Record<string, string>>({})
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,6 +86,29 @@ export function Approvals() {
           setItems(rows)
         }
         setLoaded(true)
+      })
+    // Charter chains live under a polymorphic subject (no FK), so two queries
+    supabase
+      .from('project_charters')
+      .select('id, objective, estimated_budget, doa_tier, project:projects(code, name)')
+      .eq('status', 'submitted')
+      .order('submitted_at')
+      .then(async ({ data }) => {
+        const rows = (data as unknown as PendingCharter[]) ?? []
+        if (rows.length === 0) { setCharters([]); return }
+        const { data: s } = await supabase
+          .from('approvals')
+          .select('id, request_id, step_order, approver_hint, decision, comment, subject_id')
+          .eq('subject_type', 'project_charter')
+          .in('subject_id', rows.map((c) => c.id))
+          .order('step_order')
+        const bySubject = new Map<string, ApprovalStep[]>()
+        for (const step of (s as unknown as (ApprovalStep & { subject_id: string })[]) ?? []) {
+          const list = bySubject.get(step.subject_id) ?? []
+          list.push(step)
+          bySubject.set(step.subject_id, list)
+        }
+        setCharters(rows.map((c) => ({ ...c, steps: bySubject.get(c.id) ?? [] })))
       })
   }, [])
 
@@ -146,7 +179,47 @@ export function Approvals() {
           </div>
         )
       })}
-      {loaded && items.length === 0 && !error && (
+      {charters.map((c) => {
+        const current = c.steps.find((s) => s.decision === 'pending')
+        return (
+          <div className="card" key={c.id} style={{ marginBottom: 14, padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+              <span style={{ width: 4, alignSelf: 'stretch', background: 'var(--accent)', borderRadius: 2 }} />
+              <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink)' }}>
+                {c.project?.code ?? 'PJ-????'}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div className="row-title">Project charter — {c.project?.name ?? 'Unknown project'}</div>
+                <div className="row-desc">{c.objective}{c.doa_tier ? ` · ${c.doa_tier}` : ''}</div>
+              </div>
+              {c.estimated_budget != null && (
+                <span className="mono" style={{ fontSize: 14, color: 'var(--ink)' }}>
+                  {c.estimated_budget.toLocaleString()} SAR
+                </span>
+              )}
+            </div>
+            <Chain steps={c.steps} />
+            {current && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
+                <input
+                  className="input"
+                  style={{ flex: 1 }}
+                  placeholder="Comment (optional)"
+                  value={comments[current.id] ?? ''}
+                  onChange={(e) => setComments((s) => ({ ...s, [current.id]: e.target.value }))}
+                />
+                <button className="btn primary" onClick={() => decide(current, 'approved')}>
+                  Approve step {current.step_order}
+                </button>
+                <button className="btn" onClick={() => decide(current, 'rejected')}>
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {loaded && items.length === 0 && charters.length === 0 && !error && (
         <div className="card">
           <div className="row row-desc">Nothing awaiting approval.</div>
         </div>
