@@ -6,16 +6,26 @@ const DEV_USERS = [
   { email: 'requester@dev.rlc.sa', label: 'Rana Requester — requester' },
   { email: 'agent.it@dev.rlc.sa', label: 'Ahmed Agent — agent, IT' },
   { email: 'lead.it@dev.rlc.sa', label: 'Latifa Lead — team lead, IT' },
-  { email: 'approver@dev.rlc.sa', label: 'Aziz Approver — DoA approver' },
-  { email: 'deptadmin.it@dev.rlc.sa', label: 'Dana DeptAdmin — dept admin, IT' },
+  { email: 'approver@dev.rlc.sa', label: 'Aziz Approver — dept head' },
+  { email: 'deptadmin.it@dev.rlc.sa', label: 'Dana DeptAdmin — dept head, IT' },
   { email: 'useradmin@dev.rlc.sa', label: 'Umar UserAdmin — user admin' },
   { email: 'sysadmin@dev.rlc.sa', label: 'Sara SysAdmin — system admin' },
+  { email: 'tester1@dev.rlc.sa', label: 'Tester One — requester' },
+  { email: 'tester2@dev.rlc.sa', label: 'Tester Two — requester' },
+  { email: 'tester3@dev.rlc.sa', label: 'Tester Three — requester' },
 ]
+
+const passwordFor = (email: string) =>
+  email.startsWith('tester') ? 'RlcTest!2026' : 'RlcDev!2026'
 
 export function SignIn() {
   const { signInDev, signInSso } = useAuth()
-  const [email, setEmail] = useState(DEV_USERS[6].email)
-  const [password, setPassword] = useState('RlcDev!2026')
+  const [email, setEmailRaw] = useState(DEV_USERS[6].email)
+  const [password, setPassword] = useState(passwordFor(DEV_USERS[6].email))
+  const setEmail = (e: string) => {
+    setEmailRaw(e)
+    setPassword(passwordFor(e))
+  }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 

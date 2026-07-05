@@ -102,9 +102,9 @@ function PersonPicker({ people, placeholder, onPick }: {
   )
 }
 
-export function Assets({ onOpenRequest }: { onOpenRequest: (id: string) => void }) {
+export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: string) => void; initialSection?: 'hardware' | 'licenses' | 'people' }) {
   const { hasRole } = useAuth()
-  const [section, setSection] = useState<'hardware' | 'licenses' | 'people'>('hardware')
+  const [section, setSection] = useState<'hardware' | 'licenses' | 'people'>(initialSection ?? 'hardware')
   const [assets, setAssets] = useState<Asset[]>([])
   const [licenses, setLicenses] = useState<License[]>([])
   const [people, setPeople] = useState<Person[]>([])

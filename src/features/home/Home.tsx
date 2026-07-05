@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode, type Service } from '../../lib/types'
 import { SEVERITY_STYLE } from '../admin/Announcements'
+import { AdminOverview } from '../admin/AdminOverview'
+import type { Navigate } from '../../App'
 
 interface OwnReq {
   id: string
@@ -32,23 +34,81 @@ interface Banner {
   severity: keyof typeof SEVERITY_STYLE
 }
 
+interface OwnDelegation {
+  id: string
+  starts_on: string
+  ends_on: string
+  status: string
+  delegate: { display_name: string } | null
+}
+
 const CLOSED = ['closed', 'cancelled']
 
-export function Home({ onNavigate }: { onNavigate: (page: 'portal' | 'requests') => void }) {
-  const { session, profile } = useAuth()
+export function Home({ onNavigate, onOpenRequest }: {
+  onNavigate: Navigate
+  onOpenRequest: (id: string) => void
+}) {
+  const { session, profile, hasRole } = useAuth()
+  const isSys = hasRole('system_admin')
+  const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
+  const isApprover = hasRole('approver')
+  const [work, setWork] = useState({ mine: 0, unassigned: 0, approvals: 0 })
   const [reqs, setReqs] = useState<OwnReq[]>([])
   const [assets, setAssets] = useState<OwnAsset[]>([])
   const [lics, setLics] = useState<OwnLic[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [banners, setBanners] = useState<Banner[]>([])
+  const [delegations, setDelegations] = useState<OwnDelegation[]>([])
+  const [people, setPeople] = useState<{ id: string; display_name: string }[]>([])
+  const [dform, setDform] = useState({ delegate: '', starts: '', ends: '', reason: '' })
+  const [dError, setDError] = useState<string | null>(null)
+
+  const loadDelegations = () =>
+    supabase
+      .from('approval_delegations')
+      .select('id, starts_on, ends_on, status, delegate:profiles!approval_delegations_delegate_id_fkey(display_name)')
+      .eq('delegator_id', session!.user.id)
+      .order('starts_on', { ascending: false })
+      .limit(3)
+      .then(({ data }) => setDelegations((data as unknown as OwnDelegation[]) ?? []))
+
+  const requestDelegation = async () => {
+    setDError(null)
+    const { error: e } = await supabase.from('approval_delegations').insert({
+      delegator_id: session!.user.id,
+      delegate_id: dform.delegate,
+      starts_on: dform.starts,
+      ends_on: dform.ends,
+      reason: dform.reason || null,
+      created_by: session!.user.id,
+    })
+    if (e) setDError(e.message)
+    else setDform({ delegate: '', starts: '', ends: '', reason: '' })
+    loadDelegations()
+  }
 
   useEffect(() => {
+    if (isSys) return // system admins get the system overview instead
     const uid = session!.user.id
     supabase
       .from('requests')
       .select('id, dept, status, created_at, updated_at, sla_resolution_due')
       .eq('requester_id', uid)
       .then(({ data }) => setReqs((data as OwnReq[]) ?? []))
+    if (isStaff || isApprover) {
+      supabase
+        .from('requests')
+        .select('status, assignee_id, requester_id')
+        .not('status', 'in', '(closed,cancelled)')
+        .then(({ data }) => {
+          const rows = (data as { status: string; assignee_id: string | null }[]) ?? []
+          setWork({
+            mine: rows.filter((r) => r.assignee_id === uid).length,
+            unassigned: rows.filter((r) => !r.assignee_id).length,
+            approvals: rows.filter((r) => r.status === 'pending_approval').length,
+          })
+        })
+    }
     supabase
       .from('assets')
       .select('tag, category, model, status')
@@ -75,11 +135,20 @@ export function Home({ onNavigate }: { onNavigate: (page: 'portal' | 'requests')
         if (!data?.is_enabled) return
         supabase
           .from('announcements')
-          .select('id, title, body, severity, starts_at, ends_at')
+          .select('id, title, body, severity, starts_at, ends_at').eq('is_active', true)
           .lte('starts_at', new Date().toISOString())
           .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
           .then(({ data: anns }) => setBanners((anns as Banner[]) ?? []))
       })
+    loadDelegations()
+    supabase
+      .from('profiles')
+      .select('id, display_name')
+      .eq('is_active', true)
+      .neq('id', uid)
+      .order('display_name')
+      .then(({ data }) => setPeople((data as { id: string; display_name: string }[]) ?? []))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
   const hour = new Date().getHours()
@@ -88,6 +157,8 @@ export function Home({ onNavigate }: { onNavigate: (page: 'portal' | 'requests')
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
+
+  if (isSys) return <AdminOverview onNavigate={onNavigate} />
 
   const deptRow = (d: DeptCode) => {
     const mine = reqs.filter((r) => r.dept === d)
@@ -124,6 +195,29 @@ export function Home({ onNavigate }: { onNavigate: (page: 'portal' | 'requests')
           {today}
         </span>
       </div>
+
+      {(isStaff || isApprover) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          {isStaff && (
+            <button className="card" style={{ padding: '10px 14px', flex: 1, minWidth: 130, textAlign: 'left', cursor: 'pointer' }} onClick={() => onNavigate('mywork')}>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-head)', color: 'var(--it)' }}>{work.mine}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)' }}>Assigned to me →</div>
+            </button>
+          )}
+          {isStaff && (
+            <button className="card" style={{ padding: '10px 14px', flex: 1, minWidth: 130, textAlign: 'left', cursor: 'pointer' }} onClick={() => onNavigate('queue')}>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-head)', color: work.unassigned > 0 ? 'var(--amber)' : 'var(--green)' }}>{work.unassigned}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)' }}>Unassigned in queue →</div>
+            </button>
+          )}
+          {isApprover && (
+            <button className="card" style={{ padding: '10px 14px', flex: 1, minWidth: 130, textAlign: 'left', cursor: 'pointer' }} onClick={() => onNavigate('approvals')}>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-head)', color: work.approvals > 0 ? 'var(--accent)' : 'var(--green)' }}>{work.approvals}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)' }}>Awaiting approval →</div>
+            </button>
+          )}
+        </div>
+      )}
 
       <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.6px', marginBottom: 8 }}>
         YOUR REQUESTS SNAPSHOT
@@ -293,6 +387,46 @@ export function Home({ onNavigate }: { onNavigate: (page: 'portal' | 'requests')
               {lics.length === 0 && <div className="row-desc">No license seats.</div>}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', marginTop: 22 }}>
+        <div style={{ width: 200, flexShrink: 0, paddingTop: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Delegate while away</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+            Hand your duties to a colleague for a date range — takes effect after your
+            department head approves. Both of you are notified.
+          </div>
+        </div>
+        <div className="card" style={{ flex: 1, padding: 16 }}>
+          {delegations.map((d) => (
+            <div key={d.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '4px 0', fontSize: 12.5 }}>
+              <span style={{ flex: 1 }}>→ {d.delegate?.display_name ?? '—'}</span>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--muted)' }}>{d.starts_on} – {d.ends_on}</span>
+              <span className="chip" style={{
+                background: d.status === 'approved' ? 'var(--green-soft)' : d.status === 'rejected' ? 'var(--red-soft)' : 'var(--amber-soft)',
+                color: d.status === 'approved' ? 'var(--green)' : d.status === 'rejected' ? 'var(--red)' : 'var(--amber)',
+              }}>
+                {d.status === 'pending' ? 'awaiting dept head' : d.status}
+              </span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: delegations.length > 0 ? 10 : 0 }}>
+            <select className="input" style={{ flex: 1, minWidth: 150 }} value={dform.delegate} onChange={(e) => setDform({ ...dform, delegate: e.target.value })}>
+              <option value="">Delegate to…</option>
+              {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
+            </select>
+            <input className="input" type="date" style={{ width: 135 }} value={dform.starts} onChange={(e) => setDform({ ...dform, starts: e.target.value })} />
+            <input className="input" type="date" style={{ width: 135 }} value={dform.ends} onChange={(e) => setDform({ ...dform, ends: e.target.value })} />
+            <button
+              className="btn primary"
+              disabled={!dform.delegate || !dform.starts || !dform.ends || dform.ends < dform.starts}
+              onClick={requestDelegation}
+            >
+              Request
+            </button>
+          </div>
+          {dError && <p className="error-note">{dError}</p>}
         </div>
       </div>
     </>

@@ -7,6 +7,7 @@ interface Delegation {
   starts_on: string
   ends_on: string
   reason: string | null
+  status: 'pending' | 'approved' | 'rejected'
   delegator: { display_name: string } | null
   delegate: { display_name: string } | null
 }
@@ -17,7 +18,9 @@ interface Person {
 }
 
 export function Delegations() {
-  const { session } = useAuth()
+  const { session, hasRole } = useAuth()
+  const canDecide = hasRole('dept_head') || hasRole('user_admin') || hasRole('system_admin')
+  const canManage = hasRole('user_admin')
   const [rows, setRows] = useState<Delegation[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [form, setForm] = useState({ delegator: '', delegate: '', starts: '', ends: '', reason: '' })
@@ -27,7 +30,7 @@ export function Delegations() {
     supabase
       .from('approval_delegations')
       .select(
-        'id, starts_on, ends_on, reason, delegator:profiles!approval_delegations_delegator_id_fkey(display_name), delegate:profiles!approval_delegations_delegate_id_fkey(display_name)'
+        'id, starts_on, ends_on, reason, status, delegator:profiles!approval_delegations_delegator_id_fkey(display_name), delegate:profiles!approval_delegations_delegate_id_fkey(display_name)'
       )
       .order('starts_on', { ascending: false })
       .then(({ data, error: e }) => {
@@ -66,13 +69,24 @@ export function Delegations() {
     load()
   }
 
+  const decide = async (id: string, approve: boolean) => {
+    setError(null)
+    const { error: e } = await supabase.rpc('decide_delegation', { p_id: id, p_approve: approve })
+    if (e) setError(e.message)
+    load()
+  }
+
   const today = new Date().toISOString().slice(0, 10)
   const chip = (d: Delegation) =>
-    d.ends_on < today
-      ? { label: 'expired', bg: 'var(--surface)', fg: 'var(--muted)' }
-      : d.starts_on > today
-        ? { label: 'upcoming', bg: 'var(--it-soft)', fg: 'var(--it)' }
-        : { label: 'active', bg: 'var(--amber-soft)', fg: 'var(--amber)' }
+    d.status === 'pending'
+      ? { label: 'awaiting dept head', bg: 'var(--amber-soft)', fg: 'var(--amber)' }
+      : d.status === 'rejected'
+        ? { label: 'rejected', bg: 'var(--red-soft)', fg: 'var(--red)' }
+        : d.ends_on < today
+          ? { label: 'expired', bg: 'var(--surface)', fg: 'var(--muted)' }
+          : d.starts_on > today
+            ? { label: 'upcoming', bg: 'var(--it-soft)', fg: 'var(--it)' }
+            : { label: 'active', bg: 'var(--green-soft)', fg: 'var(--green)' }
 
   const valid = form.delegator && form.delegate && form.delegator !== form.delegate && form.starts && form.ends && form.ends >= form.starts
 
@@ -95,16 +109,29 @@ export function Delegations() {
                 {d.starts_on} – {d.ends_on}
               </span>
               <span className="chip" style={{ background: c.bg, color: c.fg }}>{c.label}</span>
-              <button
-                className="btn" style={{ padding: '2px 8px', color: 'var(--red)' }}
-                onClick={() => remove(d.id)} aria-label="Remove delegation"
-              >
-                ×
-              </button>
+              {d.status === 'pending' && canDecide && (
+                <>
+                  <button className="btn primary" style={{ padding: '3px 10px', fontSize: 11.5 }} onClick={() => decide(d.id, true)}>
+                    Approve
+                  </button>
+                  <button className="btn" style={{ padding: '3px 10px', fontSize: 11.5 }} onClick={() => decide(d.id, false)}>
+                    Reject
+                  </button>
+                </>
+              )}
+              {canManage && (
+                <button
+                  className="btn" style={{ padding: '2px 8px', color: 'var(--red)' }}
+                  onClick={() => remove(d.id)} aria-label="Remove delegation"
+                >
+                  ×
+                </button>
+              )}
             </div>
           )
         })}
         {rows.length === 0 && <div className="row row-desc">No delegations.</div>}
+        {canManage && (
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
           <select className="input" style={{ width: 160 }} value={form.delegator} onChange={(e) => setForm({ ...form, delegator: e.target.value })}>
             <option value="">Delegator…</option>
@@ -120,10 +147,12 @@ export function Delegations() {
           <input className="input" style={{ flex: 1, minWidth: 120 }} placeholder="Reason (optional)" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
           <button className="btn primary" onClick={add} disabled={!valid}>Add</button>
         </div>
+        )}
       </div>
       <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-        Enforcement in the approvals engine (delegate allowed to decide during the window)
-        arrives with the next approvals iteration.
+        Both parties are notified on every creation or status change (queued now, emailed once
+        Microsoft 365 is connected). Users request their own delegations from the Home page;
+        a department head must approve them before they take effect.
       </p>
       {error && <p className="error-note">{error}</p>}
     </>

@@ -18,6 +18,8 @@ interface AuthState {
   hasRole: (role: Role, dept?: DeptCode) => boolean
   /** Page access from the admin panel; null while unknown (fall back to role checks). */
   canSee: (page: string) => boolean | null
+  /** Re-read the page access matrix (called after admin edits it). */
+  refreshAccess: () => Promise<void>
   isAdmin: boolean
   signInDev: (email: string, password: string) => Promise<string | null>
   signInSso: () => Promise<void>
@@ -52,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return
     let cancelled = false
+    setLoading(true) // landing decisions must wait until roles + access are known
     ;(async () => {
       const [{ data: prof }, { data: ras }, { data: pa }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', session.user.id).single(),
@@ -103,13 +106,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }, [])
 
+  const refreshAccess = useCallback(async () => {
+    const { data } = await supabase.from('page_access').select('page, allowed')
+    if (data && data.length > 0) {
+      const map: Record<string, string[]> = {}
+      for (const row of data as { page: string; allowed: string[] }[]) map[row.page] = row.allowed
+      setPageAccess(map)
+    }
+  }, [])
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (session) refreshAccess()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [session, refreshAccess])
+
   const canSee = useCallback(
     (page: string): boolean | null => {
       if (!pageAccess) return null
       const allowed = pageAccess[page]
       if (!allowed) return null
       const mine = new Set<string>(roles.map((r) => r.role))
-      mine.add('requester') // every signed-in user is implicitly a requester
+      // Every signed-in user is implicitly a requester — except system admins,
+      // who manage the platform and never participate in requests.
+      if (!mine.has('system_admin')) mine.add('requester')
       return allowed.some((a) => mine.has(a))
     },
     [pageAccess, roles]
@@ -119,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, roles, loading, hasRole, canSee, isAdmin, signInDev, signInSso, signOut }}
+      value={{ session, profile, roles, loading, hasRole, canSee, refreshAccess, isAdmin, signInDev, signInSso, signOut }}
     >
       {children}
     </AuthContext.Provider>

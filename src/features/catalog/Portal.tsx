@@ -33,7 +33,7 @@ export function Portal() {
         if (!data?.is_enabled) return
         supabase
           .from('announcements')
-          .select('id, title, body, severity, starts_at, ends_at')
+          .select('id, title, body, severity, starts_at, ends_at').eq('is_active', true)
           .lte('starts_at', new Date().toISOString())
           .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
           .then(({ data: anns }) => setBanners((anns as Banner[]) ?? []))

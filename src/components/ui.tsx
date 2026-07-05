@@ -68,6 +68,64 @@ export function MetricCard({ label, value, tone = 'ink' }: {
   )
 }
 
+export function Donut({ parts, centerTop, centerSub, size = 110 }: {
+  parts: { v: number; c: string }[]
+  centerTop: string
+  centerSub: string
+  size?: number
+}) {
+  const total = parts.reduce((s, p) => s + p.v, 0) || 1
+  const R = 50
+  const C = 2 * Math.PI * R
+  let acc = 0
+  return (
+    <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
+      <svg viewBox="0 0 128 128" width={size} height={size}>
+        <circle cx="64" cy="64" r={R} fill="none" stroke="var(--surface)" strokeWidth="17" />
+        {parts.filter((p) => p.v > 0).map((p, i) => {
+          const frac = p.v / total
+          const el = (
+            <circle
+              key={i} cx="64" cy="64" r={R} fill="none" stroke={p.c} strokeWidth="17"
+              strokeDasharray={`${frac * C} ${C}`} strokeDashoffset={-acc * C}
+              transform="rotate(-90 64 64)"
+            />
+          )
+          acc += frac
+          return el
+        })}
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-head)', color: 'var(--ink)' }}>{centerTop}</div>
+        <div style={{ fontSize: 8.5, color: 'var(--muted)' }}>{centerSub}</div>
+      </div>
+    </div>
+  )
+}
+
+export function HBar({ name, value, max, color, onClick }: {
+  name: string
+  value: number
+  max: number
+  color: string
+  onClick?: () => void
+}) {
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0', cursor: onClick ? 'pointer' : undefined }}
+      onClick={onClick}
+    >
+      <span style={{ fontSize: 10.5, width: 104, flexShrink: 0, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {name}
+      </span>
+      <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 3, height: 12, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.max(3, (value / Math.max(1, max)) * 100)}%`, height: '100%', borderRadius: 3, background: color }} />
+      </div>
+      <span className="mono" style={{ fontSize: 10, width: 22, textAlign: 'right', color: 'var(--muted)' }}>{value}</span>
+    </div>
+  )
+}
+
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.6px', marginBottom: 8, textTransform: 'uppercase' }}>

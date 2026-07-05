@@ -10,6 +10,8 @@ export interface FormField {
   options?: string[]
   visible?: boolean
   required?: boolean
+  /** layout width in the request form: full row (default) or half row */
+  width?: 'full' | 'half'
 }
 
 interface ServiceWithForm extends Service {
@@ -93,8 +95,9 @@ export function RequestForm({
         {service.description} · {c.label}
       </p>
 
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0 4%' }}>
       {fields.map((f) => (
-        <div key={f.key} style={{ marginBottom: 14 }}>
+        <div key={f.key} style={{ marginBottom: 14, width: f.width === 'half' ? '48%' : '100%' }}>
           <label className="field-label">
             {f.label}
             {f.required && <span style={{ color: 'var(--red)' }}> *</span>}
@@ -135,6 +138,7 @@ export function RequestForm({
           )}
         </div>
       ))}
+      </div>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button className="btn primary" onClick={submit} disabled={busy}>
