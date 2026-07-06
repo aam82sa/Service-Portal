@@ -27,7 +27,7 @@ export type Navigate = (page: Page, opts?: NavOpts) => void
 
 const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
   { id: 'home', label: 'Overview', ico: 'home' },
-  { id: 'portal', label: 'Portal', ico: 'grid' },
+  { id: 'portal', label: 'New request', ico: 'plus' },
   { id: 'requests', label: 'My requests', ico: 'list' },
   { id: 'mywork', label: 'My work', ico: 'briefcase', group: 'Workspace' },
   { id: 'queue', label: 'Department queue', ico: 'inbox', group: 'Workspace' },
@@ -36,7 +36,7 @@ const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
   { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
   { id: 'assets', label: 'IT assets', ico: 'device', group: 'Workspace' },
   { id: 'pmoadmin', label: 'PMO Admin', ico: 'shield', group: 'Administration' },
-  { id: 'admin', label: 'Admin console', ico: 'gear', group: 'Administration' },
+  { id: 'admin', label: 'Admin console', ico: 'sliders', group: 'Administration' },
 ]
 
 export default function App() {
@@ -46,7 +46,8 @@ export default function App() {
   const [assetsTab, setAssetsTab] = useState<'hardware' | 'licenses' | 'people'>('hardware')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-folded') === '1')
+  const [workBadge, setWorkBadge] = useState(0)
   const [isCommittee, setIsCommittee] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
@@ -89,6 +90,21 @@ export default function App() {
     }
   }, [session])
 
+  // Open items assigned to me -> count pill on "My work"
+  useEffect(() => {
+    if (!session || !isStaff) {
+      setWorkBadge(0)
+      return
+    }
+    supabase
+      .from('requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('assignee_id', session.user.id)
+      .not('status', 'in', '(resolved,closed,cancelled)')
+      .then(({ count }) => setWorkBadge(count ?? 0))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, isStaff])
+
   // Committee membership grants Projects access without any platform role
   useEffect(() => {
     if (!session || !profile) {
@@ -128,7 +144,7 @@ export default function App() {
           <span className="brand-name">Services Hub</span>
           <button
             className="collapse-btn"
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => { localStorage.setItem('sidebar-folded', collapsed ? '0' : '1'); setCollapsed(!collapsed) }}
             aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
             title={collapsed ? 'Expand menu' : 'Collapse menu'}
           >
@@ -136,19 +152,20 @@ export default function App() {
           </button>
         </div>
         {NAV.filter((n) => see[n.id]).map((n) => {
-          const header =
-            n.group && n.group !== lastGroup ? <div className="nav-group" key={`g-${n.group}`}>{n.group}</div> : null
+          const isNewGroup = n.group && n.group !== lastGroup
           lastGroup = n.group ?? lastGroup
           return (
             <div key={n.id}>
-              {header}
+              {isNewGroup && <div className="nav-group">{n.group}</div>}
+              {isNewGroup && <div className="nav-divider" />}
               <button
                 className={`nav-item${activePage === n.id ? ' active' : ''}`}
                 onClick={() => go(n.id)}
                 title={n.label}
               >
-                <Icon name={n.ico} size={collapsed ? 20 : 16} />
+                <Icon name={n.ico} size={collapsed ? 17 : 16} />
                 <span className="nav-label">{n.label}</span>
+                {n.id === 'mywork' && workBadge > 0 && <span className="nav-badge">{workBadge}</span>}
               </button>
               {n.id === 'admin' && activePage === 'admin' && !collapsed &&
                 adminSections.map((s) => (
@@ -165,11 +182,16 @@ export default function App() {
           )
         })}
         <div className="sidebar-foot">
-          <div style={{ color: '#fff', fontWeight: 500 }}>{profile?.display_name}</div>
-          <div className="mono" style={{ fontSize: 10.5, margin: '2px 0 10px' }}>
-            {profile?.upn}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }} title={profile?.display_name}>
+            <span className="avatar">
+              {(profile?.display_name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+            </span>
+            <div className="foot-meta">
+              <div className="foot-name">{profile?.display_name}</div>
+              <div className="foot-mail">{profile?.upn}</div>
+            </div>
           </div>
-          <button className="nav-item" onClick={signOut} style={{ padding: '6px 0' }}>
+          <button className="nav-item foot-signout" onClick={signOut} style={{ padding: '6px 0', marginTop: 8 }}>
             <span className="nav-label">Sign out</span>
           </button>
         </div>

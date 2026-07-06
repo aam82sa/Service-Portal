@@ -59,26 +59,46 @@ h1, h2, h3 { font-family: var(--font-head); color: var(--ink); margin: 0; }
   cursor: pointer; font-size: 13px; line-height: 1; flex-shrink: 0;
 }
 .collapse-btn:hover { background: var(--ink-3); color: #fff; }
-.sidebar.collapsed { width: 68px; padding: 16px 10px; }
+
+/* Folded sidebar (design 4b): 64px icon rail */
+.sidebar.collapsed { width: 64px; padding: 16px 12px; align-items: center; }
 .sidebar.collapsed .nav-item.sub { display: none; }
-.sidebar.collapsed .brand { padding: 0 0 14px; justify-content: center; flex-direction: column; gap: 8px; }
+.sidebar.collapsed .brand { padding: 0 0 10px; justify-content: center; flex-direction: column; gap: 8px; }
 .sidebar.collapsed .brand-name,
 .sidebar.collapsed .nav-label,
 .sidebar.collapsed .nav-group,
-.sidebar.collapsed .sidebar-foot { display: none; }
+.sidebar.collapsed .foot-meta,
+.sidebar.collapsed .foot-signout { display: none; }
 .sidebar.collapsed .collapse-btn { margin-left: 0; }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 7px 0; }
-.nav-ico {
-  display: none; font-size: 10px; font-weight: 500;
-  background: var(--ink-2); border-radius: 6px; padding: 4px 6px;
-  color: inherit; flex-shrink: 0;
+.sidebar.collapsed .nav-item {
+  width: 40px; height: 36px; border-radius: 9px;
+  justify-content: center; padding: 0; margin: 0 auto;
 }
-.sidebar.collapsed .nav-ico { display: inline-block; }
-.nav-item.active .nav-ico { background: var(--accent); color: #fff; }
+.sidebar.collapsed .nav-divider {
+  display: block; width: 24px; border-top: 1px solid var(--ink-3); margin: 8px auto;
+}
+.sidebar.collapsed .nav-badge {
+  position: absolute; top: 2px; right: 2px; margin: 0;
+  font-size: 8.5px; padding: 0 4px;
+}
+.sidebar.collapsed .sidebar-foot { padding: 12px 0 0; display: flex; justify-content: center; }
+.sidebar.collapsed .avatar { width: 30px; height: 30px; }
+.nav-divider { display: none; }
 .nav-item.sub { padding: 5px 10px 5px 26px; font-size: 11.5px; }
 .nav-item.sub.active { background: var(--ink-2); }
-.sidebar.collapsed .nav-item.sub { padding: 5px 0; }
-.sidebar.collapsed .nav-item.sub .nav-ico { font-size: 9px; opacity: .85; }
+.nav-item.sub.active::before { display: none; }
+.nav-badge {
+  margin-left: auto; background: var(--accent); color: #fff;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
+  border-radius: 99px; padding: 1px 6px; flex-shrink: 0;
+}
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--ink-3); color: #fff;
+  font-size: 10.5px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
 .brand-badge {
   font-family: var(--font-mono); font-size: 11px;
   background: var(--accent); color: #fff;
@@ -86,6 +106,7 @@ h1, h2, h3 { font-family: var(--font-head); color: var(--ink); margin: 0; }
 }
 .nav-group { font-size: 11px; color: #5E6B85; margin: 14px 8px 4px; font-weight: 500; }
 .nav-item {
+  position: relative;
   display: flex; align-items: center; gap: 10px;
   padding: 7px 10px; border-radius: 8px;
   font-size: 12.5px; color: #B9C2D6;
@@ -94,11 +115,18 @@ h1, h2, h3 { font-family: var(--font-head); color: var(--ink); margin: 0; }
 }
 .nav-item:hover { background: var(--ink-2); color: #fff; }
 .nav-item.active { background: var(--ink-3); color: #fff; }
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 7px; bottom: 7px;
+  width: 3px; background: var(--accent); border-radius: 2px;
+}
 .sidebar-foot {
   margin-top: auto; padding: 12px 8px 0;
   border-top: 1px solid var(--ink-3);
   font-size: 12px;
 }
+.foot-meta { min-width: 0; }
+.foot-name { color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foot-mail { font-family: var(--font-mono); font-size: 9.5px; color: #5E6B85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .main { flex: 1; padding: 16px 22px; min-width: 0; }
 .page-head { margin-bottom: 3px; font-size: 17px; }
 .page-sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
