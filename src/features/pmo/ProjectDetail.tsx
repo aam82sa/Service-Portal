@@ -3,13 +3,21 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { Chip, SectionLabel } from '../../components/ui'
 import { Chain, type ApprovalStep } from '../requests/Approvals'
+import { WbsTree, type Activity, type WbsAssignment, type WbsDependency } from './Wbs'
+import { TimelineView } from './Timeline'
 import {
-  DEPT_COLOR, PROJECT_STATUS_META,
+  DEPT_COLOR, PORTAL_DEPTS, PROJECT_STATUS_META,
   type DeptCode, type Project, type ProjectCharter, type ProjectStatus,
 } from '../../lib/types'
 
-interface WbsRow { id: string; code: string; title: string; level: number }
-interface BaselineRow { id: string; baseline_type: string; version: number; locked_at: string }
+interface BaselineRow {
+  id: string
+  baseline_type: string
+  version: number
+  locked_at: string
+  revoked_at: string | null
+  revoke_reason: string | null
+}
 interface TeamRow {
   id: string
   allocation_percent: number
@@ -33,10 +41,17 @@ interface BudgetRow {
   po_request_id: string | null
   po: { ref: string; status: string } | null
 }
+interface AuditRow {
+  id: number
+  area: string
+  action: string
+  detail: Record<string, string>
+  created_at: string
+  actor: { display_name: string } | null
+}
 
-type Tab = 'charter' | 'wbs' | 'baselines' | 'budget' | 'team'
+type Tab = 'charter' | 'wbs' | 'timeline' | 'baselines' | 'budget' | 'team'
 
-/** PM-driven transitions; guarded server-side by projects_guard_update. */
 const COMPANY_ACTIONS: Partial<Record<ProjectStatus, { to: ProjectStatus; label: string; primary?: boolean }[]>> = {
   draft: [{ to: 'cancelled', label: 'Cancel project' }],
   charter_submitted: [{ to: 'cancelled', label: 'Cancel project' }],
@@ -70,6 +85,11 @@ const PERSONAL_ACTIONS: typeof COMPANY_ACTIONS = {
   closing: [{ to: 'closed', label: 'Close', primary: true }],
 }
 
+const ALL_STATUSES: ProjectStatus[] = [
+  'draft', 'charter_submitted', 'charter_approval', 'planning', 'baselined',
+  'active', 'on_hold', 'closing', 'closed', 'cancelled',
+]
+
 const STEP_LABEL = (s: InternalStep) =>
   s.step === 'dept_head'
     ? `${s.target_dept ? DEPT_COLOR[s.target_dept]?.label ?? s.target_dept : ''} department head`
@@ -81,10 +101,18 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const [charters, setCharters] = useState<ProjectCharter[]>([])
   const [steps, setSteps] = useState<InternalStep[]>([])
   const [amICommittee, setAmICommittee] = useState(false)
-  const [wbs, setWbs] = useState<WbsRow[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [assignments, setAssignments] = useState<WbsAssignment[]>([])
+  const [dependencies, setDependencies] = useState<WbsDependency[]>([])
   const [baselines, setBaselines] = useState<BaselineRow[]>([])
+  const [audit, setAudit] = useState<AuditRow[]>([])
   const [team, setTeam] = useState<TeamRow[]>([])
+  const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [tab, setTab] = useState<Tab | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [correcting, setCorrecting] = useState(false)
+  const [correctTo, setCorrectTo] = useState('')
+  const [correctReason, setCorrectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [comment, setComment] = useState('')
   // charter form
@@ -92,6 +120,13 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const [businessCase, setBusinessCase] = useState('')
   const [budget, setBudget] = useState('')
   const [duration, setDuration] = useState('')
+  // edit form
+  const [eName, setEName] = useState('')
+  const [eDesc, setEDesc] = useState('')
+  const [eStart, setEStart] = useState('')
+  const [eEnd, setEEnd] = useState('')
+  const [ePm, setEPm] = useState('')
+  const [eScope, setEScope] = useState<DeptCode[]>([])
 
   const load = useCallback(() => {
     supabase
@@ -104,10 +139,8 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         else setProject(data as unknown as Project)
       })
     supabase
-      .from('project_charters')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
+      .from('project_charters').select('*')
+      .eq('project_id', projectId).order('created_at', { ascending: false })
       .then(({ data }) => {
         const rows = (data as unknown as ProjectCharter[]) ?? []
         setCharters(rows)
@@ -122,28 +155,46 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         } else setSteps([])
       })
     supabase
-      .from('wbs_elements').select('id, code, title, level')
+      .from('wbs_elements')
+      .select('id, parent_wbs_id, code, title, level, sequence, planned_start, planned_end, status, is_milestone')
       .eq('project_id', projectId).order('code')
-      .then(({ data }) => setWbs((data as unknown as WbsRow[]) ?? []))
+      .then(({ data }) => {
+        const acts = (data as unknown as Activity[]) ?? []
+        setActivities(acts)
+        if (acts.length) {
+          const ids = acts.map((a) => a.id)
+          supabase.from('wbs_assignments').select('id, wbs_element_id, user_id').in('wbs_element_id', ids)
+            .then(({ data: d }) => setAssignments((d as WbsAssignment[]) ?? []))
+          supabase.from('wbs_dependencies').select('id, predecessor_id, successor_id').in('successor_id', ids)
+            .then(({ data: d }) => setDependencies((d as WbsDependency[]) ?? []))
+        } else {
+          setAssignments([]); setDependencies([])
+        }
+      })
     supabase
-      .from('project_baselines').select('id, baseline_type, version, locked_at')
+      .from('project_baselines')
+      .select('id, baseline_type, version, locked_at, revoked_at, revoke_reason')
       .eq('project_id', projectId).order('baseline_type').order('version')
       .then(({ data }) => setBaselines((data as unknown as BaselineRow[]) ?? []))
+    supabase
+      .from('pmo_audit_events')
+      .select('id, area, action, detail, created_at, actor:profiles(display_name)')
+      .eq('project_id', projectId).order('id', { ascending: false }).limit(30)
+      .then(({ data }) => setAudit((data as unknown as AuditRow[]) ?? []))
     supabase
       .from('resource_assignments')
       .select('id, allocation_percent, role_on_project, member:profiles!resource_assignments_user_id_fkey(id, display_name)')
       .eq('project_id', projectId)
       .then(({ data }) => setTeam((data as unknown as TeamRow[]) ?? []))
+    supabase.from('profiles').select('id, display_name').eq('is_active', true)
+      .then(({ data }) => setPeople(new Map((data ?? []).map((p) => [p.id, p.display_name]))))
   }, [projectId])
 
   useEffect(load, [load])
 
   useEffect(() => {
     if (!profile) return
-    supabase
-      .from('pmo_committee_members')
-      .select('id')
-      .eq('user_id', profile.id)
+    supabase.from('pmo_committee_members').select('id').eq('user_id', profile.id)
       .then(({ data }) => setAmICommittee((data ?? []).length > 0))
   }, [profile])
 
@@ -151,12 +202,15 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
 
   const isPersonal = project.project_type === 'personal'
   const meta = PROJECT_STATUS_META[project.status]
-  const isPm = project.project_manager_id === profile?.id || project.created_by === profile?.id
-  const canManage = isPm || (!isPersonal && (hasRole('pmo_admin') || hasRole('system_admin')))
+  const isOwner = project.project_manager_id === profile?.id || project.created_by === profile?.id
+  const canManage = isOwner || (!isPersonal && (hasRole('pmo_admin') || hasRole('system_admin')))
   const charter = charters[0] ?? null
-  const tabs: Tab[] = isPersonal ? ['wbs', 'team'] : ['charter', 'wbs', 'baselines', 'budget', 'team']
+  const tabs: Tab[] = isPersonal
+    ? ['wbs', 'timeline', 'team']
+    : ['charter', 'wbs', 'timeline', 'baselines', 'budget', 'team']
   const activeTab: Tab = tab && tabs.includes(tab) ? tab : tabs[0]
   const actions = (isPersonal ? PERSONAL_ACTIONS : COMPANY_ACTIONS)[project.status] ?? []
+  const teamPeople = team.flatMap((t) => (t.member ? [{ id: t.member.id, display_name: t.member.display_name }] : []))
 
   const currentStep = steps.find((s) => s.decision === 'pending')
   const canDecide =
@@ -169,6 +223,38 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
     setError(null)
     const { error: e } = await supabase.from('projects').update({ status: to }).eq('id', project.id)
     if (e) setError(e.message)
+    load()
+  }
+
+  const correctStatus = async () => {
+    setError(null)
+    const { error: e } = await supabase.rpc('pmo_correct_status', {
+      p_project: project.id, p_status: correctTo, p_reason: correctReason,
+    })
+    if (e) setError(e.message)
+    else { setCorrecting(false); setCorrectTo(''); setCorrectReason('') }
+    load()
+  }
+
+  const startEdit = () => {
+    setEName(project.name); setEDesc(project.description ?? '')
+    setEStart(project.planned_start ?? ''); setEEnd(project.planned_end ?? '')
+    setEPm(project.project_manager_id ?? ''); setEScope(project.department_scope)
+    setEditing(true)
+  }
+
+  const saveEdit = async () => {
+    setError(null)
+    const { error: e } = await supabase.from('projects').update({
+      name: eName.trim(),
+      description: eDesc.trim() || null,
+      planned_start: eStart || null,
+      planned_end: eEnd || null,
+      project_manager_id: ePm || null,
+      department_scope: isPersonal ? [] : eScope,
+    }).eq('id', project.id)
+    if (e) setError(e.message)
+    else setEditing(false)
     load()
   }
 
@@ -197,9 +283,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
     if (!currentStep) return
     setError(null)
     const { error: e } = await supabase.rpc('decide_project_approval', {
-      p_approval: currentStep.id,
-      p_decision: decision,
-      p_comment: comment || null,
+      p_approval: currentStep.id, p_decision: decision, p_comment: comment || null,
     })
     if (e) setError(e.message)
     setComment('')
@@ -208,53 +292,35 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
 
   const lockBaselines = async () => {
     setError(null)
+    const active = baselines.filter((b) => !b.revoked_at)
     const nextVersion = (t: string) =>
       baselines.filter((b) => b.baseline_type === t).reduce((m, b) => Math.max(m, b.version), 0) + 1
-    const { error: e } = await supabase.from('project_baselines').insert([
-      {
-        project_id: project.id, baseline_type: 'scope', version: nextVersion('scope'),
-        snapshot_json: { wbs: wbs.map((w) => ({ code: w.code, title: w.title })) },
-      },
-      {
-        project_id: project.id, baseline_type: 'schedule', version: nextVersion('schedule'),
-        snapshot_json: { planned_start: project.planned_start, planned_end: project.planned_end },
-      },
-      {
-        project_id: project.id, baseline_type: 'cost', version: nextVersion('cost'),
-        snapshot_json: { estimated_budget: charter?.estimated_budget ?? null },
-      },
-    ])
+    const missing = ['scope', 'schedule', 'cost'].filter((t) => !active.some((b) => b.baseline_type === t))
+    if (missing.length === 0) return
+    const { error: e } = await supabase.from('project_baselines').insert(missing.map((t) => ({
+      project_id: project.id, baseline_type: t, version: nextVersion(t),
+      snapshot_json:
+        t === 'scope' ? { wbs: activities.map((w) => ({ code: w.code, title: w.title })) } :
+        t === 'schedule' ? { planned_start: project.planned_start, planned_end: project.planned_end } :
+        { estimated_budget: charter?.estimated_budget ?? null },
+    })))
     if (e) setError(e.message)
     load()
   }
 
-  const addWbs = async (parent: WbsRow | null) => {
-    const siblings = wbs.filter((w) =>
-      parent ? w.code.startsWith(parent.code + '.') && w.level === parent.level + 1 : w.level === 1
-    )
-    const code = parent ? `${parent.code}.${siblings.length + 1}` : `${siblings.length + 1}`
-    const title = window.prompt(`Title for WBS ${code}`)
-    if (!title?.trim()) return
-    const { error: e } = await supabase.from('wbs_elements').insert({
-      project_id: project.id,
-      parent_wbs_id: parent?.id ?? null,
-      code,
-      title: title.trim(),
-      level: parent ? parent.level + 1 : 1,
-      sequence: siblings.length + 1,
-    })
+  const revokeBaseline = async (b: BaselineRow) => {
+    const reason = window.prompt(`Reason for revoking ${b.baseline_type} v${b.version}? (required, audited)`)
+    if (!reason?.trim()) return
+    setError(null)
+    const { error: e } = await supabase.rpc('revoke_baseline', { p_baseline: b.id, p_reason: reason.trim() })
     if (e) setError(e.message)
     load()
   }
 
-  const hasAllBaselines = new Set(baselines.map((b) => b.baseline_type)).size >= 3
+  const hasAllBaselines = new Set(baselines.filter((b) => !b.revoked_at).map((b) => b.baseline_type)).size >= 3
   const chainSteps: ApprovalStep[] = steps.map((s) => ({
-    id: s.id,
-    request_id: '',
-    step_order: s.step_order,
-    approver_hint: STEP_LABEL(s),
-    decision: s.decision,
-    comment: s.comment,
+    id: s.id, request_id: '', step_order: s.step_order,
+    approver_hint: STEP_LABEL(s), decision: s.decision, comment: s.comment,
   }))
 
   return (
@@ -276,8 +342,8 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         {project.origin_type === 'converted' ? ' · converted from a ticket' : ''}
       </p>
 
-      {canManage && actions.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {canManage && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {actions.map((a) => (
             <button
               key={a.to}
@@ -289,6 +355,65 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               {a.label}
             </button>
           ))}
+          <span style={{ flex: 1 }} />
+          <button className="btn" onClick={() => (editing ? setEditing(false) : startEdit())}>
+            {editing ? 'Close edit' : 'Edit project'}
+          </button>
+          <button className="btn" onClick={() => setCorrecting(!correcting)}>Correct status</button>
+        </div>
+      )}
+
+      {editing && canManage && (
+        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+          <SectionLabel>Edit project</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input className="input" value={eName} onChange={(e) => setEName(e.target.value)} placeholder="Project name" />
+            <textarea className="input" rows={2} value={eDesc} onChange={(e) => setEDesc(e.target.value)} placeholder="Description" />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className="row-desc">Planned</span>
+              <input className="input" type="date" style={{ width: 150 }} value={eStart} onChange={(e) => setEStart(e.target.value)} />
+              <span className="row-desc">→</span>
+              <input className="input" type="date" style={{ width: 150 }} value={eEnd} onChange={(e) => setEEnd(e.target.value)} />
+              <span className="row-desc" style={{ marginLeft: 12 }}>PM</span>
+              <select className="input" style={{ width: 200 }} value={ePm} onChange={(e) => setEPm(e.target.value)}>
+                <option value="">unassigned</option>
+                {[...people.entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
+            {!isPersonal && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="row-desc">Departments:</span>
+                {PORTAL_DEPTS.map((d) => (
+                  <Chip key={d} tone={eScope.includes(d) ? 'accent' : 'muted'}
+                    onClick={() => setEScope((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]))}>
+                    {DEPT_COLOR[d].label}
+                  </Chip>
+                ))}
+              </div>
+            )}
+            <div><button className="btn primary" onClick={saveEdit} disabled={!eName.trim()}>Save changes</button></div>
+          </div>
+        </div>
+      )}
+
+      {correcting && canManage && (
+        <div className="card" style={{ padding: 18, marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Chip tone="red">status correction</Chip>
+          <span className="row-desc" style={{ minWidth: 180, flex: 1 }}>
+            Fix a wrong status outside the normal lifecycle. A reason is required and the
+            change is written to the audit log.
+          </span>
+          <select className="input" style={{ width: 180 }} value={correctTo} onChange={(e) => setCorrectTo(e.target.value)}>
+            <option value="">Set status to…</option>
+            {ALL_STATUSES.filter((s) => s !== project.status).map((s) => (
+              <option key={s} value={s}>{PROJECT_STATUS_META[s].label}</option>
+            ))}
+          </select>
+          <input className="input" style={{ flex: 2, minWidth: 200 }} placeholder="Reason (required)"
+            value={correctReason} onChange={(e) => setCorrectReason(e.target.value)} />
+          <button className="btn primary" onClick={correctStatus} disabled={!correctTo || correctReason.trim().length < 5}>
+            Apply
+          </button>
         </div>
       )}
 
@@ -344,10 +469,8 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               )}
               {canDecide && currentStep && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
-                  <input
-                    className="input" style={{ flex: 1 }} placeholder="Comment (optional)"
-                    value={comment} onChange={(e) => setComment(e.target.value)}
-                  />
+                  <input className="input" style={{ flex: 1 }} placeholder="Comment (optional)"
+                    value={comment} onChange={(e) => setComment(e.target.value)} />
                   <button className="btn primary" onClick={() => decideStep('approved')}>
                     Approve as {STEP_LABEL(currentStep)}
                   </button>
@@ -375,56 +498,75 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       )}
 
       {activeTab === 'wbs' && (
-        <div className="card" style={{ padding: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <SectionLabel>Work Breakdown Structure</SectionLabel>
-            <span style={{ flex: 1 }} />
-            {canManage && <button className="btn" onClick={() => addWbs(null)}>+ Top-level element</button>}
-          </div>
-          {wbs.map((w) => (
-            <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', paddingLeft: (w.level - 1) * 22, borderTop: '1px solid var(--line)' }}>
-              <span className="mono" style={{ fontSize: 12, color: 'var(--accent)' }}>{w.code}</span>
-              <span style={{ flex: 1, fontSize: 13 }}>{w.title}</span>
-              {canManage && (
-                <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => addWbs(w)}>+ child</button>
-              )}
-            </div>
-          ))}
-          {wbs.length === 0 && <div className="row-desc">No WBS elements yet.</div>}
-        </div>
+        <WbsTree
+          projectId={project.id}
+          activities={activities}
+          assignments={assignments}
+          dependencies={dependencies}
+          team={teamPeople}
+          people={people}
+          canManage={canManage}
+          myId={profile?.id ?? null}
+          onChanged={load}
+          onError={setError}
+        />
+      )}
+
+      {activeTab === 'timeline' && (
+        <TimelineView activities={activities} dependencies={dependencies} />
       )}
 
       {activeTab === 'baselines' && !isPersonal && (
         <div className="card" style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <SectionLabel>Baselines — locked, versioned snapshots</SectionLabel>
+            <SectionLabel>Baselines — locked, versioned; revocable with an audited reason</SectionLabel>
             <span style={{ flex: 1 }} />
-            {canManage && project.status === 'planning' && (
-              <button className="btn primary" onClick={lockBaselines}>Lock scope + schedule + cost</button>
+            {canManage && ['planning', 'baselined', 'active'].includes(project.status) && !hasAllBaselines && (
+              <button className="btn primary" onClick={lockBaselines}>Lock missing baselines</button>
             )}
           </div>
           {baselines.map((b) => (
-            <div key={b.id} style={{ display: 'flex', gap: 12, padding: '7px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
-              <Chip tone="ink">{b.baseline_type}</Chip>
-              <span className="mono">v{b.version}</span>
+            <div key={b.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '7px 0', borderTop: '1px solid var(--line)', fontSize: 13, opacity: b.revoked_at ? 0.6 : 1 }}>
+              <Chip tone={b.revoked_at ? 'red' : 'ink'}>{b.baseline_type}</Chip>
+              <span className="mono" style={{ textDecoration: b.revoked_at ? 'line-through' : 'none' }}>v{b.version}</span>
               <span className="row-desc">{new Date(b.locked_at).toLocaleString()}</span>
+              {b.revoked_at ? (
+                <span className="row-desc" style={{ flex: 1 }}>revoked — {b.revoke_reason}</span>
+              ) : (
+                <span style={{ flex: 1 }} />
+              )}
+              {canManage && !b.revoked_at && (
+                <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => revokeBaseline(b)}>revoke</button>
+              )}
             </div>
           ))}
           {baselines.length === 0 && <div className="row-desc">Nothing locked yet — baselining requires scope, schedule and cost.</div>}
+          {audit.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <SectionLabel>Audit log</SectionLabel>
+              {audit.map((e) => (
+                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '5px 0', borderTop: '1px solid var(--line)', fontSize: 12 }}>
+                  <span className="mono row-desc" style={{ minWidth: 130 }}>{new Date(e.created_at).toLocaleString()}</span>
+                  <Chip tone={e.action === 'revoked' || e.action === 'corrected' ? 'red' : 'muted'} style={{ fontSize: 10 }}>{e.area} {e.action}</Chip>
+                  <span style={{ flex: 1 }}>
+                    {e.actor?.display_name ?? '—'}
+                    {e.area === 'status' && ` · ${e.detail.from} → ${e.detail.to}`}
+                    {e.detail.type && ` · ${e.detail.type} v${e.detail.version}`}
+                    {e.detail.reason && ` — "${e.detail.reason}"`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'budget' && !isPersonal && (
-        <BudgetTab
-          projectId={project.id}
-          canManage={canManage}
-          charterApproved={charter?.status === 'approved'}
-          onError={setError}
-        />
+        <BudgetTab projectId={project.id} canManage={canManage} charterApproved={charter?.status === 'approved'} onError={setError} />
       )}
 
       {activeTab === 'team' && (
-        <TeamTab projectId={project.id} team={team} canManage={canManage} onChanged={load} onError={setError} />
+        <TeamTab projectId={project.id} team={team} assignments={assignments} activities={activities} canManage={canManage} onChanged={load} onError={setError} />
       )}
 
       {error && <p className="error-note" style={{ marginTop: 12 }}>{error}</p>}
@@ -432,7 +574,6 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   )
 }
 
-/** Budget tab — integration point 2: each line can raise a Procurement request. */
 function BudgetTab({ projectId, canManage, charterApproved, onError }: {
   projectId: string
   canManage: boolean
@@ -458,11 +599,8 @@ function BudgetTab({ projectId, canManage, charterApproved, onError }: {
 
   const add = async () => {
     const { error: e } = await supabase.from('budget_lines').insert({
-      project_id: projectId,
-      description: desc.trim(),
-      planned_amount: Number(amount),
-      cost_center: costCenter.trim() || null,
-      category: category.trim() || null,
+      project_id: projectId, description: desc.trim(), planned_amount: Number(amount),
+      cost_center: costCenter.trim() || null, category: category.trim() || null,
     })
     if (e) onError(e.message)
     setDesc(''); setAmount(''); setCostCenter(''); setCategory('')
@@ -494,11 +632,8 @@ function BudgetTab({ projectId, canManage, charterApproved, onError }: {
           {l.po ? (
             <Chip mono tone="green">{l.po.ref} · {l.po.status.replace('_', ' ')}</Chip>
           ) : canManage ? (
-            <button
-              className="btn" onClick={() => raisePo(l)}
-              disabled={!charterApproved}
-              title={charterApproved ? undefined : 'The charter must be approved first'}
-            >
+            <button className="btn" onClick={() => raisePo(l)} disabled={!charterApproved}
+              title={charterApproved ? undefined : 'The charter must be approved first'}>
               Create PO request
             </button>
           ) : (
@@ -520,9 +655,11 @@ function BudgetTab({ projectId, canManage, charterApproved, onError }: {
   )
 }
 
-function TeamTab({ projectId, team, canManage, onChanged, onError }: {
+function TeamTab({ projectId, team, assignments, activities, canManage, onChanged, onError }: {
   projectId: string
   team: TeamRow[]
+  assignments: WbsAssignment[]
+  activities: Activity[]
   canManage: boolean
   onChanged: () => void
   onError: (m: string) => void
@@ -552,17 +689,27 @@ function TeamTab({ projectId, team, canManage, onChanged, onError }: {
     onChanged()
   }
 
+  const doneOf = (uid: string) => {
+    const mine = assignments.filter((a) => a.user_id === uid).map((a) => a.wbs_element_id)
+    const acts = activities.filter((x) => mine.includes(x.id))
+    return { total: acts.length, done: acts.filter((x) => x.status === 'done').length }
+  }
+
   return (
     <div className="card" style={{ padding: 18 }}>
-      <SectionLabel>Team — resource assignments</SectionLabel>
-      {team.map((t) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
-          <span style={{ flex: 1 }}>{t.member?.display_name ?? '—'}</span>
-          {t.role_on_project && <Chip tone="muted">{t.role_on_project}</Chip>}
-          <span className="mono">{t.allocation_percent}%</span>
-          {canManage && <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => remove(t.id)}>remove</button>}
-        </div>
-      ))}
+      <SectionLabel>Team — project membership; assign activities on the WBS tab</SectionLabel>
+      {team.map((t) => {
+        const w = t.member ? doneOf(t.member.id) : { total: 0, done: 0 }
+        return (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
+            <span style={{ flex: 1 }}>{t.member?.display_name ?? '—'}</span>
+            {t.role_on_project && <Chip tone="muted">{t.role_on_project}</Chip>}
+            <Chip tone={w.total ? 'accent' : 'muted'}>{w.done}/{w.total} activities done</Chip>
+            <span className="mono">{t.allocation_percent}%</span>
+            {canManage && <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => remove(t.id)}>remove</button>}
+          </div>
+        )
+      })}
       {team.length === 0 && <div className="row-desc">No one assigned yet.</div>}
       {canManage && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
