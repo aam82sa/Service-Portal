@@ -351,9 +351,10 @@ function Devices({ tab, assets, allAssets, history, people, reload, setError, on
   const [page, setPage] = useState(0)
   const [registering, setRegistering] = useState(false)
   const [form, setForm] = useState({ tag: '', category: 'laptop', model: '', serial: '' })
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const PAGE = 25
 
-  useEffect(() => { setPage(0) }, [tab, query, os, status, vendor])
+  useEffect(() => { setPage(0); setSelected(new Set()) }, [tab, query, os, status, vendor])
 
   const isMac = (a: Asset) => (a.manufacturer ?? '').toLowerCase().includes('apple')
   const effStatus = (a: Asset) =>
@@ -376,6 +377,21 @@ function Devices({ tab, assets, allAssets, history, people, reload, setError, on
   const inStock = assets.filter((a) => effStatus(a) === 'in_stock').length
   const fleetValue = assets.reduce((s, a) => s + (a.cost ?? 0), 0)
 
+  const toggleOne = (id: string) =>
+    setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  const bulkDelete = async () => {
+    const ids = [...selected]
+    if (!window.confirm(`Delete ${ids.length} asset${ids.length > 1 ? 's' : ''} permanently? Audit trails and ownership history are removed with them.`)) return
+    setError(null)
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error: e } = await supabase.from('assets').delete().in('id', ids.slice(i, i + 100))
+      if (e) { setError(e.message); break }
+    }
+    setSelected(new Set())
+    reload()
+  }
+
   const register = async () => {
     setError(null)
     const { error: e } = await supabase.from('assets').insert({
@@ -387,7 +403,8 @@ function Devices({ tab, assets, allAssets, history, people, reload, setError, on
     reload()
   }
 
-  const grid = '76px 1.5fr 1.1fr 100px 80px 84px 110px'
+  const grid = '26px 76px 1.5fr 1.1fr 100px 80px 84px 110px'
+  const allFilteredSelected = filtered.length > 0 && filtered.every((a) => selected.has(a.id))
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
@@ -446,8 +463,29 @@ function Devices({ tab, assets, allAssets, history, people, reload, setError, on
         </div>
       )}
 
+      {selected.size > 0 && (
+        <div style={{ background: '#FBEBEB', border: '1px solid #F0CECE', borderRadius: 10, padding: '8px 14px', display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink)', flex: 1 }}>
+            {selected.size} asset{selected.size > 1 ? 's' : ''} selected
+          </span>
+          <button className="btn" style={{ fontSize: 12 }} onClick={() => setSelected(new Set())}>Clear</button>
+          <button
+            onClick={bulkDelete}
+            style={{ background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+          >
+            Delete selected
+          </button>
+        </div>
+      )}
       <div className="card">
-        <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '9px 16px', borderBottom: '1px solid #EDEFF4' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '9px 16px', borderBottom: '1px solid #EDEFF4', alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            checked={allFilteredSelected}
+            onChange={() => setSelected(allFilteredSelected ? new Set() : new Set(filtered.map((a) => a.id)))}
+            title="Select all filtered"
+            style={{ cursor: 'pointer', margin: 0 }}
+          />
           {['Tag', 'Device / Serial', 'Assigned to', 'Vendor', 'Cost SAR', 'Warranty', 'Status'].map((h) => (
             <span key={h} style={HEAD_CELL}>{h}</span>
           ))}
@@ -461,8 +499,15 @@ function Devices({ tab, assets, allAssets, history, people, reload, setError, on
             <div
               key={a.id}
               onClick={() => onOpen(a)}
-              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '10px 16px', borderBottom: '1px solid #EDEFF4', alignItems: 'center', cursor: 'pointer' }}
+              style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '10px 16px', borderBottom: '1px solid #EDEFF4', alignItems: 'center', cursor: 'pointer', background: selected.has(a.id) ? 'var(--accent-soft)' : undefined }}
             >
+              <input
+                type="checkbox"
+                checked={selected.has(a.id)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => toggleOne(a.id)}
+                style={{ cursor: 'pointer', margin: 0 }}
+              />
               <span style={mono({ fontSize: 11, color: 'var(--muted)' })}>{a.tag}</span>
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
