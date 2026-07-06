@@ -26,7 +26,6 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
   const [items, setItems] = useState<Project[]>([])
   const [conversions, setConversions] = useState<ConversionRow[]>([])
   const [filter, setFilter] = useState<'open' | 'all'>('open')
-  const [view, setView] = useState<'projects' | 'console'>('projects')
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -36,7 +35,6 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
   const [error, setError] = useState<string | null>(null)
 
   const isDeptHead = hasRole('dept_head')
-  const canConsole = hasRole('pmo_admin') || hasRole('system_admin')
   const canCreate =
     hasRole('project_manager') || hasRole('pmo_admin') || hasRole('agent') ||
     hasRole('team_lead') || hasRole('dept_head') || hasRole('system_admin')
@@ -100,32 +98,15 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
     <>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
         <div style={{ flex: 1 }}>
-          <h2 className="page-head">{view === 'console' ? 'PMO console' : 'Projects'}</h2>
+          <h2 className="page-head">Projects</h2>
           <p className="page-sub">
-            {view === 'console'
-              ? 'Module-owned configuration — independent of the platform admin console.'
-              : 'Company projects and personal trackers, managed by the PMO module.'}
+            Company projects and personal trackers, managed by the PMO module.
           </p>
         </div>
-        {canConsole && (
-          <div style={{ display: 'flex', gap: 8, marginRight: 12 }}>
-            <Chip tone={view === 'projects' ? 'accent' : 'muted'} onClick={() => setView('projects')}>Projects</Chip>
-            <Chip tone={view === 'console' ? 'accent' : 'muted'} onClick={() => setView('console')}>PMO console</Chip>
-          </div>
-        )}
-        {view === 'projects' && canCreate && (
+        {canCreate && (
           <button className="btn primary" onClick={() => setCreating(true)}>+ New project</button>
         )}
       </div>
-
-      {view === 'console' && (
-        <>
-          <PmoConsole onError={setError} />
-          {error && <p className="error-note">{error}</p>}
-        </>
-      )}
-      {view === 'console' ? null : (
-      <>
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <MetricCard label="Active" value={count(['active'])} tone="green" />
         <MetricCard label="In planning" value={count(['planning', 'baselined'])} tone="accent" />
@@ -235,64 +216,6 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
       )}
       {!loaded && !error && <p className="page-sub">Loading…</p>}
       {error && <p className="error-note">{error}</p>}
-      </>
-      )}
     </>
-  )
-}
-
-/** PMO console — module-owned configuration, independent of the platform admin console. */
-function PmoConsole({ onError }: { onError: (m: string) => void }) {
-  const [members, setMembers] = useState<{ id: string; member: { id: string; display_name: string } | null }[]>([])
-  const [people, setPeople] = useState<{ id: string; display_name: string }[]>([])
-  const [pick, setPick] = useState('')
-
-  const load = useCallback(() => {
-    supabase
-      .from('pmo_committee_members')
-      .select('id, member:profiles!pmo_committee_members_user_id_fkey(id, display_name)')
-      .then(({ data }) => setMembers((data as never) ?? []))
-    supabase.from('profiles').select('id, display_name').eq('is_active', true).order('display_name')
-      .then(({ data }) => setPeople(data ?? []))
-  }, [])
-
-  useEffect(load, [load])
-
-  const add = async () => {
-    const { error: e } = await supabase.from('pmo_committee_members').insert({ user_id: pick })
-    if (e) onError(e.message)
-    setPick('')
-    load()
-  }
-  const remove = async (id: string) => {
-    const { error: e } = await supabase.from('pmo_committee_members').delete().eq('id', id)
-    if (e) onError(e.message)
-    load()
-  }
-
-  return (
-    <div className="card" style={{ marginTop: 18, padding: 18 }}>
-      <SectionLabel>PMO console — project committee</SectionLabel>
-      <p className="row-desc" style={{ marginBottom: 10 }}>
-        Company projects are approved by the department head, then by any member of this
-        committee. Membership is managed here, independent of platform roles.
-      </p>
-      {members.map((m) => (
-        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
-          <span style={{ flex: 1 }}>{m.member?.display_name ?? '—'}</span>
-          <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => remove(m.id)}>remove</button>
-        </div>
-      ))}
-      {members.length === 0 && <div className="row-desc">No committee members yet.</div>}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <select className="input" style={{ flex: 1 }} value={pick} onChange={(e) => setPick(e.target.value)}>
-          <option value="">Add a committee member…</option>
-          {people.filter((p) => !members.some((m) => m.member?.id === p.id)).map((p) => (
-            <option key={p.id} value={p.id}>{p.display_name}</option>
-          ))}
-        </select>
-        <button className="btn primary" onClick={add} disabled={!pick}>Add</button>
-      </div>
-    </div>
   )
 }

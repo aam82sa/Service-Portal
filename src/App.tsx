@@ -19,8 +19,9 @@ const AdminPage = lazy(() => import('./features/admin/AdminPage').then((m) => ({
 const Insights = lazy(() => import('./features/insights/Insights').then((m) => ({ default: m.Insights })))
 const Projects = lazy(() => import('./features/pmo/Projects').then((m) => ({ default: m.Projects })))
 const ProjectDetail = lazy(() => import('./features/pmo/ProjectDetail').then((m) => ({ default: m.ProjectDetail })))
+const PmoAdmin = lazy(() => import('./features/pmo/PmoAdmin').then((m) => ({ default: m.PmoAdmin })))
 
-type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'pmo' | 'insights' | 'assets' | 'admin'
+type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'pmo' | 'insights' | 'assets' | 'admin' | 'pmoadmin'
 export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people' }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
@@ -34,6 +35,7 @@ const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
   { id: 'pmo', label: 'Projects', ico: 'folder', group: 'Workspace' },
   { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
   { id: 'assets', label: 'IT assets', ico: 'device', group: 'Workspace' },
+  { id: 'pmoadmin', label: 'PMO Admin', ico: 'shield', group: 'Administration' },
   { id: 'admin', label: 'Admin console', ico: 'gear', group: 'Administration' },
 ]
 
@@ -67,6 +69,7 @@ export default function App() {
       canSee('assets') ??
       (hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || isSys),
     admin: canSee('admin') ?? canAdmin,
+    pmoadmin: canSee('pmoadmin') ?? (hasRole('pmo_admin') || isSys),
   }
   const adminSections = getAdminSections(hasRole)
   const firstVisible: Page = NAV.find((n) => see[n.id])?.id ?? 'home'
@@ -179,13 +182,14 @@ export default function App() {
           <ProjectDetail projectId={projectId} onBack={() => setProjectId(null)} />
         ) : (
           <>
-            {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={setDetailId} />}
+            {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={setDetailId} onOpenProject={setProjectId} />}
             {activePage === 'portal' && see.portal && <Portal />}
             {activePage === 'requests' && see.requests && <MyRequests onOpen={setDetailId} />}
             {activePage === 'mywork' && see.mywork && <MyWork onOpen={setDetailId} />}
             {activePage === 'queue' && see.queue && <Queue onOpen={setDetailId} />}
             {activePage === 'approvals' && see.approvals && <Approvals />}
             {activePage === 'pmo' && see.pmo && <Projects onOpen={setProjectId} />}
+            {activePage === 'pmoadmin' && see.pmoadmin && <PmoAdmin />}
             {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
             {activePage === 'assets' && see.assets && (
               <Assets onOpenRequest={setDetailId} initialSection={assetsTab} />

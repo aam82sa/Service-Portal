@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
+import { HomeProjects } from '../pmo/HomeProjects'
 import { DEPT_COLOR, type DeptCode, type Service } from '../../lib/types'
 import { SEVERITY_STYLE } from '../admin/Announcements'
 import { AdminOverview } from '../admin/AdminOverview'
@@ -44,9 +45,10 @@ interface OwnDelegation {
 
 const CLOSED = ['closed', 'cancelled']
 
-export function Home({ onNavigate, onOpenRequest }: {
+export function Home({ onNavigate, onOpenRequest, onOpenProject }: {
   onNavigate: Navigate
   onOpenRequest: (id: string) => void
+  onOpenProject?: (id: string) => void
 }) {
   const { session, profile, hasRole } = useAuth()
   const isSys = hasRole('system_admin')
@@ -195,6 +197,8 @@ export function Home({ onNavigate, onOpenRequest }: {
           {today}
         </span>
       </div>
+
+      {onOpenProject && <HomeProjects onOpen={onOpenProject} />}
 
       {(isStaff || isApprover) && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
