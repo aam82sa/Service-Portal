@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
+import { supabase } from './lib/supabase'
 import { useAuth } from './features/auth/AuthProvider'
 import { SignIn } from './features/auth/SignIn'
 import { Home } from './features/home/Home'
@@ -44,6 +45,7 @@ export default function App() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [isCommittee, setIsCommittee] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
   const isApprover = hasRole('approver')
   const canAdmin = isAdmin || hasRole('dept_admin')
@@ -59,7 +61,7 @@ export default function App() {
     pmo:
       canSee('pmo') ??
       (hasRole('project_manager') || hasRole('pmo_admin') || hasRole('executive') ||
-        hasRole('dept_head') || isStaff || isSys),
+        hasRole('dept_head') || isStaff || isSys || isCommittee),
     insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || isSys),
     assets:
       canSee('assets') ??
@@ -83,6 +85,19 @@ export default function App() {
       setDetailId(null)
     }
   }, [session])
+
+  // Committee membership grants Projects access without any platform role
+  useEffect(() => {
+    if (!session || !profile) {
+      setIsCommittee(false)
+      return
+    }
+    supabase
+      .from('pmo_committee_members')
+      .select('id')
+      .eq('user_id', profile.id)
+      .then(({ data }) => setIsCommittee((data ?? []).length > 0))
+  }, [session, profile])
 
   useEffect(() => {
     if (loading || !session) return

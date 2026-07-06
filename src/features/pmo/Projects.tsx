@@ -26,6 +26,7 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
   const [items, setItems] = useState<Project[]>([])
   const [conversions, setConversions] = useState<ConversionRow[]>([])
   const [filter, setFilter] = useState<'open' | 'all'>('open')
+  const [view, setView] = useState<'projects' | 'console'>('projects')
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -35,6 +36,7 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
   const [error, setError] = useState<string | null>(null)
 
   const isDeptHead = hasRole('dept_head')
+  const canConsole = hasRole('pmo_admin') || hasRole('system_admin')
   const canCreate =
     hasRole('project_manager') || hasRole('pmo_admin') || hasRole('agent') ||
     hasRole('team_lead') || hasRole('dept_head') || hasRole('system_admin')
@@ -98,17 +100,32 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
     <>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
         <div style={{ flex: 1 }}>
-          <h2 className="page-head">Projects</h2>
+          <h2 className="page-head">{view === 'console' ? 'PMO console' : 'Projects'}</h2>
           <p className="page-sub">
-            Chartered work coordinated by the PMO — delivery still flows through the
-            department service catalogs.
+            {view === 'console'
+              ? 'Module-owned configuration — independent of the platform admin console.'
+              : 'Company projects and personal trackers, managed by the PMO module.'}
           </p>
         </div>
-        {canCreate && (
+        {canConsole && (
+          <div style={{ display: 'flex', gap: 8, marginRight: 12 }}>
+            <Chip tone={view === 'projects' ? 'accent' : 'muted'} onClick={() => setView('projects')}>Projects</Chip>
+            <Chip tone={view === 'console' ? 'accent' : 'muted'} onClick={() => setView('console')}>PMO console</Chip>
+          </div>
+        )}
+        {view === 'projects' && canCreate && (
           <button className="btn primary" onClick={() => setCreating(true)}>+ New project</button>
         )}
       </div>
 
+      {view === 'console' && (
+        <>
+          <PmoConsole onError={setError} />
+          {error && <p className="error-note">{error}</p>}
+        </>
+      )}
+      {view === 'console' ? null : (
+      <>
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <MetricCard label="Active" value={count(['active'])} tone="green" />
         <MetricCard label="In planning" value={count(['planning', 'baselined'])} tone="accent" />
@@ -217,8 +234,9 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
         <div className="card"><div className="row row-desc">No projects yet.</div></div>
       )}
       {!loaded && !error && <p className="page-sub">Loading…</p>}
-      {hasRole('pmo_admin') && <PmoConsole onError={setError} />}
       {error && <p className="error-note">{error}</p>}
+      </>
+      )}
     </>
   )
 }
