@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { SlaRing } from '../requests/Queue'
 import { ImportPanel, downloadTemplate, printLabels } from './AssetImport'
+import { TrackerImportPanel } from './TrackerImport'
 
 interface Asset {
   id: string
@@ -12,10 +13,50 @@ interface Asset {
   serial: string | null
   status: 'in_stock' | 'assigned' | 'repair' | 'retired'
   assigned_to: string | null
+  assigned_name: string | null
   request_id: string | null
   created_at: string
   purchased_on: string | null
+  manufacturer: string | null
+  vendor: string | null
+  po_number: string | null
+  cost: number | null
+  delivery_date: string | null
+  warranty_start: string | null
+  warranty_end: string | null
+  location: string | null
   owner: { display_name: string } | null
+}
+
+interface OwnershipRow {
+  id: string
+  owner_name: string | null
+  assigned_at: string | null
+  returned_at: string | null
+  profile: { display_name: string } | null
+}
+
+interface CloudRes {
+  id: string
+  kind: 'server' | 'vm' | 'azure_resource'
+  name: string
+  os_or_type: string | null
+  environment: string | null
+  priority: string | null
+  status: string | null
+  owner_name: string | null
+  owner_email: string | null
+  location: string | null
+  resource_group: string | null
+  subscription: string | null
+}
+
+interface CreditRow {
+  month: string
+  starting_credit: number | null
+  forecast_charges: number | null
+  applied_charges: number | null
+  ending_credit: number | null
 }
 
 interface License {
@@ -25,6 +66,8 @@ interface License {
   seats: number
   expires_on: string | null
   status: 'pending' | 'active' | 'rejected'
+  subscription_status: 'active' | 'expired'
+  billing_profile: string | null
   license_assignments: {
     profile_id: string
     assigned_at: string
@@ -56,7 +99,11 @@ interface AssetEvent {
 
 const CAT_CODE: Record<string, string> = {
   laptop: 'LT', monitor: 'MN', phone: 'PH', printer: 'PR', accessory: 'AC',
+  dock: 'DS', keyboard_mouse: 'KM', headset: 'HS', meeting_room: 'MR',
 }
+
+const warrantySoon = (a: { warranty_end: string | null }) =>
+  a.warranty_end && new Date(a.warranty_end).getTime() < Date.now() + 60 * DAY
 const STATUS_CHIP: Record<Asset['status'], { bg: string; fg: string }> = {
   in_stock: { bg: 'var(--green-soft)', fg: 'var(--green)' },
   assigned: { bg: 'var(--it-soft)', fg: 'var(--it)' },
@@ -102,9 +149,11 @@ function PersonPicker({ people, placeholder, onPick }: {
   )
 }
 
-export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: string) => void; initialSection?: 'hardware' | 'licenses' | 'people' }) {
+export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: string) => void; initialSection?: 'hardware' | 'licenses' | 'people' | 'cloud' }) {
   const { hasRole } = useAuth()
-  const [section, setSection] = useState<'hardware' | 'licenses' | 'people'>(initialSection ?? 'hardware')
+  const [section, setSection] = useState<'hardware' | 'licenses' | 'people' | 'cloud'>(initialSection ?? 'hardware')
+  const [cloud, setCloud] = useState<CloudRes[]>([])
+  const [credit, setCredit] = useState<CreditRow[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [licenses, setLicenses] = useState<License[]>([])
   const [people, setPeople] = useState<Person[]>([])
@@ -114,7 +163,7 @@ export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: 
   const load = useCallback(() => {
     supabase
       .from('assets')
-      .select('id, tag, category, model, serial, status, assigned_to, request_id, created_at, purchased_on, owner:profiles!assets_assigned_to_fkey(display_name)')
+      .select('id, tag, category, model, serial, status, assigned_to, assigned_name, request_id, created_at, purchased_on, manufacturer, vendor, po_number, cost, delivery_date, warranty_start, warranty_end, location, owner:profiles!assets_assigned_to_fkey(display_name)')
       .order('tag')
       .then(({ data, error: e }) => {
         if (e) setError(e.message)
@@ -122,7 +171,7 @@ export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: 
       })
     supabase
       .from('licenses')
-      .select('id, name, vendor, seats, expires_on, status, license_assignments(profile_id, assigned_at, profile:profiles!license_assignments_profile_id_fkey(id, display_name))')
+      .select('id, name, vendor, seats, expires_on, status, subscription_status, billing_profile, license_assignments(profile_id, assigned_at, profile:profiles!license_assignments_profile_id_fkey(id, display_name))')
       .order('name')
       .then(({ data, error: e }) => {
         if (e) setError(e.message)
@@ -134,6 +183,16 @@ export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: 
       .eq('is_active', true)
       .order('display_name')
       .then(({ data }) => setPeople((data as Person[]) ?? []))
+    supabase
+      .from('cloud_resources')
+      .select('id, kind, name, os_or_type, environment, priority, status, owner_name, owner_email, location, resource_group, subscription')
+      .order('kind').order('name')
+      .then(({ data }) => setCloud((data as CloudRes[]) ?? []))
+    supabase
+      .from('azure_credit')
+      .select('month, starting_credit, forecast_charges, applied_charges, ending_credit')
+      .order('month', { ascending: false })
+      .then(({ data }) => setCredit((data as CreditRow[]) ?? []))
   }, [])
   useEffect(load, [load])
 
@@ -141,6 +200,7 @@ export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: 
     { id: 'hardware', label: 'Hardware', n: assets.length, color: 'var(--it)', soft: 'var(--it-soft)' },
     { id: 'licenses', label: 'Software & licenses', n: licenses.length, color: 'var(--admin)', soft: 'var(--admin-soft)' },
     { id: 'people', label: 'People 360', n: people.length, color: 'var(--green)', soft: 'var(--green-soft)' },
+    { id: 'cloud', label: 'Cloud & servers', n: cloud.length, color: 'var(--accent)', soft: 'var(--accent-soft)' },
   ] as const
 
   return (
@@ -175,6 +235,7 @@ export function Assets({ onOpenRequest, initialSection }: { onOpenRequest: (id: 
       {section === 'people' && (
         <People people={people} assets={assets} licenses={licenses} onOpenRequest={onOpenRequest} />
       )}
+      {section === 'cloud' && <Cloud cloud={cloud} credit={credit} />}
       {error && <p className="error-note">{error}</p>}
     </>
   )
@@ -186,6 +247,7 @@ function Hardware({ assets, people, reload, setError }: {
   const [form, setForm] = useState({ tag: '', category: 'laptop', model: '', serial: '' })
   const [expanded, setExpanded] = useState<string | null>(null)
   const [events, setEvents] = useState<Record<string, AssetEvent[]>>({})
+  const [history, setHistory] = useState<Record<string, OwnershipRow[]>>({})
 
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     setError(null)
@@ -204,6 +266,12 @@ function Hardware({ assets, people, reload, setError }: {
         .eq('asset_id', a.id)
         .order('id')
       setEvents((s) => ({ ...s, [a.id]: (data as unknown as AssetEvent[]) ?? [] }))
+      const { data: own } = await supabase
+        .from('asset_ownership')
+        .select('id, owner_name, assigned_at, returned_at, profile:profiles!asset_ownership_profile_id_fkey(display_name)')
+        .eq('asset_id', a.id)
+        .order('assigned_at')
+      setHistory((s) => ({ ...s, [a.id]: (own as unknown as OwnershipRow[]) ?? [] }))
     }
   }
 
@@ -241,6 +309,7 @@ function Hardware({ assets, people, reload, setError }: {
         >
           Print all QR labels
         </button>
+        <TrackerImportPanel people={people} onDone={reload} />
       </div>
       <div className="card">
         {assets.map((a) => {
@@ -262,9 +331,16 @@ function Hardware({ assets, people, reload, setError }: {
                 <div style={{ flex: 1 }}>
                   <div className="row-title" style={{ fontSize: 12.5 }}>{a.model ?? a.category}</div>
                   <div className="row-desc">
-                    {a.serial ?? 'no serial'}{a.owner ? ` · held by ${a.owner.display_name}` : ''}
+                    {a.serial ?? 'no serial'}
+                    {a.owner ? ` · held by ${a.owner.display_name}` : a.assigned_name ? ` · held by ${a.assigned_name}` : ''}
+                    {a.location ? ` · ${a.location}` : ''}
                   </div>
                 </div>
+                {warrantySoon(a) && (
+                  <span className="chip mono" style={{ background: 'var(--red)', color: '#fff', fontSize: 10 }}>
+                    warranty {a.warranty_end}
+                  </span>
+                )}
                 <span className="chip" style={{ background: s.bg, color: s.fg }}>{a.status.replace('_', ' ')}</span>
                 {a.status === 'in_stock' && (
                   <PersonPicker
@@ -286,6 +362,36 @@ function Hardware({ assets, people, reload, setError }: {
               </div>
               {isOpen && (
                 <div style={{ background: 'var(--surface)', padding: '10px 18px 12px 52px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '4px 16px', padding: '2px 0 8px', fontSize: 11.5 }}>
+                    {a.manufacturer && <span><span style={{ color: 'var(--muted)' }}>Manufacturer </span>{a.manufacturer}</span>}
+                    {a.vendor && <span><span style={{ color: 'var(--muted)' }}>Vendor </span>{a.vendor}</span>}
+                    {a.po_number && <span><span style={{ color: 'var(--muted)' }}>PO </span><span className="mono">{a.po_number}</span></span>}
+                    {a.cost != null && <span><span style={{ color: 'var(--muted)' }}>Cost </span><span className="mono">{a.cost.toLocaleString()} SAR</span></span>}
+                    {a.delivery_date && <span><span style={{ color: 'var(--muted)' }}>Delivered </span><span className="mono">{a.delivery_date}</span></span>}
+                    {(a.warranty_start || a.warranty_end) && (
+                      <span>
+                        <span style={{ color: 'var(--muted)' }}>Warranty </span>
+                        <span className="mono" style={{ color: warrantySoon(a) ? 'var(--red)' : undefined }}>
+                          {a.warranty_start ?? '…'} → {a.warranty_end ?? '…'}
+                        </span>
+                      </span>
+                    )}
+                    {a.location && <span><span style={{ color: 'var(--muted)' }}>Location </span>{a.location}</span>}
+                  </div>
+                  {(history[a.id] ?? []).length > 0 && (
+                    <div style={{ padding: '2px 0 8px' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', letterSpacing: '.5px', marginBottom: 3 }}>PREVIOUS OWNERS</div>
+                      {(history[a.id] ?? []).map((o) => (
+                        <div key={o.id} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '2px 0' }}>
+                          <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--muted)', marginTop: 3 }} />
+                          <span style={{ flex: 1 }}>{o.profile?.display_name ?? o.owner_name ?? '—'}</span>
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--muted)' }}>
+                            {o.assigned_at ?? '…'} → {o.returned_at ?? 'still held'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: 12 }}>
                     <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', marginTop: 3 }} />
                     <span style={{ flex: 1 }}>
@@ -365,8 +471,11 @@ function Licenses({ licenses, people, reload, setError, canApprove }: {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   <div className="row-title">{l.name}</div>
-                  <div className="row-desc">{l.vendor ?? '—'}</div>
+                  <div className="row-desc">{l.billing_profile ?? l.vendor ?? '—'}</div>
                 </div>
+                {l.subscription_status === 'expired' && (
+                  <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>expired</span>
+                )}
                 {l.status === 'pending' && (
                   <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>awaiting IT head</span>
                 )}
@@ -648,6 +757,91 @@ function People({ people, assets, licenses, onOpenRequest }: {
           )})()}
         </div>
       </div>
+    </>
+  )
+}
+
+const KIND_META = {
+  server: { label: 'Servers', code: 'SV', color: 'var(--it)', soft: 'var(--it-soft)' },
+  vm: { label: 'Virtual machines', code: 'VM', color: 'var(--admin)', soft: 'var(--admin-soft)' },
+  azure_resource: { label: 'Azure resources', code: 'AZ', color: 'var(--accent)', soft: 'var(--accent-soft)' },
+} as const
+
+function Cloud({ cloud, credit }: { cloud: CloudRes[]; credit: CreditRow[] }) {
+  if (cloud.length === 0 && credit.length === 0) {
+    return (
+      <div className="card">
+        <div className="row row-desc">
+          Nothing imported yet — use "Import tracker workbook" on the Hardware tab to load
+          servers, VMs, Azure resources and credit.
+        </div>
+      </div>
+    )
+  }
+  return (
+    <>
+      {(['server', 'vm', 'azure_resource'] as const).map((kind) => {
+        const rows = cloud.filter((c) => c.kind === kind)
+        if (rows.length === 0) return null
+        const m = KIND_META[kind]
+        return (
+          <div className="card" key={kind} style={{ marginBottom: 14 }}>
+            <div className="row" style={{ background: 'var(--surface)' }}>
+              <span className="tile-code" style={{ background: m.soft, color: m.color, fontSize: 10 }}>{m.code}</span>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{m.label}</span>
+              <span className="chip mono" style={{ background: m.soft, color: m.color, fontSize: 10 }}>{rows.length}</span>
+            </div>
+            {rows.map((c) => (
+              <div className="row" key={c.id}>
+                <div style={{ flex: 1 }}>
+                  <div className="row-title" style={{ fontSize: 12.5 }}>{c.name}</div>
+                  <div className="row-desc">
+                    {[c.os_or_type, c.resource_group, c.subscription, c.owner_name || c.owner_email]
+                      .filter(Boolean).join(' · ') || '—'}
+                  </div>
+                </div>
+                {c.location && <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>{c.location}</span>}
+                {c.environment && (
+                  <span className="chip" style={{
+                    background: c.environment.toLowerCase() === 'prod' ? 'var(--red-soft)' : 'var(--green-soft)',
+                    color: c.environment.toLowerCase() === 'prod' ? 'var(--red)' : 'var(--green)',
+                  }}>
+                    {c.environment}{c.priority ? ` · ${c.priority}` : ''}
+                  </span>
+                )}
+                {c.status && (
+                  <span className="chip" style={{
+                    background: c.status.toLowerCase() === 'shutdown' ? 'var(--surface)' : 'var(--green-soft)',
+                    color: c.status.toLowerCase() === 'shutdown' ? 'var(--muted)' : 'var(--green)',
+                  }}>
+                    {c.status}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      })}
+      {credit.length > 0 && (
+        <div className="card">
+          <div className="row" style={{ background: 'var(--surface)' }}>
+            <span className="tile-code" style={{ background: 'var(--amber-soft)', color: 'var(--amber)', fontSize: 10 }}>CR</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>Azure credit</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr 1fr 1fr', padding: '8px 16px 2px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--muted)' }}>
+            <span>Month</span><span>Starting</span><span>Applied</span><span>Forecast charges</span><span>Ending</span>
+          </div>
+          {credit.map((c) => (
+            <div key={c.month} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 1fr 1fr 1fr', padding: '7px 16px', borderTop: '1px solid #EDEFF4', fontSize: 12 }}>
+              <span className="mono">{c.month.slice(0, 7)}</span>
+              <span className="mono">{c.starting_credit?.toLocaleString() ?? '—'}</span>
+              <span className="mono">{c.applied_charges?.toLocaleString() ?? '—'}</span>
+              <span className="mono" style={{ color: 'var(--amber)' }}>{c.forecast_charges?.toLocaleString() ?? '—'}</span>
+              <span className="mono" style={{ color: 'var(--green)' }}>{c.ending_credit?.toLocaleString() ?? '—'}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 }
