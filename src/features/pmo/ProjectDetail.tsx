@@ -109,6 +109,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const [team, setTeam] = useState<TeamRow[]>([])
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [tab, setTab] = useState<Tab | null>(null)
+  const [focusActivity, setFocusActivity] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [correcting, setCorrecting] = useState(false)
   const [correctTo, setCorrectTo] = useState('')
@@ -419,7 +420,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         {tabs.map((t) => (
-          <Chip key={t} tone={activeTab === t ? 'accent' : 'muted'} onClick={() => setTab(t)}>
+          <Chip key={t} tone={activeTab === t ? 'accent' : 'muted'} onClick={() => { setFocusActivity(null); setTab(t) }}>
             {t === 'wbs' ? 'WBS' : t[0].toUpperCase() + t.slice(1)}
           </Chip>
         ))}
@@ -507,13 +508,18 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
           people={people}
           canManage={canManage}
           myId={profile?.id ?? null}
+          focusId={focusActivity}
           onChanged={load}
           onError={setError}
         />
       )}
 
       {activeTab === 'timeline' && (
-        <TimelineView activities={activities} dependencies={dependencies} />
+        <TimelineView
+          activities={activities}
+          dependencies={dependencies}
+          onOpen={(id) => { setFocusActivity(id); setTab('wbs') }}
+        />
       )}
 
       {activeTab === 'baselines' && !isPersonal && (
