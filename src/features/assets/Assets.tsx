@@ -514,8 +514,38 @@ function Drawer({ asset, history, allAssets, licenses, people, onClose, onChange
   setError: (e: string | null) => void
 }) {
   const [reassigning, setReassigning] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [f, setF] = useState({
+    tag: asset.tag, category: asset.category, model: asset.model ?? '', serial: asset.serial ?? '',
+    manufacturer: asset.manufacturer ?? '', vendor: asset.vendor ?? '', po_number: asset.po_number ?? '',
+    cost: asset.cost != null ? String(asset.cost) : '', delivery_date: asset.delivery_date ?? '',
+    warranty_start: asset.warranty_start ?? '', warranty_end: asset.warranty_end ?? '',
+    location: asset.location ?? '',
+  })
   const st = STATUS_CHIP[asset.status === 'in_stock' && history.length ? 'returned' : asset.status]
   const holder = asset.owner?.display_name ?? asset.assigned_name
+
+  const saveEdit = async () => {
+    setError(null)
+    const { error: e } = await supabase.from('assets').update({
+      tag: f.tag.trim().toUpperCase(), category: f.category,
+      model: f.model.trim() || null, serial: f.serial.trim() || null,
+      manufacturer: f.manufacturer.trim() || null, vendor: f.vendor.trim() || null,
+      po_number: f.po_number.trim() || null, cost: f.cost ? Number(f.cost) : null,
+      delivery_date: f.delivery_date || null, warranty_start: f.warranty_start || null,
+      warranty_end: f.warranty_end || null, location: f.location.trim() || null,
+    }).eq('id', asset.id)
+    if (e) setError(e.message)
+    onChanged()
+  }
+
+  const deleteAsset = async () => {
+    if (!window.confirm(`Delete ${asset.tag} (${asset.model ?? asset.category}) permanently? The audit trail and ownership history go with it.`)) return
+    setError(null)
+    const { error: e } = await supabase.from('assets').delete().eq('id', asset.id)
+    if (e) setError(e.message)
+    onChanged()
+  }
 
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     setError(null)
@@ -565,6 +595,9 @@ function Drawer({ asset, history, allAssets, licenses, people, onClose, onChange
             <span className="chip" style={mono({ background: 'var(--ink)', color: '#fff', borderRadius: 6, fontSize: 11 })}>{asset.tag}</span>
             <span className="chip" style={{ background: st.bg, color: st.fg }}>{st.label}</span>
             <span style={{ flex: 1 }} />
+            <button className="btn" style={{ padding: '3px 10px', fontSize: 11.5 }} onClick={() => setEditing(!editing)}>
+              {editing ? 'Cancel' : 'Edit'}
+            </button>
             <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--surface)', cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
           </div>
           <h3 style={{ fontSize: 18, marginTop: 12 }}>{asset.model ?? asset.category.replace('_', ' ')}</h3>
@@ -574,6 +607,34 @@ function Drawer({ asset, history, allAssets, licenses, people, onClose, onChange
         </div>
 
         <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1 }}>
+          {editing ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px' }}>
+              {([
+                ['Tag', 'tag', 'text'], ['Model', 'model', 'text'], ['Serial', 'serial', 'text'],
+                ['Manufacturer', 'manufacturer', 'text'], ['Vendor', 'vendor', 'text'],
+                ['PO number', 'po_number', 'text'], ['Cost (SAR)', 'cost', 'number'],
+                ['Delivered', 'delivery_date', 'date'], ['Warranty start', 'warranty_start', 'date'],
+                ['Warranty end', 'warranty_end', 'date'], ['Location', 'location', 'text'],
+              ] as const).map(([lbl, key, type]) => (
+                <div key={key}>
+                  <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#8FA0BE', letterSpacing: '.4px', marginBottom: 3 }}>{lbl}</div>
+                  <input className="input" type={type} style={{ fontSize: 12 }}
+                    value={f[key]} onChange={(e) => setF({ ...f, [key]: e.target.value })} />
+                </div>
+              ))}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#8FA0BE', letterSpacing: '.4px', marginBottom: 3 }}>Category</div>
+                <select className="input" style={{ fontSize: 12 }} value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
+                  {Object.keys(CAT_CODE).map((c) => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 4 }}>
+                <button className="btn primary" style={{ flex: 1 }} onClick={saveEdit} disabled={!f.tag.trim()}>Save changes</button>
+                <button className="btn" style={{ color: 'var(--red)', borderColor: 'var(--red)' }} onClick={deleteAsset}>Delete asset</button>
+              </div>
+            </div>
+          ) : (
+          <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 18px' }}>
             {field('Category', `${asset.category.replace('_', ' ')}${asset.manufacturer ? ` · ${asset.manufacturer}` : ''}`)}
             {field('Vendor', asset.vendor ?? '—')}
@@ -622,6 +683,8 @@ function Drawer({ asset, history, allAssets, licenses, people, onClose, onChange
               ))}
             </>
           )}
+          </>
+          )}
         </div>
 
         <div style={{ padding: '14px 24px', borderTop: '1px solid #EDEFF4', display: 'flex', gap: 8 }}>
@@ -664,6 +727,30 @@ function Software({ licenses, people, vms, credit, reload, setError, canApprove 
   const [openId, setOpenId] = useState<string | null>(null)
   const [showLapsedOnly, setShowLapsedOnly] = useState(false)
   const [form, setForm] = useState({ name: '', vendor: '', seats: '5', expires: '' })
+  const [editId, setEditId] = useState<string | null>(null)
+  const [ef, setEf] = useState({ name: '', billing: '', seats: '', expires: '' })
+
+  const startEdit = (l: License) => {
+    setEditId(l.id)
+    setEf({ name: l.name, billing: l.billing_profile ?? l.vendor ?? '', seats: String(l.seats), expires: l.expires_on ?? '' })
+  }
+  const saveEdit = async (l: License) => {
+    setError(null)
+    const { error: e } = await supabase.from('licenses').update({
+      name: ef.name.trim(), billing_profile: ef.billing.trim() || null,
+      seats: Math.max(1, Number(ef.seats) || l.seats), expires_on: ef.expires || null,
+    }).eq('id', l.id)
+    if (e) setError(e.message)
+    setEditId(null)
+    reload()
+  }
+  const deleteLicense = async (l: License) => {
+    if (!window.confirm(`Delete subscription "${l.name}" and its ${l.license_assignments.length} seat assignment(s)?`)) return
+    setError(null)
+    const { error: e } = await supabase.from('licenses').delete().eq('id', l.id)
+    if (e) setError(e.message)
+    reload()
+  }
 
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     setError(null)
@@ -773,6 +860,21 @@ function Software({ licenses, people, vms, credit, reload, setError, canApprove 
                 </div>
                 {open && (
                   <div style={{ padding: '4px 16px 12px' }}>
+                    {editId === l.id ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+                        <input className="input" style={{ flex: 2, minWidth: 140 }} value={ef.name} onChange={(e) => setEf({ ...ef, name: e.target.value })} />
+                        <input className="input" style={{ flex: 1, minWidth: 100 }} placeholder="Billing profile" value={ef.billing} onChange={(e) => setEf({ ...ef, billing: e.target.value })} />
+                        <input className="input" type="number" style={{ width: 70 }} value={ef.seats} onChange={(e) => setEf({ ...ef, seats: e.target.value })} />
+                        <input className="input" type="date" style={{ width: 135 }} value={ef.expires} onChange={(e) => setEf({ ...ef, expires: e.target.value })} />
+                        <button className="btn primary" style={{ padding: '5px 12px' }} onClick={() => saveEdit(l)} disabled={!ef.name.trim()}>Save</button>
+                        <button className="btn" style={{ padding: '5px 12px' }} onClick={() => setEditId(null)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <button className="btn" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => startEdit(l)}>Edit</button>
+                        <button className="btn" style={{ padding: '3px 10px', fontSize: 11, color: 'var(--red)' }} onClick={() => deleteLicense(l)}>Delete</button>
+                      </div>
+                    )}
                     {l.status === 'pending' && canApprove && (
                       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                         <button className="btn primary" style={{ padding: '5px 12px' }} onClick={() => rpc('decide_license', { p_license: l.id, p_approve: true })}>Approve</button>
