@@ -33,28 +33,31 @@ begin
     ('77777777-0000-4000-8000-000000000146', '44444444-0000-4000-8000-000000000004',
      '77777777-0000-4000-8000-000000000043', '3.2', 'Facility handover', 2, 2,
      current_date + 60, current_date + 60, 'todo', true, pm)
-  on conflict (id) do nothing;
+  on conflict do nothing;
 
-  insert into wbs_dependencies (predecessor_id, successor_id) values
-    ('77777777-0000-4000-8000-000000000141', '77777777-0000-4000-8000-000000000142'),
+  -- endpoints may have been skipped above (code collisions), so guard the FKs
+  insert into wbs_dependencies (predecessor_id, successor_id)
+  select v.p, v.s from (values
+    ('77777777-0000-4000-8000-000000000141'::uuid, '77777777-0000-4000-8000-000000000142'::uuid),
     ('77777777-0000-4000-8000-000000000142', '77777777-0000-4000-8000-000000000143'),
     ('77777777-0000-4000-8000-000000000143', '77777777-0000-4000-8000-000000000144'),
     ('77777777-0000-4000-8000-000000000144', '77777777-0000-4000-8000-000000000145'),
     ('77777777-0000-4000-8000-000000000145', '77777777-0000-4000-8000-000000000146')
+  ) as v(p, s)
+  where exists (select 1 from wbs_elements where id = v.p)
+    and exists (select 1 from wbs_elements where id = v.s)
   on conflict do nothing;
 
-  if t1 is not null then
-    insert into wbs_assignments (wbs_element_id, user_id, created_by) values
-      ('77777777-0000-4000-8000-000000000143', t1, pm),
-      ('77777777-0000-4000-8000-000000000144', t1, pm)
-    on conflict do nothing;
-  end if;
-  if t2 is not null then
-    insert into wbs_assignments (wbs_element_id, user_id, created_by) values
-      ('77777777-0000-4000-8000-000000000143', t2, pm),
-      ('77777777-0000-4000-8000-000000000145', t2, pm)
-    on conflict do nothing;
-  end if;
+  insert into wbs_assignments (wbs_element_id, user_id, created_by)
+  select v.w, v.u, pm from (values
+    ('77777777-0000-4000-8000-000000000143'::uuid, t1),
+    ('77777777-0000-4000-8000-000000000144', t1),
+    ('77777777-0000-4000-8000-000000000143', t2),
+    ('77777777-0000-4000-8000-000000000145', t2)
+  ) as v(w, u)
+  where v.u is not null
+    and exists (select 1 from wbs_elements where id = v.w)
+  on conflict do nothing;
 
   -- PJ-1003 ERP Rollout (planning): future-dated activities
   update wbs_elements set planned_start = current_date + 14, planned_end = current_date + 44
