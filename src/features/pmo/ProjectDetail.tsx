@@ -5,7 +5,7 @@ import { Chip, SectionLabel } from '../../components/ui'
 import { Chain, type ApprovalStep } from '../requests/Approvals'
 import {
   DEPT_COLOR, PROJECT_STATUS_META,
-  type Project, type ProjectCharter, type ProjectStatus,
+  type DeptCode, type Project, type ProjectCharter, type ProjectStatus,
 } from '../../lib/types'
 
 interface WbsRow { id: string; code: string; title: string; level: number }
@@ -16,11 +16,28 @@ interface TeamRow {
   role_on_project: string | null
   member: { id: string; display_name: string } | null
 }
+interface InternalStep {
+  id: string
+  step: 'dept_head' | 'committee'
+  step_order: number
+  target_dept: DeptCode | null
+  decision: 'pending' | 'approved' | 'rejected' | 'info_requested'
+  comment: string | null
+}
+interface BudgetRow {
+  id: string
+  category: string | null
+  description: string
+  planned_amount: number
+  cost_center: string | null
+  po_request_id: string | null
+  po: { ref: string; status: string } | null
+}
 
-type Tab = 'charter' | 'wbs' | 'baselines' | 'team'
+type Tab = 'charter' | 'wbs' | 'baselines' | 'budget' | 'team'
 
 /** PM-driven transitions; guarded server-side by projects_guard_update. */
-const ACTIONS: Partial<Record<ProjectStatus, { to: ProjectStatus; label: string; primary?: boolean }[]>> = {
+const COMPANY_ACTIONS: Partial<Record<ProjectStatus, { to: ProjectStatus; label: string; primary?: boolean }[]>> = {
   draft: [{ to: 'cancelled', label: 'Cancel project' }],
   charter_submitted: [{ to: 'cancelled', label: 'Cancel project' }],
   charter_approval: [{ to: 'cancelled', label: 'Cancel project' }],
@@ -40,16 +57,36 @@ const ACTIONS: Partial<Record<ProjectStatus, { to: ProjectStatus; label: string;
   closing: [{ to: 'closed', label: 'Close project', primary: true }],
 }
 
+const PERSONAL_ACTIONS: typeof COMPANY_ACTIONS = {
+  draft: [
+    { to: 'active', label: 'Start tracking', primary: true },
+    { to: 'cancelled', label: 'Cancel' },
+  ],
+  active: [
+    { to: 'on_hold', label: 'Pause' },
+    { to: 'closing', label: 'Start closing' },
+  ],
+  on_hold: [{ to: 'active', label: 'Resume', primary: true }],
+  closing: [{ to: 'closed', label: 'Close', primary: true }],
+}
+
+const STEP_LABEL = (s: InternalStep) =>
+  s.step === 'dept_head'
+    ? `${s.target_dept ? DEPT_COLOR[s.target_dept]?.label ?? s.target_dept : ''} department head`
+    : 'PMO committee'
+
 export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack: () => void }) {
   const { profile, hasRole } = useAuth()
   const [project, setProject] = useState<Project | null>(null)
   const [charters, setCharters] = useState<ProjectCharter[]>([])
-  const [steps, setSteps] = useState<ApprovalStep[]>([])
+  const [steps, setSteps] = useState<InternalStep[]>([])
+  const [amICommittee, setAmICommittee] = useState(false)
   const [wbs, setWbs] = useState<WbsRow[]>([])
   const [baselines, setBaselines] = useState<BaselineRow[]>([])
   const [team, setTeam] = useState<TeamRow[]>([])
-  const [tab, setTab] = useState<Tab>('charter')
+  const [tab, setTab] = useState<Tab | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [comment, setComment] = useState('')
   // charter form
   const [objective, setObjective] = useState('')
   const [businessCase, setBusinessCase] = useState('')
@@ -75,14 +112,13 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         const rows = (data as unknown as ProjectCharter[]) ?? []
         setCharters(rows)
         const current = rows[0]
-        if (current && current.status !== 'draft') {
+        if (current) {
           supabase
-            .from('approvals')
-            .select('id, request_id, step_order, approver_hint, decision, comment')
-            .eq('subject_type', 'project_charter')
-            .eq('subject_id', current.id)
+            .from('project_approvals')
+            .select('id, step, step_order, target_dept, decision, comment')
+            .eq('charter_id', current.id)
             .order('step_order')
-            .then(({ data: s }) => setSteps((s as unknown as ApprovalStep[]) ?? []))
+            .then(({ data: s }) => setSteps((s as unknown as InternalStep[]) ?? []))
         } else setSteps([])
       })
     supabase
@@ -102,12 +138,32 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
 
   useEffect(load, [load])
 
+  useEffect(() => {
+    if (!profile) return
+    supabase
+      .from('pmo_committee_members')
+      .select('id')
+      .eq('user_id', profile.id)
+      .then(({ data }) => setAmICommittee((data ?? []).length > 0))
+  }, [profile])
+
   if (!project) return error ? <p className="error-note">{error}</p> : <p className="page-sub">Loading…</p>
 
+  const isPersonal = project.project_type === 'personal'
   const meta = PROJECT_STATUS_META[project.status]
   const isPm = project.project_manager_id === profile?.id || project.created_by === profile?.id
-  const canManage = isPm || hasRole('pmo_admin') || hasRole('system_admin')
+  const canManage = isPm || (!isPersonal && (hasRole('pmo_admin') || hasRole('system_admin')))
   const charter = charters[0] ?? null
+  const tabs: Tab[] = isPersonal ? ['wbs', 'team'] : ['charter', 'wbs', 'baselines', 'budget', 'team']
+  const activeTab: Tab = tab && tabs.includes(tab) ? tab : tabs[0]
+  const actions = (isPersonal ? PERSONAL_ACTIONS : COMPANY_ACTIONS)[project.status] ?? []
+
+  const currentStep = steps.find((s) => s.decision === 'pending')
+  const canDecide =
+    charter?.status === 'submitted' && currentStep != null &&
+    (currentStep.step === 'dept_head'
+      ? hasRole('dept_head', currentStep.target_dept ?? undefined)
+      : amICommittee)
 
   const transition = async (to: ProjectStatus) => {
     setError(null)
@@ -137,6 +193,19 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
     load()
   }
 
+  const decideStep = async (decision: 'approved' | 'rejected') => {
+    if (!currentStep) return
+    setError(null)
+    const { error: e } = await supabase.rpc('decide_project_approval', {
+      p_approval: currentStep.id,
+      p_decision: decision,
+      p_comment: comment || null,
+    })
+    if (e) setError(e.message)
+    setComment('')
+    load()
+  }
+
   const lockBaselines = async () => {
     setError(null)
     const nextVersion = (t: string) =>
@@ -163,9 +232,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
     const siblings = wbs.filter((w) =>
       parent ? w.code.startsWith(parent.code + '.') && w.level === parent.level + 1 : w.level === 1
     )
-    const code = parent
-      ? `${parent.code}.${siblings.length + 1}`
-      : `${siblings.length + 1}`
+    const code = parent ? `${parent.code}.${siblings.length + 1}` : `${siblings.length + 1}`
     const title = window.prompt(`Title for WBS ${code}`)
     if (!title?.trim()) return
     const { error: e } = await supabase.from('wbs_elements').insert({
@@ -181,6 +248,14 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   }
 
   const hasAllBaselines = new Set(baselines.map((b) => b.baseline_type)).size >= 3
+  const chainSteps: ApprovalStep[] = steps.map((s) => ({
+    id: s.id,
+    request_id: '',
+    step_order: s.step_order,
+    approver_hint: STEP_LABEL(s),
+    decision: s.decision,
+    comment: s.comment,
+  }))
 
   return (
     <>
@@ -188,19 +263,22 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
         <span className="mono" style={{ fontSize: 14, color: 'var(--ink)' }}>{project.code}</span>
         <h2 className="page-head" style={{ flex: 1, margin: 0 }}>{project.name}</h2>
+        {isPersonal && <Chip tone="it">Personal tracker</Chip>}
         <Chip tone={meta.tone}>{meta.label}</Chip>
       </div>
       <p className="page-sub">
         PM: {project.pm?.display_name ?? 'unassigned'}
-        {project.department_scope.length > 0
-          ? ' · ' + project.department_scope.map((d) => DEPT_COLOR[d]?.label ?? d).join(', ')
-          : ' · Cross-functional'}
+        {isPersonal
+          ? ' · visible only to you and your team'
+          : project.department_scope.length > 0
+            ? ' · ' + project.department_scope.map((d) => DEPT_COLOR[d]?.label ?? d).join(', ')
+            : ' · Cross-functional'}
         {project.origin_type === 'converted' ? ' · converted from a ticket' : ''}
       </p>
 
-      {canManage && (ACTIONS[project.status] ?? []).length > 0 && (
+      {canManage && actions.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {(ACTIONS[project.status] ?? []).map((a) => (
+          {actions.map((a) => (
             <button
               key={a.to}
               className={`btn${a.primary ? ' primary' : ''}`}
@@ -215,18 +293,18 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        {(['charter', 'wbs', 'baselines', 'team'] as Tab[]).map((t) => (
-          <Chip key={t} tone={tab === t ? 'accent' : 'muted'} onClick={() => setTab(t)}>
+        {tabs.map((t) => (
+          <Chip key={t} tone={activeTab === t ? 'accent' : 'muted'} onClick={() => setTab(t)}>
             {t === 'wbs' ? 'WBS' : t[0].toUpperCase() + t.slice(1)}
           </Chip>
         ))}
       </div>
 
-      {tab === 'charter' && (
+      {activeTab === 'charter' && !isPersonal && (
         <div className="card" style={{ padding: 18 }}>
           {!charter && (
             <>
-              <SectionLabel>Charter — formal authorization (DoA-gated)</SectionLabel>
+              <SectionLabel>Charter — authorization by department head + PMO committee</SectionLabel>
               {canManage && project.status === 'draft' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <textarea className="input" rows={2} placeholder="Objective" value={objective} onChange={(e) => setObjective(e.target.value)} />
@@ -247,7 +325,6 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <SectionLabel>Charter</SectionLabel>
                 <span style={{ flex: 1 }} />
-                {charter.doa_tier && <Chip mono tone="ink">{charter.doa_tier}</Chip>}
                 <Chip tone={charter.status === 'approved' ? 'green' : charter.status === 'rejected' ? 'red' : charter.status === 'submitted' ? 'amber' : 'muted'}>
                   {charter.status}
                 </Chip>
@@ -259,10 +336,22 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
                 <span className="mono">{charter.estimated_budget != null ? `${charter.estimated_budget.toLocaleString()} SAR` : '—'}</span>
                 <span className="row-desc">Duration</span><span>{charter.estimated_duration_days != null ? `${charter.estimated_duration_days} days` : '—'}</span>
               </div>
-              {steps.length > 0 && (
+              {chainSteps.length > 0 && (
                 <div style={{ marginTop: 14 }}>
-                  <SectionLabel>Approval chain (Procurement DoA)</SectionLabel>
-                  <Chain steps={steps} />
+                  <SectionLabel>Approval — department head, then PMO committee</SectionLabel>
+                  <Chain steps={chainSteps} />
+                </div>
+              )}
+              {canDecide && currentStep && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
+                  <input
+                    className="input" style={{ flex: 1 }} placeholder="Comment (optional)"
+                    value={comment} onChange={(e) => setComment(e.target.value)}
+                  />
+                  <button className="btn primary" onClick={() => decideStep('approved')}>
+                    Approve as {STEP_LABEL(currentStep)}
+                  </button>
+                  <button className="btn" onClick={() => decideStep('rejected')}>Reject</button>
                 </div>
               )}
               {canManage && charter.status === 'draft' && (
@@ -285,7 +374,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         </div>
       )}
 
-      {tab === 'wbs' && (
+      {activeTab === 'wbs' && (
         <div className="card" style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <SectionLabel>Work Breakdown Structure</SectionLabel>
@@ -301,11 +390,11 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               )}
             </div>
           ))}
-          {wbs.length === 0 && <div className="row-desc">No WBS elements yet. Tasks and scheduling arrive with the next phase.</div>}
+          {wbs.length === 0 && <div className="row-desc">No WBS elements yet.</div>}
         </div>
       )}
 
-      {tab === 'baselines' && (
+      {activeTab === 'baselines' && !isPersonal && (
         <div className="card" style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <SectionLabel>Baselines — locked, versioned snapshots</SectionLabel>
@@ -325,12 +414,109 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         </div>
       )}
 
-      {tab === 'team' && (
+      {activeTab === 'budget' && !isPersonal && (
+        <BudgetTab
+          projectId={project.id}
+          canManage={canManage}
+          charterApproved={charter?.status === 'approved'}
+          onError={setError}
+        />
+      )}
+
+      {activeTab === 'team' && (
         <TeamTab projectId={project.id} team={team} canManage={canManage} onChanged={load} onError={setError} />
       )}
 
       {error && <p className="error-note" style={{ marginTop: 12 }}>{error}</p>}
     </>
+  )
+}
+
+/** Budget tab — integration point 2: each line can raise a Procurement request. */
+function BudgetTab({ projectId, canManage, charterApproved, onError }: {
+  projectId: string
+  canManage: boolean
+  charterApproved: boolean
+  onError: (m: string) => void
+}) {
+  const [lines, setLines] = useState<BudgetRow[]>([])
+  const [desc, setDesc] = useState('')
+  const [amount, setAmount] = useState('')
+  const [costCenter, setCostCenter] = useState('')
+  const [category, setCategory] = useState('')
+
+  const load = useCallback(() => {
+    supabase
+      .from('budget_lines')
+      .select('id, category, description, planned_amount, cost_center, po_request_id, po:requests!budget_lines_po_request_id_fkey(ref, status)')
+      .eq('project_id', projectId)
+      .order('created_at')
+      .then(({ data }) => setLines((data as unknown as BudgetRow[]) ?? []))
+  }, [projectId])
+
+  useEffect(load, [load])
+
+  const add = async () => {
+    const { error: e } = await supabase.from('budget_lines').insert({
+      project_id: projectId,
+      description: desc.trim(),
+      planned_amount: Number(amount),
+      cost_center: costCenter.trim() || null,
+      category: category.trim() || null,
+    })
+    if (e) onError(e.message)
+    setDesc(''); setAmount(''); setCostCenter(''); setCategory('')
+    load()
+  }
+
+  const raisePo = async (line: BudgetRow) => {
+    const { error: e } = await supabase.rpc('create_po_request', { p_budget_line: line.id })
+    if (e) onError(e.message)
+    load()
+  }
+
+  const total = lines.reduce((s, l) => s + l.planned_amount, 0)
+
+  return (
+    <div className="card" style={{ padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <SectionLabel>Budget — hands off to Procurement, never approves spend itself</SectionLabel>
+        <span style={{ flex: 1 }} />
+        <span className="mono" style={{ fontSize: 13 }}>{total.toLocaleString()} SAR planned</span>
+      </div>
+      {lines.map((l) => (
+        <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
+          <div style={{ flex: 1 }}>
+            <div className="row-title">{l.description}</div>
+            <div className="row-desc">{[l.category, l.cost_center].filter(Boolean).join(' · ') || '—'}</div>
+          </div>
+          <span className="mono">{l.planned_amount.toLocaleString()} SAR</span>
+          {l.po ? (
+            <Chip mono tone="green">{l.po.ref} · {l.po.status.replace('_', ' ')}</Chip>
+          ) : canManage ? (
+            <button
+              className="btn" onClick={() => raisePo(l)}
+              disabled={!charterApproved}
+              title={charterApproved ? undefined : 'The charter must be approved first'}
+            >
+              Create PO request
+            </button>
+          ) : (
+            <Chip tone="muted">no PO yet</Chip>
+          )}
+        </div>
+      ))}
+      {lines.length === 0 && <div className="row-desc">No budget lines yet.</div>}
+      {canManage && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <input className="input" style={{ flex: 2 }} placeholder="Description" value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <input className="input" style={{ width: 120 }} type="number" placeholder="SAR" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input className="input" style={{ width: 110 }} placeholder="Cost center" value={costCenter} onChange={(e) => setCostCenter(e.target.value)} />
+          <input className="input" style={{ width: 110 }} placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <button className="btn primary" onClick={add} disabled={!desc.trim() || !(Number(amount) > 0)}>Add line</button>
+        </div>
+      )}
+    </div>
   )
 }
 

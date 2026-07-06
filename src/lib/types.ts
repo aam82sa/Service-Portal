@@ -59,12 +59,15 @@ export type ProjectStatus =
   | 'draft' | 'charter_submitted' | 'charter_approval' | 'planning' | 'baselined'
   | 'active' | 'on_hold' | 'closing' | 'closed' | 'cancelled'
 
+export type ProjectType = 'personal' | 'company'
+
 export interface Project {
   id: string
   code: string
   name: string
   description: string | null
   status: ProjectStatus
+  project_type: ProjectType
   department_scope: DeptCode[]
   origin_type: 'scratch' | 'converted'
   project_manager_id: string | null

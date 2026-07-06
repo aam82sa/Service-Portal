@@ -1,9 +1,62 @@
 # PMO Module — Gap Decisions
 
-Proposed 2026-07-05, pending approval. Resolves the gaps between the
-"RLC PMO Module Technical Specification" (v1.0) and the current codebase.
-Once approved, this document is the source of truth where it and the spec
-disagree; the spec remains authoritative for everything not listed here.
+Agreed 2026-07-05; **redesigned 2026-07-06 — see §R below, which supersedes
+§B wherever they conflict.** Resolves the gaps between the "RLC PMO Module
+Technical Specification" (v1.0) and the current codebase. This document is
+the source of truth where it and the spec disagree.
+
+## R. Redesign: PMO is an independent module (2026-07-06)
+
+Owner decision overriding the spec's §2.2 "governance reuse": the PMO module
+is **fully independent** of the platform's DoA matrix, SLA engine, approvals
+queue, and admin console. Exactly **two integration points** with the
+service portal exist:
+
+1. **Ticket → project conversion** (unchanged): department staff escalate a
+   request; the originating department head approves; the project is created
+   with the ticket linked.
+2. **Budget → PO request**: a budget line on an approved company project can
+   raise a Procurement request in the portal (service `PROC/PPO`), carrying
+   the project code and amount. From that point it is an ordinary portal
+   request and follows the portal's own DoA — the PMO never re-implements
+   spend approval, it hands off to Procurement.
+
+Everything else — approvals, access, configuration — lives inside the PMO
+area with its own **PMO console** (committee membership, templates), gated
+by `pmo_admin`.
+
+### R.1 Project types
+
+| Type | Approval | Visibility | Budget/PO |
+|---|---|---|---|
+| `personal` | **None** — pure tracker; draft → active directly | Owner + invited team members only (not dept heads, executives, or PMO admins) | Disabled |
+| `company` | Charter approved by **department head, then the PMO committee** | PM, sponsor, creator, team, dept heads in scope, PMO Admin, Executive | Budget tab + manual "Create PO request" per line |
+
+### R.2 Company approval workflow (replaces DoA §B)
+
+- The charter remains the approval subject. Submission builds an internal
+  two-step chain in `project_approvals` (NOT the platform `approvals` table):
+  step 1 `dept_head` targeting `coalesce(origin_department,
+  department_scope[1])` — skipped entirely for fully cross-functional
+  projects with no department — then step 2 `committee`.
+- The **committee is a single, company-wide member list** managed by PMO
+  Admin in the PMO console (`pmo_committee_members`). Any member may decide
+  step 2.
+- Decisions happen **inside the project workspace** (charter tab), not in
+  the portal's Approvals queue. `decide_project_approval()` RPC enforces
+  who may decide each step.
+- No SAR tiers, no doa_matrix involvement, no `doa_tier` snapshots.
+
+### R.3 What this unwinds from the first build
+
+- The polymorphic `approvals.subject_type` machinery stays in the schema
+  (harmless, still used by requests) but charters no longer write to it;
+  `decide_approval()` is restored to requests-only.
+- Platform approvers lose charter visibility (`chr_approver`,
+  `prj_approver`, `apr_read_pmo` policies dropped).
+- `project_charters.doa_tier` is retired (kept as a dead column).
+- All changes ship as forward-only migration `00027` — environments that
+  already applied 00024–00026 upgrade cleanly.
 
 ## A. Codebase alignment (translation rules, apply throughout)
 
