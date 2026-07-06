@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { Chip, MetricCard, SectionLabel } from '../../components/ui'
 import {
   DEPT_COLOR, PORTAL_DEPTS, PROJECT_STATUS_META,
-  type DeptCode, type Project, type ProjectStatus,
+  type DeptCode, type Project, type ProjectStatus, type ProjectType,
 } from '../../lib/types'
 
 interface ConversionRow {
@@ -30,6 +30,7 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [scope, setScope] = useState<DeptCode[]>([])
+  const [projectType, setProjectType] = useState<ProjectType>('company')
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -68,7 +69,8 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
       .insert({
         name: name.trim(),
         description: description.trim() || null,
-        department_scope: scope,
+        project_type: projectType,
+        department_scope: projectType === 'personal' ? [] : scope,
         project_manager_id: profile?.id ?? null,
       })
       .select('id')
@@ -138,11 +140,25 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
         <div className="card" style={{ marginBottom: 18, padding: 18 }}>
           <SectionLabel>New project</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Chip tone={projectType === 'company' ? 'accent' : 'muted'} onClick={() => setProjectType('company')}>
+                Company project
+              </Chip>
+              <Chip tone={projectType === 'personal' ? 'accent' : 'muted'} onClick={() => setProjectType('personal')}>
+                Personal tracker
+              </Chip>
+              <span className="row-desc">
+                {projectType === 'company'
+                  ? 'Charter approved by the department head, then the PMO committee.'
+                  : 'No approvals — private to you and people you invite.'}
+              </span>
+            </div>
             <input className="input" placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} />
             <textarea
               className="input" rows={2} placeholder="Description (optional)"
               value={description} onChange={(e) => setDescription(e.target.value)}
             />
+            {projectType === 'company' && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span className="row-desc">Departments involved:</span>
               {PORTAL_DEPTS.map((d) => (
@@ -156,6 +172,7 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
               ))}
               <span className="row-desc">(none = cross-functional)</span>
             </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn primary" onClick={create} disabled={!name.trim()}>Create draft</button>
               <button className="btn" onClick={() => setCreating(false)}>Cancel</button>
@@ -185,7 +202,9 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
                 {p.origin_type === 'converted' ? ' · converted from a ticket' : ''}
               </div>
             </div>
-            {p.department_scope.length === 0 ? (
+            {p.project_type === 'personal' ? (
+              <Chip tone="it">Personal</Chip>
+            ) : p.department_scope.length === 0 ? (
               <Chip tone="muted">Cross-functional</Chip>
             ) : (
               p.department_scope.map((d) => <Chip key={d} tone="muted">{DEPT_COLOR[d]?.label ?? d}</Chip>)
@@ -198,7 +217,64 @@ export function Projects({ onOpen }: { onOpen: (id: string) => void }) {
         <div className="card"><div className="row row-desc">No projects yet.</div></div>
       )}
       {!loaded && !error && <p className="page-sub">Loading…</p>}
+      {hasRole('pmo_admin') && <PmoConsole onError={setError} />}
       {error && <p className="error-note">{error}</p>}
     </>
+  )
+}
+
+/** PMO console — module-owned configuration, independent of the platform admin console. */
+function PmoConsole({ onError }: { onError: (m: string) => void }) {
+  const [members, setMembers] = useState<{ id: string; member: { id: string; display_name: string } | null }[]>([])
+  const [people, setPeople] = useState<{ id: string; display_name: string }[]>([])
+  const [pick, setPick] = useState('')
+
+  const load = useCallback(() => {
+    supabase
+      .from('pmo_committee_members')
+      .select('id, member:profiles!pmo_committee_members_user_id_fkey(id, display_name)')
+      .then(({ data }) => setMembers((data as never) ?? []))
+    supabase.from('profiles').select('id, display_name').eq('is_active', true).order('display_name')
+      .then(({ data }) => setPeople(data ?? []))
+  }, [])
+
+  useEffect(load, [load])
+
+  const add = async () => {
+    const { error: e } = await supabase.from('pmo_committee_members').insert({ user_id: pick })
+    if (e) onError(e.message)
+    setPick('')
+    load()
+  }
+  const remove = async (id: string) => {
+    const { error: e } = await supabase.from('pmo_committee_members').delete().eq('id', id)
+    if (e) onError(e.message)
+    load()
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 18, padding: 18 }}>
+      <SectionLabel>PMO console — project committee</SectionLabel>
+      <p className="row-desc" style={{ marginBottom: 10 }}>
+        Company projects are approved by the department head, then by any member of this
+        committee. Membership is managed here, independent of platform roles.
+      </p>
+      {members.map((m) => (
+        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
+          <span style={{ flex: 1 }}>{m.member?.display_name ?? '—'}</span>
+          <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => remove(m.id)}>remove</button>
+        </div>
+      ))}
+      {members.length === 0 && <div className="row-desc">No committee members yet.</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <select className="input" style={{ flex: 1 }} value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="">Add a committee member…</option>
+          {people.filter((p) => !members.some((m) => m.member?.id === p.id)).map((p) => (
+            <option key={p.id} value={p.id}>{p.display_name}</option>
+          ))}
+        </select>
+        <button className="btn primary" onClick={add} disabled={!pick}>Add</button>
+      </div>
+    </div>
   )
 }
