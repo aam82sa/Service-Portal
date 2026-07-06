@@ -55,9 +55,10 @@ function computeCritical(activities: Activity[], deps: WbsDependency[]): Set<str
   return critical
 }
 
-export function TimelineView({ activities, dependencies }: {
+export function TimelineView({ activities, dependencies, onOpen }: {
   activities: Activity[]
   dependencies: WbsDependency[]
+  onOpen?: (id: string) => void
 }) {
   const { rows, min, max, critical } = useMemo(() => {
     const children = buildTree(activities)
@@ -143,8 +144,12 @@ export function TimelineView({ activities, dependencies }: {
             const isCrit = critical.has(r.a.id)
             const dated = r.start !== null && r.end !== null
             return (
-              <g key={r.a.id}>
+              <g key={r.a.id} onClick={onOpen ? () => onOpen(r.a.id) : undefined}
+                 style={onOpen ? { cursor: 'pointer' } : undefined}>
                 {i % 2 === 1 && <rect x={0} y={y} width={W} height={rowH} fill="var(--surface)" opacity={0.45} />}
+                <rect x={0} y={y} width={W} height={rowH} fill="transparent">
+                  <title>{r.a.code} {r.a.title} — open details</title>
+                </rect>
                 <text x={8 + (r.a.level - 1) * 14} y={y + rowH / 2 + 3.5} fontSize={r.summary ? 11 : 10.5}
                   fontWeight={r.summary ? 700 : 400} fill="var(--ink)">
                   <tspan fill="var(--accent)" fontFamily="var(--font-mono, monospace)">{r.a.code}</tspan>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Chip, SectionLabel } from '../../components/ui'
 
@@ -36,7 +36,7 @@ export function buildTree(activities: Activity[]) {
   return children
 }
 
-export function WbsTree({ projectId, activities, assignments, dependencies, team, people, canManage, myId, onChanged, onError }: {
+export function WbsTree({ projectId, activities, assignments, dependencies, team, people, canManage, myId, focusId, onChanged, onError }: {
   projectId: string
   activities: Activity[]
   assignments: WbsAssignment[]
@@ -45,12 +45,23 @@ export function WbsTree({ projectId, activities, assignments, dependencies, team
   people: Map<string, string>
   canManage: boolean
   myId: string | null
+  focusId?: string | null
   onChanged: () => void
   onError: (m: string) => void
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<string | null>(null)
+  const focusRef = useRef<HTMLDivElement | null>(null)
   const children = useMemo(() => buildTree(activities), [activities])
+
+  // Arriving from a timeline bar: expand ancestors, open the editor, scroll to it
+  useEffect(() => {
+    if (!focusId) return
+    setCollapsed(new Set())
+    if (canManage) setEditing(focusId)
+    const t = setTimeout(() => focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+    return () => clearTimeout(t)
+  }, [focusId, canManage])
 
   const run = async (p: PromiseLike<{ error: { message: string } | null }>) => {
     const { error } = await p
@@ -92,9 +103,10 @@ export function WbsTree({ projectId, activities, assignments, dependencies, team
     const preds = dependencies.filter((d) => d.successor_id === a.id)
     const isMine = asg.some((x) => x.user_id === myId)
     const meta = STATUS_META[a.status]
+    const isFocus = a.id === focusId
     return (
-      <div key={a.id}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', paddingLeft: (a.level - 1) * 22, borderTop: '1px solid var(--line)' }}>
+      <div key={a.id} ref={isFocus ? focusRef : undefined}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', paddingLeft: (a.level - 1) * 22, borderTop: '1px solid var(--line)', background: isFocus ? 'var(--accent-soft)' : undefined, borderRadius: isFocus ? 6 : undefined }}>
           <button
             className="btn" style={{ padding: '0 6px', fontSize: 11, visibility: kids.length ? 'visible' : 'hidden', minWidth: 24 }}
             onClick={() => setCollapsed((s) => { const n = new Set(s); if (n.has(a.id)) n.delete(a.id); else n.add(a.id); return n })}
