@@ -219,7 +219,14 @@ export function AdminOverview({ onNavigate }: { onNavigate: Navigate }) {
           <div className="card">
             <div style={cardHead}>
               <span style={label10}>Needs your action · {queue}</span>
-              <button style={linkStyle} onClick={() => onNavigate('approvals')}>Approvals →</button>
+              <button
+                style={linkStyle}
+                onClick={() => (licPending.length > 0
+                  ? onNavigate('assets', { assetsTab: 'licenses' })
+                  : onNavigate('admin', { admin: 'delegation' }))}
+              >
+                Approvals →
+              </button>
             </div>
             {licPending.map((l) => (
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderTop: '1px solid #EDEFF4' }}>
