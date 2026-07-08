@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../../lib/supabase'
-import { DEPT_COLOR } from '../../lib/types'
+import { DEPT_COLOR, type DeptCode } from '../../lib/types'
 import { RequestForm, type FormField } from './RequestForm'
 import { SEVERITY_STYLE } from '../admin/Announcements'
 
 interface ServiceWithForm {
   id: string
-  dept: 'IT' | 'ADMIN' | 'PROC' | 'LOG'
+  dept: DeptCode
   code: string
   name: string
   description: string | null
@@ -24,12 +24,43 @@ interface Banner {
   severity: keyof typeof SEVERITY_STYLE
 }
 
-const IT_CATEGORIES = [
-  { prefix: 'AC', name: 'Access & identity', desc: 'Accounts, permissions, passwords, remote access', icon: 'key' },
-  { prefix: 'HW', name: 'Hardware', desc: 'Devices, peripherals, repairs and returns', icon: 'monitor' },
-  { prefix: 'SW', name: 'Software & licenses', desc: 'Installations, licenses, cloud subscriptions', icon: 'box' },
-  { prefix: 'NW', name: 'Network & connectivity', desc: 'Wi-Fi, ports and firewall changes', icon: 'wifi' },
-  { prefix: 'EL', name: 'Employee IT lifecycle', desc: 'Onboarding, offboarding and transfers', icon: 'users' },
+/** A category tile: matches by code prefix, or by department (e.g. Logistics). */
+interface CatDef {
+  key: string
+  name: string
+  desc: string
+  icon: string
+  soft: string
+  fg: string
+  prefix?: string
+  depts?: DeptCode[]
+}
+
+/** One level-1 block. `categories: null` drills straight to a flat list. */
+interface BlockDef {
+  key: string
+  name: string
+  depts: DeptCode[]
+  icon: string
+  soft: string
+  fg: string
+  categories: CatDef[] | null
+  hasIssuePath: boolean
+}
+
+const IT_CATEGORIES: CatDef[] = [
+  { key: 'AC', prefix: 'AC', name: 'Access & identity', desc: 'Accounts, permissions, passwords, remote access', icon: 'key', soft: 'var(--it-soft)', fg: 'var(--it)' },
+  { key: 'HW', prefix: 'HW', name: 'Hardware', desc: 'Devices, peripherals, repairs and returns', icon: 'monitor', soft: 'var(--it-soft)', fg: 'var(--it)' },
+  { key: 'SW', prefix: 'SW', name: 'Software & licenses', desc: 'Installations, licenses, cloud subscriptions', icon: 'box', soft: 'var(--it-soft)', fg: 'var(--it)' },
+  { key: 'NW', prefix: 'NW', name: 'Network & connectivity', desc: 'Wi-Fi, ports and firewall changes', icon: 'wifi', soft: 'var(--it-soft)', fg: 'var(--it)' },
+  { key: 'EL', prefix: 'EL', name: 'Employee IT lifecycle', desc: 'Onboarding, offboarding and transfers', icon: 'users', soft: 'var(--it-soft)', fg: 'var(--it)' },
+]
+
+
+const DEPT_BLOCKS: BlockDef[] = [
+  { key: 'IT', name: 'IT services', depts: ['IT'], icon: 'laptop', soft: 'var(--it-soft)', fg: 'var(--it)', categories: IT_CATEGORIES, hasIssuePath: true },
+  { key: 'ADMINLOG', name: 'Administration & Logistics', depts: ['ADMIN', 'LOG'], icon: 'building', soft: 'var(--admin-soft)', fg: 'var(--admin)', categories: null, hasIssuePath: false },
+  { key: 'PROC', name: 'Procurement', depts: ['PROC'], icon: 'shopping-cart', soft: 'var(--accent-soft)', fg: 'var(--accent)', categories: null, hasIssuePath: false },
 ]
 
 const ICONS: Record<string, ReactNode> = {
@@ -67,8 +98,8 @@ const PRIORITY_CHIP: Record<string, { bg: string; fg: string; border: string }> 
 }
 
 const prefixOf = (code: string) => (code.includes('-') ? code.split('-')[0] : '')
-
-type DeptBlock = 'IT' | 'ADMINLOG' | 'PROC'
+const catMatches = (c: CatDef, s: ServiceWithForm) =>
+  c.depts ? c.depts.includes(s.dept) : prefixOf(s.code) === c.prefix
 
 export function Portal() {
   const [services, setServices] = useState<ServiceWithForm[]>([])
@@ -76,7 +107,7 @@ export function Portal() {
   const [banners, setBanners] = useState<Banner[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dept, setDept] = useState<DeptBlock | null>(null)
+  const [blockKey, setBlockKey] = useState<string | null>(null)
   const [path, setPath] = useState<'issue' | 'request' | null>(null)
   const [category, setCategory] = useState<string | null>(null)
 
@@ -122,34 +153,34 @@ export function Portal() {
     return <RequestForm service={effective} onDone={() => setSelected(null)} />
   }
 
-  const it = services.filter((s) => s.dept === 'IT')
-  const adminLog = services.filter((s) => s.dept === 'ADMIN' || s.dept === 'LOG')
-  const proc = services.filter((s) => s.dept === 'PROC')
-  const incidents = it.filter((s) => s.request_type === 'incident')
-  const itRequests = it.filter((s) => s.request_type !== 'incident')
-  const knownPrefixes = IT_CATEGORIES.map((c) => c.prefix)
-  const otherRequests = itRequests.filter((s) => !knownPrefixes.includes(prefixOf(s.code)))
-  const categoryTiles = [
-    ...IT_CATEGORIES.map((c) => ({
-      ...c,
-      services: itRequests.filter((s) => prefixOf(s.code) === c.prefix),
-    })),
-    ...(otherRequests.length > 0
-      ? [{ prefix: 'OTHER', name: 'Other', desc: 'Everything else', icon: 'plus-circle', services: otherRequests }]
-      : []),
-  ].filter((c) => c.services.length > 0)
+  const block = DEPT_BLOCKS.find((b) => b.key === blockKey) ?? null
+  const svcOf = (b: BlockDef) => services.filter((s) => b.depts.includes(s.dept))
+  const blockServices = block ? svcOf(block) : []
+  const incidents = blockServices.filter((s) => s.request_type === 'incident')
+  const requests = blockServices.filter((s) => s.request_type !== 'incident')
 
-  const crumbs: { label: string; go: () => void }[] = [
-    { label: 'Service portal', go: () => { setDept(null); setPath(null); setCategory(null) } },
-  ]
-  if (dept === 'IT') crumbs.push({ label: 'IT services', go: () => { setPath(null); setCategory(null) } })
-  if (dept === 'ADMINLOG') crumbs.push({ label: 'Administration & Logistics', go: () => {} })
-  if (dept === 'PROC') crumbs.push({ label: 'Procurement', go: () => {} })
-  if (dept === 'IT' && path === 'issue') crumbs.push({ label: 'Report an issue', go: () => {} })
-  if (dept === 'IT' && path === 'request') crumbs.push({ label: 'Request something', go: () => setCategory(null) })
-  if (dept === 'IT' && path === 'request' && category) {
-    const c = categoryTiles.find((t) => t.prefix === category)
-    crumbs.push({ label: c?.name ?? 'Other', go: () => {} })
+  const categoryTiles = block?.categories
+    ? [
+        ...block.categories.map((c) => ({
+          ...c,
+          services: requests.filter((s) => catMatches(c, s)),
+        })),
+        ...(() => {
+          const rest = requests.filter((s) => !block.categories!.some((c) => catMatches(c, s)))
+          return rest.length > 0
+            ? [{ key: 'OTHER', name: 'Other', desc: 'Everything else', icon: 'plus-circle', soft: block.soft, fg: block.fg, services: rest }]
+            : []
+        })(),
+      ].filter((c) => c.services.length > 0)
+    : []
+
+  const reset = () => { setBlockKey(null); setPath(null); setCategory(null) }
+  const crumbs: { label: string; go: () => void }[] = [{ label: 'Service portal', go: reset }]
+  if (block) crumbs.push({ label: block.name, go: () => { setPath(null); setCategory(null) } })
+  if (block && path === 'issue') crumbs.push({ label: 'Report an issue', go: () => {} })
+  if (block && path === 'request') crumbs.push({ label: 'Request something', go: () => setCategory(null) })
+  if (block && path === 'request' && category) {
+    crumbs.push({ label: categoryTiles.find((t) => t.key === category)?.name ?? 'Other', go: () => {} })
   }
 
   const rows = (list: ServiceWithForm[], withDeptChip = false) => (
@@ -192,7 +223,7 @@ export function Portal() {
     </div>
   )
 
-  const block = (opts: {
+  const bigBlock = (opts: {
     icon: string; iconBg: string; iconFg: string; title: string; count: string; go: () => void
   }) => (
     <button key={opts.title} className="pc-block" style={{ ['--pc-c' as string]: opts.iconFg }} onClick={opts.go}>
@@ -205,65 +236,58 @@ export function Portal() {
   )
 
   let body: ReactNode
-  if (dept === null) {
+  if (!block) {
     body = (
       <>
         <div className="pc-section">Choose a department</div>
         <div className="pc-grid">
-          {it.length > 0 && block({
-            icon: 'laptop', iconBg: 'var(--it-soft)', iconFg: 'var(--it)',
-            title: 'IT services', count: `${it.length} services`, go: () => setDept('IT'),
-          })}
-          {adminLog.length > 0 && block({
-            icon: 'building', iconBg: 'var(--admin-soft)', iconFg: 'var(--admin)',
-            title: 'Administration & Logistics', count: `${adminLog.length} service${adminLog.length > 1 ? 's' : ''}`, go: () => setDept('ADMINLOG'),
-          })}
-          {proc.length > 0 && block({
-            icon: 'shopping-cart', iconBg: 'var(--accent-soft)', iconFg: 'var(--accent)',
-            title: 'Procurement', count: `${proc.length} service${proc.length > 1 ? 's' : ''}`, go: () => setDept('PROC'),
-          })}
+          {DEPT_BLOCKS.filter((b) => svcOf(b).length > 0).map((b) =>
+            bigBlock({
+              icon: b.icon, iconBg: b.soft, iconFg: b.fg, title: b.name,
+              count: `${svcOf(b).length} service${svcOf(b).length > 1 ? 's' : ''}`,
+              go: () => setBlockKey(b.key),
+            }))}
         </div>
       </>
     )
-  } else if (dept === 'IT' && path === null) {
+  } else if (block.hasIssuePath && path === null) {
     body = (
       <>
         <div className="pc-section">What do you need?</div>
         <div className="pc-grid">
-          {block({
+          {bigBlock({
             icon: 'alert-triangle', iconBg: 'var(--red-soft)', iconFg: 'var(--red)',
-            title: 'Report an issue', count: `Something is broken · ${incidents.length} services`, go: () => setPath('issue'),
+            title: 'Report an issue', count: `Something is broken · ${incidents.length} service${incidents.length === 1 ? '' : 's'}`, go: () => setPath('issue'),
           })}
-          {block({
+          {bigBlock({
             icon: 'plus-circle', iconBg: 'var(--green-soft)', iconFg: 'var(--green)',
-            title: 'Request something', count: `New access, hardware, software · ${itRequests.length} services`, go: () => setPath('request'),
+            title: 'Request something', count: `${requests.length} services`, go: () => setPath('request'),
           })}
         </div>
       </>
     )
-  } else if (dept === 'IT' && path === 'issue') {
-    body = rows(incidents)
-  } else if (dept === 'IT' && path === 'request' && category === null) {
+  } else if (block.hasIssuePath && path === 'issue') {
+    body = rows(incidents, block.depts.length > 1)
+  } else if (block.categories && path === 'request' && category === null) {
     body = (
       <div className="pc-cat-grid">
         {categoryTiles.map((c) => (
-          <button key={c.prefix} className="pc-cat" onClick={() => setCategory(c.prefix)}>
-            <span className="pc-ico pc-ico-sm" style={{ background: 'var(--it-soft)', color: 'var(--it)' }}>
+          <button key={c.key} className="pc-cat" onClick={() => setCategory(c.key)}>
+            <span className="pc-ico pc-ico-sm" style={{ background: c.soft, color: c.fg }}>
               <Icon name={c.icon} size={19} />
             </span>
             <span className="pc-block-title" style={{ fontSize: 13.5 }}>{c.name}</span>
             <span className="pc-row-desc">{c.desc}</span>
-            <span className="pc-block-count">{c.services.length} services</span>
+            <span className="pc-block-count">{c.services.length} service{c.services.length === 1 ? '' : 's'}</span>
           </button>
         ))}
       </div>
     )
-  } else if (dept === 'IT' && path === 'request' && category) {
-    body = rows(categoryTiles.find((c) => c.prefix === category)?.services ?? [])
-  } else if (dept === 'ADMINLOG') {
-    body = rows(adminLog, true)
+  } else if (block.categories && path === 'request' && category) {
+    body = rows(categoryTiles.find((c) => c.key === category)?.services ?? [], block.depts.length > 1)
   } else {
-    body = rows(proc)
+    // no categories configured (or request path without tiles): flat list
+    body = rows(path === 'request' ? requests : blockServices, block.depts.length > 1)
   }
 
   return (
@@ -285,7 +309,7 @@ export function Portal() {
       })}
       <h2 className="page-head">Service portal</h2>
       <p className="page-sub">Browse the catalog and submit a request.</p>
-      {dept !== null && (
+      {block && (
         <div className="pc-crumb">
           {crumbs.map((c, i) => (
             <span key={i}>
