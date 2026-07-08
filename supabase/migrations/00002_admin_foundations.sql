@@ -1,4 +1,4 @@
--- RLC Services Hub — admin foundations
+-- ABC Services Hub — admin foundations
 -- Feature flags, admin audit, template overrides, inbound routing, teams,
 -- delegation, calendars, SLA policies, escalation, priority matrix,
 -- assignment rules, announcements, settings, integrations,
@@ -62,7 +62,7 @@ create unique index notification_templates_dept_key
 -- ============ Inbound email routing (email-to-ticket) ============
 create table inbound_routes (
   id uuid primary key default gen_random_uuid(),
-  mailbox text unique not null,              -- it-support@rlc.sa
+  mailbox text unique not null,              -- it-support@abccorp.com
   dept dept_code not null,
   default_service_id uuid references services(id),
   is_catch_all boolean not null default false,

@@ -5,16 +5,16 @@ declare
   u record;
 begin
   for u in select * from (values
-    ('22222222-2222-4222-8222-222222222201'::uuid, 'tester1@dev.rlc.sa', 'Tester One'),
-    ('22222222-2222-4222-8222-222222222202'::uuid, 'tester2@dev.rlc.sa', 'Tester Two'),
-    ('22222222-2222-4222-8222-222222222203'::uuid, 'tester3@dev.rlc.sa', 'Tester Three')
+    ('22222222-2222-4222-8222-222222222201'::uuid, 'tester1@dev.abccorp.com', 'Tester One'),
+    ('22222222-2222-4222-8222-222222222202'::uuid, 'tester2@dev.abccorp.com', 'Tester Two'),
+    ('22222222-2222-4222-8222-222222222203'::uuid, 'tester3@dev.abccorp.com', 'Tester Three')
   ) as t(id, email, name)
   loop
     insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
       email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
       confirmation_token, recovery_token, email_change, email_change_token_new)
     values ('00000000-0000-0000-0000-000000000000', u.id, 'authenticated', 'authenticated',
-      u.email, crypt('RlcTest!2026', gen_salt('bf')), now(),
+      u.email, crypt('AbcTest!2026', gen_salt('bf')), now(),
       '{"provider":"email","providers":["email"]}',
       jsonb_build_object('full_name', u.name), now(), now(), '', '', '', '')
     on conflict (id) do nothing;

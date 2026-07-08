@@ -76,7 +76,7 @@ create type asset_status as enum ('in_stock', 'assigned', 'repair', 'retired');
 
 create table assets (
   id uuid primary key default gen_random_uuid(),
-  tag text unique not null,                  -- RLC-LT-0001
+  tag text unique not null,                  -- ABC-LT-0001
   category text not null default 'laptop',   -- laptop, monitor, phone, printer, accessory
   model text,
   serial text,
@@ -195,17 +195,17 @@ end $$;
 
 -- ============ Dev dummy data (visualization) ============
 insert into assets (tag, category, model, serial, status, assigned_to, request_id, purchased_on) values
-  ('RLC-LT-0001', 'laptop',  'Dell Latitude 7440',   'DL7440-8842', 'assigned', '11111111-1111-4111-8111-111111111101', (select id from requests where ref = 'REQ-2500'), '2026-07-01'),
-  ('RLC-LT-0002', 'laptop',  'ThinkPad X1 Carbon',   'TP-X1-2231',  'assigned', '11111111-1111-4111-8111-111111111102', null, '2025-03-14'),
-  ('RLC-LT-0003', 'laptop',  'Dell Latitude 5540',   'DL5540-1190', 'assigned', '11111111-1111-4111-8111-111111111103', null, '2025-01-20'),
-  ('RLC-LT-0004', 'laptop',  'ThinkPad T14',         'TP-T14-7765', 'repair',   '11111111-1111-4111-8111-111111111104', null, '2024-09-02'),
-  ('RLC-LT-0005', 'laptop',  'Dell Latitude 5540',   'DL5540-1191', 'in_stock', null, null, '2025-01-20'),
-  ('RLC-MN-0001', 'monitor', 'Dell U2723QE 27"',     'U27-55821',   'assigned', '11111111-1111-4111-8111-111111111101', null, '2025-05-05'),
-  ('RLC-MN-0002', 'monitor', 'Dell U2723QE 27"',     'U27-55822',   'assigned', '11111111-1111-4111-8111-111111111107', null, '2025-05-05'),
-  ('RLC-MN-0003', 'monitor', 'LG 34WN80C 34"',       'LG34-00318',  'in_stock', null, null, '2025-08-11'),
-  ('RLC-PH-0001', 'phone',   'iPhone 15',            'IP15-90332',  'assigned', '11111111-1111-4111-8111-111111111102', null, '2025-11-30'),
-  ('RLC-PH-0002', 'phone',   'Samsung Galaxy S24',   'SG24-11208',  'in_stock', null, null, '2025-11-30'),
-  ('RLC-PR-0001', 'printer', 'HP LaserJet Pro M479', 'HPM479-2210', 'retired',  null, null, '2021-02-15')
+  ('ABC-LT-0001', 'laptop',  'Dell Latitude 7440',   'DL7440-8842', 'assigned', '11111111-1111-4111-8111-111111111101', (select id from requests where ref = 'REQ-2500'), '2026-07-01'),
+  ('ABC-LT-0002', 'laptop',  'ThinkPad X1 Carbon',   'TP-X1-2231',  'assigned', '11111111-1111-4111-8111-111111111102', null, '2025-03-14'),
+  ('ABC-LT-0003', 'laptop',  'Dell Latitude 5540',   'DL5540-1190', 'assigned', '11111111-1111-4111-8111-111111111103', null, '2025-01-20'),
+  ('ABC-LT-0004', 'laptop',  'ThinkPad T14',         'TP-T14-7765', 'repair',   '11111111-1111-4111-8111-111111111104', null, '2024-09-02'),
+  ('ABC-LT-0005', 'laptop',  'Dell Latitude 5540',   'DL5540-1191', 'in_stock', null, null, '2025-01-20'),
+  ('ABC-MN-0001', 'monitor', 'Dell U2723QE 27"',     'U27-55821',   'assigned', '11111111-1111-4111-8111-111111111101', null, '2025-05-05'),
+  ('ABC-MN-0002', 'monitor', 'Dell U2723QE 27"',     'U27-55822',   'assigned', '11111111-1111-4111-8111-111111111107', null, '2025-05-05'),
+  ('ABC-MN-0003', 'monitor', 'LG 34WN80C 34"',       'LG34-00318',  'in_stock', null, null, '2025-08-11'),
+  ('ABC-PH-0001', 'phone',   'iPhone 15',            'IP15-90332',  'assigned', '11111111-1111-4111-8111-111111111102', null, '2025-11-30'),
+  ('ABC-PH-0002', 'phone',   'Samsung Galaxy S24',   'SG24-11208',  'in_stock', null, null, '2025-11-30'),
+  ('ABC-PR-0001', 'printer', 'HP LaserJet Pro M479', 'HPM479-2210', 'retired',  null, null, '2021-02-15')
 on conflict do nothing;
 
 insert into licenses (name, vendor, seats, expires_on) values
@@ -220,16 +220,16 @@ select l.id, p.id from licenses l, profiles p where l.name = 'Microsoft 365 E3'
 on conflict do nothing;
 insert into license_assignments (license_id, profile_id)
 select l.id, p.id from licenses l
-join profiles p on p.upn in ('requester@dev.rlc.sa', 'deptadmin.it@dev.rlc.sa')
+join profiles p on p.upn in ('requester@dev.abccorp.com', 'deptadmin.it@dev.abccorp.com')
 where l.name = 'Adobe Creative Cloud'
 on conflict do nothing;
 insert into license_assignments (license_id, profile_id)
 select l.id, p.id from licenses l
-join profiles p on p.upn = 'lead.it@dev.rlc.sa'
+join profiles p on p.upn = 'lead.it@dev.abccorp.com'
 where l.name = 'AutoCAD'
 on conflict do nothing;
 insert into license_assignments (license_id, profile_id)
 select l.id, p.id from licenses l
-join profiles p on p.upn in ('agent.it@dev.rlc.sa', 'sysadmin@dev.rlc.sa')
+join profiles p on p.upn in ('agent.it@dev.abccorp.com', 'sysadmin@dev.abccorp.com')
 where l.name = 'Zoom Pro'
 on conflict do nothing;

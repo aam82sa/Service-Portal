@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RLC Services Hub — Prototype v2</title>
+<title>ABC Services Hub — Prototype v2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -202,7 +202,7 @@ td .sub{display:block;font-size:11px;color:var(--muted);font-family:'JetBrains M
 <aside class="sidebar">
   <div class="brand">
     <div class="brand-mark">R</div>
-    <div class="brand-name">Services Hub<span>RLC Internal</span></div>
+    <div class="brand-name">Services Hub<span>ABC Internal</span></div>
   </div>
 
   <div class="nav-label">Navigation</div>
@@ -305,7 +305,7 @@ td .sub{display:block;font-size:11px;color:var(--muted);font-family:'JetBrains M
         <div class="dept-rail rail-it"></div>
         <div class="sla-ring"><svg width="42" height="42"><circle cx="21" cy="21" r="17" fill="none" stroke="#EEF0F4" stroke-width="4"/><circle cx="21" cy="21" r="17" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="107" stroke-dashoffset="12" stroke-linecap="round"/></svg><div class="val" style="color:var(--green)">3d</div></div>
         <div class="id">REQ-2476</div>
-        <div class="t"><b>Shared mailbox — procurement@rlc</b><span>Waiting on requester confirmation</span></div>
+        <div class="t"><b>Shared mailbox — procurement@abccorp.com</b><span>Waiting on requester confirmation</span></div>
         <span class="chip chip-neutral">Pending requester</span>
       </div>
     </div>
@@ -534,11 +534,11 @@ td .sub{display:block;font-size:11px;color:var(--muted);font-family:'JetBrains M
 
     <div class="section-h"><h3>Group-to-role mapping</h3><span>AD security groups drive platform roles automatically</span></div>
     <div class="card" style="padding:14px 22px;margin-bottom:20px">
-      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-ServiceDesk-IT</span>IT Service Desk group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--it);background:var(--it-soft)">Agent · IT Services scope</div></div>
-      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-Admin-Services</span>Administration services group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--admin);background:var(--admin-soft)">Agent · Administration scope</div></div>
-      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-Logistics-Ops</span>Logistics operations group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--log);background:var(--log-soft)">Agent · Logistics scope</div></div>
-      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-DoA-Approvers</span>DoA approvers group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--accent);background:var(--accent-soft)">Approver · per DoA matrix band</div></div>
-      <div class="mapping"><div class="map-box"><span class="mono">SG-RLC-Executives</span>Executive leadership group</div><div class="map-arrow">→</div><div class="map-box">Executive · read-only insights</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-ABC-ServiceDesk-IT</span>IT Service Desk group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--it);background:var(--it-soft)">Agent · IT Services scope</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-ABC-Admin-Services</span>Administration services group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--admin);background:var(--admin-soft)">Agent · Administration scope</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-ABC-Logistics-Ops</span>Logistics operations group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--log);background:var(--log-soft)">Agent · Logistics scope</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-ABC-DoA-Approvers</span>DoA approvers group</div><div class="map-arrow">→</div><div class="map-box" style="border-color:var(--accent);background:var(--accent-soft)">Approver · per DoA matrix band</div></div>
+      <div class="mapping"><div class="map-box"><span class="mono">SG-ABC-Executives</span>Executive leadership group</div><div class="map-arrow">→</div><div class="map-box">Executive · read-only insights</div></div>
       <div class="mapping"><div class="map-box"><span class="mono">All licensed users</span>Default — every employee</div><div class="map-arrow">→</div><div class="map-box">Requester · service portal</div></div>
     </div>
 
@@ -547,12 +547,12 @@ td .sub{display:block;font-size:11px;color:var(--muted);font-family:'JetBrains M
       <table>
         <thead><tr><th>User</th><th>Department (AD)</th><th>AD groups</th><th>Platform role</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><td><span class="avatar">AD</span><b>Ady</b><span class="sub" style="display:inline;margin-left:8px">ady@rlc.sa</span></td><td>Governance &amp; Compliance</td><td class="mono" style="font-size:11px">SG-DoA-Approvers, SG-Executives</td><td><span class="chip chip-amber">Approver</span> <span class="chip chip-neutral">Executive</span></td><td><span class="chip chip-green">Active</span></td></tr>
-          <tr><td><span class="avatar" style="background:#3E6DD8">MK</span><b>M. Khalid</b><span class="sub" style="display:inline;margin-left:8px">m.khalid@rlc.sa</span></td><td>Information Technology</td><td class="mono" style="font-size:11px">SG-ServiceDesk-IT</td><td><span class="chip chip-it">Agent · IT</span></td><td><span class="chip chip-green">Active</span></td></tr>
-          <tr><td><span class="avatar" style="background:#8A5FC9">RN</span><b>R. Nasser</b><span class="sub" style="display:inline;margin-left:8px">r.nasser@rlc.sa</span></td><td>Administration</td><td class="mono" style="font-size:11px">SG-Admin-Services</td><td><span class="chip chip-admin">Agent · Administration</span></td><td><span class="chip chip-green">Active</span></td></tr>
-          <tr><td><span class="avatar" style="background:#2E9E6B">FB</span><b>F. Badr</b><span class="sub" style="display:inline;margin-left:8px">f.badr@rlc.sa</span></td><td>Logistics</td><td class="mono" style="font-size:11px">SG-Logistics-Ops</td><td><span class="chip chip-log">Agent · Logistics</span></td><td><span class="chip chip-green">Active</span></td></tr>
-          <tr><td><span class="avatar" style="background:#6B7280">SA</span><b>S. Alharbi</b><span class="sub" style="display:inline;margin-left:8px">s.alharbi@rlc.sa</span></td><td>Logistics</td><td class="mono" style="font-size:11px">—</td><td><span class="chip chip-neutral">Requester</span></td><td><span class="chip chip-green">Active</span></td></tr>
-          <tr><td><span class="avatar" style="background:#9AA1AF">TQ</span><b>T. Qassim</b><span class="sub" style="display:inline;margin-left:8px">t.qassim@rlc.sa</span></td><td>Finance</td><td class="mono" style="font-size:11px">SG-DoA-Approvers</td><td><span class="chip chip-amber">Approver</span></td><td><span class="chip chip-neutral">Disabled in AD</span></td></tr>
+          <tr><td><span class="avatar">AD</span><b>Ady</b><span class="sub" style="display:inline;margin-left:8px">ady@abccorp.com</span></td><td>Governance &amp; Compliance</td><td class="mono" style="font-size:11px">SG-DoA-Approvers, SG-Executives</td><td><span class="chip chip-amber">Approver</span> <span class="chip chip-neutral">Executive</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#3E6DD8">MK</span><b>M. Khalid</b><span class="sub" style="display:inline;margin-left:8px">m.khalid@abccorp.com</span></td><td>Information Technology</td><td class="mono" style="font-size:11px">SG-ServiceDesk-IT</td><td><span class="chip chip-it">Agent · IT</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#8A5FC9">RN</span><b>R. Nasser</b><span class="sub" style="display:inline;margin-left:8px">r.nasser@abccorp.com</span></td><td>Administration</td><td class="mono" style="font-size:11px">SG-Admin-Services</td><td><span class="chip chip-admin">Agent · Administration</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#2E9E6B">FB</span><b>F. Badr</b><span class="sub" style="display:inline;margin-left:8px">f.badr@abccorp.com</span></td><td>Logistics</td><td class="mono" style="font-size:11px">SG-Logistics-Ops</td><td><span class="chip chip-log">Agent · Logistics</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#6B7280">SA</span><b>S. Alharbi</b><span class="sub" style="display:inline;margin-left:8px">s.alharbi@abccorp.com</span></td><td>Logistics</td><td class="mono" style="font-size:11px">—</td><td><span class="chip chip-neutral">Requester</span></td><td><span class="chip chip-green">Active</span></td></tr>
+          <tr><td><span class="avatar" style="background:#9AA1AF">TQ</span><b>T. Qassim</b><span class="sub" style="display:inline;margin-left:8px">t.qassim@abccorp.com</span></td><td>Finance</td><td class="mono" style="font-size:11px">SG-DoA-Approvers</td><td><span class="chip chip-amber">Approver</span></td><td><span class="chip chip-neutral">Disabled in AD</span></td></tr>
         </tbody>
       </table>
     </div>

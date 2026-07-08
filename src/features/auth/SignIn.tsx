@@ -3,31 +3,34 @@ import { authMode, isConfigured } from '../../lib/supabase'
 import { useAuth } from './AuthProvider'
 
 const DEV_USERS = [
-  { email: 'requester@dev.abccorp.com', label: 'Rana Requester — requester' },
-  { email: 'agent.it@dev.abccorp.com', label: 'Ahmed Agent — agent, IT' },
-  { email: 'lead.it@dev.abccorp.com', label: 'Latifa Lead — team lead, IT' },
-  { email: 'approver@dev.abccorp.com', label: 'Aziz Approver — dept head' },
-  { email: 'deptadmin.it@dev.abccorp.com', label: 'Dana DeptAdmin — dept head, IT' },
-  { email: 'useradmin@dev.abccorp.com', label: 'Umar UserAdmin — user admin' },
-  { email: 'sysadmin@dev.abccorp.com', label: 'Sara SysAdmin — system admin' },
-  { email: 'pmo.admin@dev.abccorp.com', label: 'Paula PMO Admin — PMO console' },
-  { email: 'pm@dev.abccorp.com', label: 'Peter PM — project manager' },
-  { email: 'committee@dev.abccorp.com', label: 'Carla Committee — PMO committee' },
-  { email: 'tester1@dev.abccorp.com', label: 'Tester One — requester' },
-  { email: 'tester2@dev.abccorp.com', label: 'Tester Two — requester' },
-  { email: 'tester3@dev.abccorp.com', label: 'Tester Three — requester' },
+  { email: 'sysadmin@dev.abccorp.com', label: 'Sami SysAdmin — system admin' },
+  { email: 'head.it@dev.abccorp.com', label: 'Huda IT Head — dept head, IT' },
+  { email: 'head.admin@dev.abccorp.com', label: 'Hatem Admin Head — dept head, Administration' },
+  { email: 'head.proc@dev.abccorp.com', label: 'Hala Procurement Head — dept head, Procurement' },
+  { email: 'head.pmo@dev.abccorp.com', label: 'Hani PMO Head — PMO console + committee' },
+  { email: 'lead.it@dev.abccorp.com', label: 'Layla IT Lead — team lead, IT' },
+  { email: 'lead.admin@dev.abccorp.com', label: 'Lama Admin Lead — team lead, Administration' },
+  { email: 'lead.proc@dev.abccorp.com', label: 'Loay Procurement Lead — team lead, Procurement' },
+  { email: 'lead.pmo@dev.abccorp.com', label: 'Lina PMO Lead — project manager' },
+  { email: 'agent.it@dev.abccorp.com', label: 'Adel IT Agent — agent, IT' },
+  { email: 'agent.admin@dev.abccorp.com', label: 'Afnan Admin Officer — agent, Administration' },
+  { email: 'agent.proc@dev.abccorp.com', label: 'Amjad Procurement Officer — agent, Procurement' },
+  { email: 'agent.pmo@dev.abccorp.com', label: 'Areej PMO Officer — project manager' },
+  { email: 'biz1@dev.abccorp.com', label: 'Basma Business — requester' },
+  { email: 'biz2@dev.abccorp.com', label: 'Bandar Business — requester' },
+  { email: 'biz3@dev.abccorp.com', label: 'Dana Business — requester' },
+  { email: 'biz4@dev.abccorp.com', label: 'Faisal Business — requester' },
 ]
 
-const passwordFor = (email: string) =>
-  email.startsWith('tester') ? 'RlcTest!2026' : 'RlcDev!2026'
+const passwordFor = () => 'AbcHub!2026'
 
 export function SignIn() {
   const { signInDev, signInSso } = useAuth()
-  const [email, setEmailRaw] = useState(DEV_USERS[6].email)
-  const [password, setPassword] = useState(passwordFor(DEV_USERS[6].email))
+  const [email, setEmailRaw] = useState(DEV_USERS[0].email)
+  const [password, setPassword] = useState(passwordFor())
   const setEmail = (e: string) => {
     setEmailRaw(e)
-    setPassword(passwordFor(e))
+    setPassword(passwordFor())
   }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
