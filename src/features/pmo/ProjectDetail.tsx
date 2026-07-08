@@ -4,9 +4,9 @@ import { PersonPicker } from '../../components/PersonPicker'
 import { useAuth } from '../auth/AuthProvider'
 import { Chip, SectionLabel } from '../../components/ui'
 import { Chain, type ApprovalStep } from '../requests/Approvals'
-import { WbsTree, type Activity, type WbsAssignment, type WbsDependency } from './Wbs'
-import { TimelineView } from './Timeline'
-import { RiskRegister } from './RiskRegister'
+import { STATUS_META, WbsTree, type Activity, type WbsAssignment, type WbsDependency } from './Wbs'
+import { TimelineView, type BaselineDates } from './Timeline'
+import { RiskRegister, scoreBand } from './RiskRegister'
 import {
   DEPT_COLOR, PORTAL_DEPTS, PROJECT_STATUS_META,
   type DeptCode, type Project, type ProjectCharter, type ProjectStatus,
@@ -19,7 +19,18 @@ interface BaselineRow {
   locked_at: string
   revoked_at: string | null
   revoke_reason: string | null
+  snapshot_json: Record<string, unknown> | null
 }
+interface RiskLite {
+  id: string
+  seq: number
+  title: string
+  score: number
+  status: string
+  impact_scope: number
+  type: string
+}
+interface IssueLite { id: string; severity: string; status: string }
 interface TeamRow {
   id: string
   allocation_percent: number
@@ -52,7 +63,7 @@ interface AuditRow {
   actor: { display_name: string } | null
 }
 
-type Tab = 'charter' | 'wbs' | 'timeline' | 'baselines' | 'budget' | 'risks' | 'team'
+type Tab = 'charter' | 'wbs' | 'baselines' | 'budget' | 'risks' | 'team'
 
 const COMPANY_ACTIONS: Partial<Record<ProjectStatus, { to: ProjectStatus; label: string; primary?: boolean }[]>> = {
   draft: [{ to: 'cancelled', label: 'Cancel project' }],
@@ -92,6 +103,71 @@ const ALL_STATUSES: ProjectStatus[] = [
   'active', 'on_hold', 'closing', 'closed', 'cancelled',
 ]
 
+const RAG_COLOR: Record<string, string> = {
+  green: 'var(--green)', amber: 'var(--amber)', red: 'var(--red)', muted: 'var(--ink-3)',
+}
+const RAG_SOFT: Record<string, string> = {
+  green: 'var(--green-soft)', amber: 'var(--amber-soft)', red: 'var(--red-soft)', muted: 'var(--line)',
+}
+
+function RagDot({ tone, title }: { tone: string; title: string }) {
+  return (
+    <span
+      title={title}
+      style={{
+        width: 12, height: 12, borderRadius: 6, display: 'inline-block',
+        background: RAG_COLOR[tone], boxShadow: `0 0 0 3px ${RAG_SOFT[tone]}`,
+      }}
+    />
+  )
+}
+
+function Av({ name }: { name: string }) {
+  const initials = name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+  return (
+    <span
+      title={name}
+      style={{
+        width: 26, height: 26, borderRadius: 13, background: 'var(--it-soft)', color: 'var(--it)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 700, flexShrink: 0,
+      }}
+    >
+      {initials}
+    </span>
+  )
+}
+
+function Metric({ label, value, sub, title }: { label: string; value: string; sub?: string; title?: string }) {
+  return (
+    <div className="card" style={{ padding: '14px 16px', flex: 1, minWidth: 0 }} title={title}>
+      <div className="row-desc" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+      <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{value}</div>
+      {sub && <div className="row-desc" style={{ fontSize: 12, marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function SectionCard({ label, action, onAction, children }: {
+  label: string
+  action?: string
+  onAction?: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="card" style={{ padding: 16, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+        <SectionLabel>{label}</SectionLabel>
+        <span style={{ flex: 1 }} />
+        {onAction && (
+          <button className="btn" style={{ padding: '2px 10px', fontSize: 12 }} onClick={onAction}>{action}</button>
+        )}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 const STEP_LABEL = (s: InternalStep) =>
   s.step === 'dept_head'
     ? `${s.target_dept ? DEPT_COLOR[s.target_dept]?.label ?? s.target_dept : ''} department head`
@@ -110,7 +186,10 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const [audit, setAudit] = useState<AuditRow[]>([])
   const [team, setTeam] = useState<TeamRow[]>([])
   const [people, setPeople] = useState<Map<string, string>>(new Map())
-  const [tab, setTab] = useState<Tab | null>(null)
+  const [subview, setSubview] = useState<Tab | null>(null)
+  const [budgetLines, setBudgetLines] = useState<BudgetRow[]>([])
+  const [risks, setRisks] = useState<RiskLite[]>([])
+  const [issues, setIssues] = useState<IssueLite[]>([])
   const [focusActivity, setFocusActivity] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [correcting, setCorrecting] = useState(false)
@@ -176,7 +255,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       })
     supabase
       .from('project_baselines')
-      .select('id, baseline_type, version, locked_at, revoked_at, revoke_reason')
+      .select('id, baseline_type, version, locked_at, revoked_at, revoke_reason, snapshot_json')
       .eq('project_id', projectId).order('baseline_type').order('version')
       .then(({ data }) => setBaselines((data as unknown as BaselineRow[]) ?? []))
     supabase
@@ -191,6 +270,16 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       .then(({ data }) => setTeam((data as unknown as TeamRow[]) ?? []))
     supabase.from('profiles').select('id, display_name').eq('is_active', true)
       .then(({ data }) => setPeople(new Map((data ?? []).map((p) => [p.id, p.display_name]))))
+    supabase.from('budget_lines')
+      .select('id, category, description, planned_amount, cost_center, po_request_id, po:requests!budget_lines_po_request_id_fkey(ref, status)')
+      .eq('project_id', projectId)
+      .then(({ data }) => setBudgetLines((data as unknown as BudgetRow[]) ?? []))
+    supabase.from('pmo_risks')
+      .select('id, seq, title, score, status, impact_scope, type')
+      .eq('project_id', projectId).order('score', { ascending: false })
+      .then(({ data }) => setRisks((data as RiskLite[]) ?? []))
+    supabase.from('pmo_issues').select('id, severity, status').eq('project_id', projectId)
+      .then(({ data }) => setIssues((data as IssueLite[]) ?? []))
   }, [projectId])
 
   useEffect(load, [load])
@@ -208,10 +297,6 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const isOwner = project.project_manager_id === profile?.id || project.created_by === profile?.id
   const canManage = isOwner || (!isPersonal && (hasRole('pmo_admin') || hasRole('system_admin')))
   const charter = charters[0] ?? null
-  const tabs: Tab[] = isPersonal
-    ? ['wbs', 'timeline', 'team']
-    : ['charter', 'wbs', 'timeline', 'baselines', 'budget', 'risks', 'team']
-  const activeTab: Tab = tab && tabs.includes(tab) ? tab : tabs[0]
   const actions = (isPersonal ? PERSONAL_ACTIONS : COMPANY_ACTIONS)[project.status] ?? []
   const teamPeople = team.flatMap((t) => (t.member ? [{ id: t.member.id, display_name: t.member.display_name }] : []))
 
@@ -304,7 +389,12 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       project_id: project.id, baseline_type: t, version: nextVersion(t),
       snapshot_json:
         t === 'scope' ? { wbs: activities.map((w) => ({ code: w.code, title: w.title })) } :
-        t === 'schedule' ? { planned_start: project.planned_start, planned_end: project.planned_end } :
+        t === 'schedule' ? {
+          planned_start: project.planned_start, planned_end: project.planned_end,
+          activities: activities
+            .filter((w) => w.planned_start && w.planned_end)
+            .map((w) => ({ id: w.id, start: w.planned_start, end: w.planned_end })),
+        } :
         { estimated_budget: charter?.estimated_budget ?? null },
     })))
     if (e) setError(e.message)
@@ -326,24 +416,129 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
     approver_hint: STEP_LABEL(s), decision: s.decision, comment: s.comment,
   }))
 
+  // ---- derived overview metrics ----
+  const parentIds = new Set(activities.map((a) => a.parent_wbs_id).filter(Boolean))
+  const leaves = activities.filter((a) => !parentIds.has(a.id))
+  const weightOf = (a: Activity) => {
+    if (a.planned_start && a.planned_end) {
+      const d = (new Date(a.planned_end).getTime() - new Date(a.planned_start).getTime()) / 86400000 + 1
+      if (d > 0) return d
+    }
+    return 1
+  }
+  const totalWeight = leaves.reduce((s, a) => s + weightOf(a), 0)
+  const pctComplete = totalWeight > 0
+    ? Math.round(leaves.reduce((s, a) => s + weightOf(a) * STATUS_META[a.status].pct, 0) / totalWeight)
+    : 0
+  const pctOf = (rootId: string): number => {
+    const descend = (id: string): Activity[] => {
+      const kids = activities.filter((a) => a.parent_wbs_id === id)
+      if (kids.length === 0) return activities.filter((a) => a.id === id)
+      return kids.flatMap((k) => descend(k.id))
+    }
+    const ls = descend(rootId)
+    const w = ls.reduce((s, a) => s + weightOf(a), 0)
+    return w > 0 ? Math.round(ls.reduce((s, a) => s + weightOf(a) * STATUS_META[a.status].pct, 0) / w) : 0
+  }
+
+  const activeBl = (t: string) => baselines.find((b) => b.baseline_type === t && !b.revoked_at) ?? null
+  const schedBl = activeBl('schedule')
+  const costBl = activeBl('cost')
+  const schedSnap = (schedBl?.snapshot_json ?? null) as {
+    planned_start?: string | null
+    planned_end?: string | null
+    activities?: { id: string; start: string; end: string }[]
+  } | null
+  const baselineDates: BaselineDates = {}
+  for (const a of schedSnap?.activities ?? []) baselineDates[a.id] = { start: a.start, end: a.end }
+
+  // SPI — earned schedule vs planned value from the schedule baseline's planned range
+  let pvPct: number | null = null
+  if (schedSnap?.planned_start && schedSnap?.planned_end) {
+    const s = new Date(schedSnap.planned_start).getTime()
+    const e = new Date(schedSnap.planned_end).getTime()
+    if (e > s) pvPct = Math.min(1, Math.max(0, (Date.now() - s) / (e - s)))
+  }
+  const spi = pvPct != null && pvPct > 0 ? pctComplete / 100 / pvPct : null
+
+  // CPI — EV = BAC × % complete; AC = committed spend (budget lines handed to Procurement)
+  const plannedTotal = budgetLines.reduce((s, l) => s + l.planned_amount, 0)
+  const snapBudget = (costBl?.snapshot_json as { estimated_budget?: number | null } | null)?.estimated_budget ?? null
+  const bac = snapBudget ?? (plannedTotal > 0 ? plannedTotal : null)
+  const acTotal = budgetLines.filter((l) => l.po_request_id).reduce((s, l) => s + l.planned_amount, 0)
+  const cpi = costBl && bac != null && bac > 0 && acTotal > 0 ? ((pctComplete / 100) * bac) / acTotal : null
+
+  const openRisks = risks.filter((r) => r.status !== 'closed')
+  const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'in_progress')
+  const ragOf = (v: number | null) => (v == null ? 'muted' : v >= 0.95 ? 'green' : v >= 0.85 ? 'amber' : 'red')
+  const scopeRag = openIssues.some((i) => i.severity === 'critical')
+    ? 'red'
+    : openRisks.some((r) => r.type === 'threat' && r.impact_scope >= 4) ? 'amber' : 'green'
+  const scopeNote = scopeRag === 'red' ? 'open critical issue'
+    : scopeRag === 'amber' ? 'open risk threatens scope (impact ≥ 4)' : 'no open scope threats'
+  const sponsorName = project.created_by ? people.get(project.created_by) ?? null : null
+  const topLevel = activities.filter((a) => !a.parent_wbs_id)
+  const acPct = bac != null && bac > 0 ? Math.min(100, Math.round((acTotal / bac) * 100)) : 0
+  const cpiWords = cpi == null
+    ? 'CPI needs an approved cost baseline and committed spend.'
+    : cpi >= 1.05 ? 'spending less than planned for the work done'
+    : cpi >= 0.95 ? 'spending roughly to plan'
+    : 'spending more than planned for the work done'
+
   return (
     <>
       <button className="btn" onClick={onBack} style={{ marginBottom: 14 }}>← Projects</button>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-        <span className="mono" style={{ fontSize: 14, color: 'var(--ink)' }}>{project.code}</span>
-        <h2 className="page-head" style={{ flex: 1, margin: 0 }}>{project.name}</h2>
-        {isPersonal && <Chip tone="it">Personal tracker</Chip>}
-        <Chip tone={meta.tone}>{meta.label}</Chip>
+      <div className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Chip mono tone="ink">{project.code}</Chip>
+          <h2 className="page-head" style={{ flex: 1, margin: 0 }}>{project.name}</h2>
+          {isPersonal && <Chip tone="it">Personal tracker</Chip>}
+          <Chip tone={meta.tone}>{meta.label}</Chip>
+          {!isPersonal && (
+            <span style={{ display: 'inline-flex', gap: 8, marginLeft: 6, alignItems: 'center' }}>
+              <RagDot tone={ragOf(spi)} title={spi != null ? `Schedule — SPI ${spi.toFixed(2)}` : 'Schedule — requires approved baseline'} />
+              <RagDot tone={ragOf(cpi)} title={cpi != null ? `Cost — CPI ${cpi.toFixed(2)}` : 'Cost — requires approved baseline'} />
+              <RagDot tone={scopeRag} title={`Scope — ${scopeNote}`} />
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, fontSize: 13, flexWrap: 'wrap' }}>
+          {project.pm?.display_name ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Av name={project.pm.display_name} />
+              <span><span className="row-desc">PM </span>{project.pm.display_name}</span>
+            </span>
+          ) : (
+            <span className="row-desc">PM unassigned</span>
+          )}
+          {sponsorName && sponsorName !== project.pm?.display_name && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Av name={sponsorName} />
+              <span><span className="row-desc">Sponsor </span>{sponsorName}</span>
+            </span>
+          )}
+          <span className="row-desc">·</span>
+          <span>
+            {isPersonal
+              ? 'visible only to you and your team'
+              : project.department_scope.length > 0
+                ? project.department_scope.map((d) => DEPT_COLOR[d]?.label ?? d).join(', ')
+                : 'Cross-functional'}
+          </span>
+          <span className="row-desc">·</span>
+          <span className="mono">{project.planned_start ?? '—'} → {project.planned_end ?? '—'}</span>
+          {!isPersonal && (
+            <>
+              <span className="row-desc">·</span>
+              <span className="mono">{charter?.estimated_budget != null ? `${charter.estimated_budget.toLocaleString()} SAR` : 'no budget'}</span>
+              <Chip tone={charter ? (charter.status === 'approved' ? 'green' : charter.status === 'rejected' ? 'red' : charter.status === 'submitted' ? 'amber' : 'muted') : 'muted'}>
+                {charter ? `charter ${charter.status}` : 'no charter'}
+              </Chip>
+            </>
+          )}
+          {project.origin_type === 'converted' && <Chip tone="muted">converted from a ticket</Chip>}
+        </div>
       </div>
-      <p className="page-sub">
-        PM: {project.pm?.display_name ?? 'unassigned'}
-        {isPersonal
-          ? ' · visible only to you and your team'
-          : project.department_scope.length > 0
-            ? ' · ' + project.department_scope.map((d) => DEPT_COLOR[d]?.label ?? d).join(', ')
-            : ' · Cross-functional'}
-        {project.origin_type === 'converted' ? ' · converted from a ticket' : ''}
-      </p>
 
       {canManage && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -421,15 +616,192 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        {tabs.map((t) => (
-          <Chip key={t} tone={activeTab === t ? 'accent' : 'muted'} onClick={() => { setFocusActivity(null); setTab(t) }}>
-            {t === 'wbs' ? 'WBS' : t[0].toUpperCase() + t.slice(1)}
-          </Chip>
-        ))}
-      </div>
+      {subview !== null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <button className="btn" onClick={() => { setFocusActivity(null); setSubview(null) }}>← Overview</button>
+          <span className="row-desc mono">
+            {project.code} / {subview === 'wbs' ? 'Work breakdown' : subview[0].toUpperCase() + subview.slice(1)}
+          </span>
+        </div>
+      )}
 
-      {activeTab === 'charter' && !isPersonal && (
+      {subview === null && isPersonal && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="card" style={{ padding: 16 }}>
+            <SectionLabel>Timeline</SectionLabel>
+            <TimelineView
+              activities={activities}
+              dependencies={dependencies}
+              onOpen={(id) => setFocusActivity(id)}
+            />
+          </div>
+          <WbsTree
+            projectId={project.id}
+            activities={activities}
+            assignments={assignments}
+            dependencies={dependencies}
+            team={teamPeople}
+            people={people}
+            canManage={canManage}
+            myId={profile?.id ?? null}
+            focusId={focusActivity}
+            onChanged={load}
+            onError={setError}
+          />
+          <TeamTab projectId={project.id} team={team} assignments={assignments} activities={activities} canManage={canManage} onChanged={load} onError={setError} />
+        </div>
+      )}
+
+      {subview === null && !isPersonal && (
+        <>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+            <Metric
+              label="% complete"
+              value={`${pctComplete}%`}
+              sub={`${leaves.filter((l) => l.status === 'done').length} of ${leaves.length} activities done`}
+            />
+            <Metric
+              label="SPI — schedule"
+              value={spi != null ? spi.toFixed(2) : '—'}
+              sub={spi != null
+                ? spi >= 0.95 ? 'on schedule' : spi >= 0.85 ? 'slightly behind plan' : 'behind schedule'
+                : 'requires approved baseline'}
+              title={spi != null && pvPct != null
+                ? `Earned ${pctComplete}% vs ${Math.round(pvPct * 100)}% planned by today`
+                : 'requires approved baseline'}
+            />
+            <Metric
+              label="CPI — cost"
+              value={cpi != null ? cpi.toFixed(2) : '—'}
+              sub={cpi != null
+                ? cpi >= 0.95 ? 'on budget' : cpi >= 0.85 ? 'slightly over plan' : 'over budget'
+                : 'requires approved baseline'}
+              title={cpi != null && bac != null
+                ? `EV ${Math.round((pctComplete / 100) * bac).toLocaleString()} / AC ${acTotal.toLocaleString()} SAR`
+                : 'requires approved baseline'}
+            />
+            <Metric
+              label="Risks · issues"
+              value={`${openRisks.length} · ${openIssues.length}`}
+              sub="open risks · open issues"
+            />
+          </div>
+
+          <div className="card" style={{ padding: 16, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+              <SectionLabel>Timeline</SectionLabel>
+              <span style={{ flex: 1 }} />
+              {schedBl && <Chip tone="muted">schedule baseline v{schedBl.version}</Chip>}
+              <button className="btn" style={{ padding: '2px 10px', fontSize: 12, marginLeft: 8 }} onClick={() => setSubview('baselines')}>
+                Baselines
+              </button>
+            </div>
+            <TimelineView
+              activities={activities}
+              dependencies={dependencies}
+              baselineDates={schedBl ? baselineDates : undefined}
+              onOpen={(id) => { setFocusActivity(id); setSubview('wbs') }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <SectionCard label="Risks & issues" action="Open register" onAction={() => setSubview('risks')}>
+              {openRisks.slice(0, 3).map((r) => {
+                const band = scoreBand(r.score)
+                return (
+                  <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
+                    <span className="mono row-desc">R-{String(r.seq).padStart(2, '0')}</span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                    <span className="mono" style={{ fontSize: 11, padding: '1px 8px', borderRadius: 999, background: band.bg, color: band.fg }}>{r.score}</span>
+                  </div>
+                )
+              })}
+              {openRisks.length === 0 && <div className="row-desc">No open risks.</div>}
+              <div className="row-desc" style={{ marginTop: 8, fontSize: 12 }}>
+                {openRisks.length} open risks · {openIssues.length} open issues
+              </div>
+            </SectionCard>
+
+            <SectionCard label="Budget" action="Open budget" onAction={() => setSubview('budget')}>
+              <div className="mono" style={{ fontSize: 13 }}>
+                {acTotal.toLocaleString()} / {bac != null ? bac.toLocaleString() : '—'} SAR committed
+              </div>
+              <div style={{ position: 'relative', height: 10, borderRadius: 5, background: 'var(--line)', margin: '10px 0' }}>
+                <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: `${acPct}%`, borderRadius: 5, background: 'var(--it)' }} />
+                <div title={`${pctComplete}% complete`} style={{ position: 'absolute', top: -3, bottom: -3, left: `${Math.min(100, pctComplete)}%`, width: 2, background: 'var(--accent)' }} />
+              </div>
+              <div className="row-desc" style={{ fontSize: 12 }}>
+                {acPct}% committed vs {pctComplete}% complete — {cpiWords}
+              </div>
+            </SectionCard>
+
+            <SectionCard label="Work breakdown" action="Open full WBS" onAction={() => setSubview('wbs')}>
+              {topLevel.slice(0, 5).map((t) => {
+                const p = pctOf(t.id)
+                return (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
+                    <span className="mono row-desc">{t.code}</span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                    <span style={{ width: 70, height: 6, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
+                      <span style={{ display: 'block', width: `${p}%`, height: '100%', background: p === 100 ? 'var(--green)' : 'var(--it)' }} />
+                    </span>
+                    <span className="mono" style={{ fontSize: 12, width: 38, textAlign: 'right' }}>{p}%</span>
+                  </div>
+                )
+              })}
+              {topLevel.length === 0 && <div className="row-desc">No WBS yet.</div>}
+            </SectionCard>
+
+            <SectionCard label="Latest activity">
+              {audit.slice(0, 5).map((e) => (
+                <div key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '5px 0', borderTop: '1px solid var(--line)', fontSize: 12 }}>
+                  <span className="mono row-desc" style={{ minWidth: 78 }}>{new Date(e.created_at).toLocaleDateString()}</span>
+                  <Chip tone={e.action === 'revoked' || e.action === 'corrected' ? 'red' : 'muted'} style={{ fontSize: 10 }}>{e.area} {e.action}</Chip>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {e.actor?.display_name ?? '—'}
+                    {e.area === 'status' && ` · ${e.detail.from} → ${e.detail.to}`}
+                    {e.detail.type && ` · ${e.detail.type} v${e.detail.version}`}
+                  </span>
+                </div>
+              ))}
+              {audit.length === 0 && <div className="row-desc">No audited events yet.</div>}
+            </SectionCard>
+
+            <SectionCard label="Charter" action="Open charter" onAction={() => setSubview('charter')}>
+              {charter ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Chip tone={charter.status === 'approved' ? 'green' : charter.status === 'rejected' ? 'red' : charter.status === 'submitted' ? 'amber' : 'muted'}>
+                      {charter.status}
+                    </Chip>
+                    {charters.length > 1 && <Chip tone="muted">{charters.length} versions</Chip>}
+                    <span style={{ flex: 1 }} />
+                    <span className="mono" style={{ fontSize: 12 }}>
+                      {charter.estimated_budget != null ? `${charter.estimated_budget.toLocaleString()} SAR` : ''}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {charter.objective}
+                  </div>
+                </>
+              ) : (
+                <div className="row-desc">No charter yet.</div>
+              )}
+            </SectionCard>
+
+            <SectionCard label="Team" action="Manage" onAction={() => setSubview('team')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {team.slice(0, 10).map((t) => t.member && <Av key={t.id} name={t.member.display_name} />)}
+                {team.length === 0
+                  ? <span className="row-desc">No one assigned yet.</span>
+                  : <span className="row-desc" style={{ marginLeft: 6 }}>{team.length} member{team.length === 1 ? '' : 's'}</span>}
+              </div>
+            </SectionCard>
+          </div>
+        </>
+      )}
+
+      {subview === 'charter' && !isPersonal && (
         <div className="card" style={{ padding: 18 }}>
           {!charter && (
             <>
@@ -501,7 +873,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         </div>
       )}
 
-      {activeTab === 'wbs' && (
+      {subview === 'wbs' && (
         <WbsTree
           projectId={project.id}
           activities={activities}
@@ -517,15 +889,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         />
       )}
 
-      {activeTab === 'timeline' && (
-        <TimelineView
-          activities={activities}
-          dependencies={dependencies}
-          onOpen={(id) => { setFocusActivity(id); setTab('wbs') }}
-        />
-      )}
-
-      {activeTab === 'baselines' && !isPersonal && (
+      {subview === 'baselines' && !isPersonal && (
         <div className="card" style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <SectionLabel>Baselines — locked, versioned; revocable with an audited reason</SectionLabel>
@@ -570,15 +934,15 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
         </div>
       )}
 
-      {activeTab === 'budget' && !isPersonal && (
+      {subview === 'budget' && !isPersonal && (
         <BudgetTab projectId={project.id} canManage={canManage} charterApproved={charter?.status === 'approved'} onError={setError} />
       )}
 
-      {activeTab === 'risks' && !isPersonal && (
+      {subview === 'risks' && !isPersonal && (
         <RiskRegister projectId={project.id} canManage={canManage} onError={setError} />
       )}
 
-      {activeTab === 'team' && (
+      {subview === 'team' && (
         <TeamTab projectId={project.id} team={team} assignments={assignments} activities={activities} canManage={canManage} onChanged={load} onError={setError} />
       )}
 
