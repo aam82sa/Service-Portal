@@ -1,4 +1,4 @@
--- RLC Services Hub — initial schema
+-- ABC Services Hub — initial schema
 -- Phase 1: core entities, lifecycle, DoA approvals, audit log, RLS foundations
 
 create extension if not exists pgcrypto;
@@ -16,7 +16,7 @@ create type approval_decision as enum ('pending', 'approved', 'rejected', 'info_
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   entra_object_id uuid unique,               -- Entra ID objectId
-  upn text unique not null,                  -- user@rlc.sa
+  upn text unique not null,                  -- user@abccorp.com
   display_name text not null,
   ad_department text,                        -- department attribute from AD
   is_active boolean not null default true,   -- mirrors AD accountEnabled
@@ -29,7 +29,7 @@ create table role_assignments (
   profile_id uuid not null references profiles(id) on delete cascade,
   role platform_role not null,
   dept dept_code,                            -- null = global (executive, platform_admin)
-  source_ad_group text,                      -- e.g. SG-RLC-ServiceDesk-IT
+  source_ad_group text,                      -- e.g. SG-ABC-ServiceDesk-IT
   unique (profile_id, role, dept)
 );
 

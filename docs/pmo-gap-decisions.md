@@ -1,7 +1,7 @@
 # PMO Module — Gap Decisions
 
 Agreed 2026-07-05; **redesigned 2026-07-06 — see §R below, which supersedes
-§B wherever they conflict.** Resolves the gaps between the "RLC PMO Module
+§B wherever they conflict.** Resolves the gaps between the "ABC PMO Module
 Technical Specification" (v1.0) and the current codebase. This document is
 the source of truth where it and the spec disagree.
 
@@ -69,7 +69,7 @@ by `pmo_admin`.
 | Roles incl. "Platform Admin" | `platform_admin` was split into `user_admin` + `system_admin` (docs/admin-console.md) | Global-admin RLS checks use `system_admin`; user/role management stays with `user_admin` |
 | Migration `0006_pmo_module.sql` | Repo is at `00023` | PMO migrations start at `00024`, one migration per build phase (6a → `00024_pmo_schema.sql`, etc.) |
 | Merge into `develop` | `main` is protected; feature branches by PR | Branches `feature/pmo-*` as per spec §12, merged into `main` |
-| RLC branding, `SG-RLC-*` groups | Rebranded to ABC Corp (00023) | All naming, seeds, and suggested AD groups use `SG-ABC-*` |
+| ABC branding, `SG-ABC-*` groups | Rebranded to ABC Corp (00023) | All naming, seeds, and suggested AD groups use `SG-ABC-*` |
 
 ## B. DoA engine generalization (spec §2.2, §7.3)
 

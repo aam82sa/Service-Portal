@@ -1,7 +1,7 @@
 -- ABC Services Hub — PMO module, Phase 6a: core schema and RLS
 -- Portfolios, programs, projects, charters, conversion requests, WBS,
 -- baselines, templates, resource assignments, and the requests linkage.
--- Spec: RLC PMO Module Technical Specification v1.0 §5–6,
+-- Spec: PMO Module Technical Specification v1.0 §5–6,
 -- decisions: docs/pmo-gap-decisions.md
 
 -- ============ Enums ============

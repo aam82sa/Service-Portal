@@ -17,7 +17,7 @@ begin
       email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
       confirmation_token, recovery_token, email_change, email_change_token_new)
     values ('00000000-0000-0000-0000-000000000000', u.id, 'authenticated', 'authenticated',
-      u.email, crypt('RlcDev!2026', gen_salt('bf')), now(),
+      u.email, crypt('AbcDev!2026', gen_salt('bf')), now(),
       '{"provider":"email","providers":["email"]}',
       jsonb_build_object('full_name', u.name), now(), now(), '', '', '', '')
     on conflict (id) do nothing;
