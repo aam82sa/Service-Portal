@@ -260,3 +260,48 @@ h1, h2, h3 { font-family: var(--font-head); color: var(--ink); margin: 0; }
 }
 .pp-item:first-child { border-top: none; }
 .pp-item:hover { background: var(--accent-soft); }
+
+/* lifecycle bar */
+.lb { width: 100%; }
+.lb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.lb-title { font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-sub { font-size: 11.5px; color: var(--muted); }
+.lb-bar { position: relative; height: 42px; margin-inline: 13px; }
+.lb-bar.lb-compact { height: 24px; margin-inline: 10px; }
+.lb-track {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  inset-inline: 0; height: 8px; border-radius: 99px; background: var(--surface);
+}
+.lb-fill {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  inset-inline-start: 0; height: 8px; border-radius: 99px;
+  transition: width .25s;
+}
+.lb-node {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; z-index: 1;
+}
+.lb-compact .lb-node { width: 20px; height: 20px; }
+.lb-node-done { border: 3px solid var(--card); }
+.lb-node-next { background: var(--card); border: 2px solid var(--line); color: var(--muted); }
+.lb-node-curr { width: 34px; height: 34px; border-width: 3px; border-style: solid; font-weight: 700; }
+.lb-compact .lb-node-curr { width: 24px; height: 24px; }
+.lb-node-gap {
+  background: var(--card); border: 2px dashed var(--line); color: var(--muted);
+  font-size: 11px; letter-spacing: 1px;
+}
+.lb-dot { width: 8px; height: 8px; border-radius: 50%; }
+.lb-labels { position: relative; height: 34px; margin-top: 2px; }
+.lb-label { position: absolute; top: 0; max-width: 120px; line-height: 1.25; }
+.lb-when { font-size: 10px; color: var(--muted); font-family: var(--font-mono); display: block; }
+.lb-state { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.lb-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border-top: 1px solid #EDEFF4; margin-top: 10px; padding-top: 8px; flex-wrap: wrap;
+}
+.lb-remaining { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lb-arrow { color: #C3CAD8; font-size: 11px; }
+@media (max-width: 480px) {
+  .lb-labels { display: none; }
+}
