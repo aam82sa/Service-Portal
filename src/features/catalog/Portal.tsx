@@ -56,10 +56,20 @@ const IT_CATEGORIES: CatDef[] = [
   { key: 'EL', prefix: 'EL', name: 'Employee IT lifecycle', desc: 'Onboarding, offboarding and transfers', icon: 'users', soft: 'var(--it-soft)', fg: 'var(--it)' },
 ]
 
+const ADMIN_CATEGORIES: CatDef[] = [
+  { key: 'TR', prefix: 'TR', name: 'Travel & transport', desc: 'Business travel, visas, transport, expenses', icon: 'plane', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'FM', prefix: 'FM', name: 'Facilities & maintenance', desc: 'Moves, room setup, cleaning', icon: 'tool', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'GP', prefix: 'GP', name: 'Access & site security', desc: 'Gate passes, badges, parking', icon: 'id-badge', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'DC', prefix: 'DC', name: 'Documents & letters', desc: 'Official letters, attestation, courier', icon: 'file-text', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'GR', prefix: 'GR', name: 'Government relations', desc: 'Iqama, visas, government portals', icon: 'landmark', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'OS', prefix: 'OS', name: 'Office services', desc: 'Stationery, supplies, catering, events', icon: 'coffee', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'SA', prefix: 'SA', name: 'System access', desc: 'Access to Admin-owned systems', icon: 'shield', soft: 'var(--admin-soft)', fg: 'var(--admin)' },
+  { key: 'LOG', depts: ['LOG'], name: 'Logistics', desc: 'Fleet and logistics services', icon: 'truck', soft: 'var(--log-soft)', fg: 'var(--log)' },
+]
 
 const DEPT_BLOCKS: BlockDef[] = [
   { key: 'IT', name: 'IT services', depts: ['IT'], icon: 'laptop', soft: 'var(--it-soft)', fg: 'var(--it)', categories: IT_CATEGORIES, hasIssuePath: true },
-  { key: 'ADMINLOG', name: 'Administration & Logistics', depts: ['ADMIN', 'LOG'], icon: 'building', soft: 'var(--admin-soft)', fg: 'var(--admin)', categories: null, hasIssuePath: false },
+  { key: 'ADMINLOG', name: 'Administration & Logistics', depts: ['ADMIN', 'LOG'], icon: 'building', soft: 'var(--admin-soft)', fg: 'var(--admin)', categories: ADMIN_CATEGORIES, hasIssuePath: true },
   { key: 'PROC', name: 'Procurement', depts: ['PROC'], icon: 'shopping-cart', soft: 'var(--accent-soft)', fg: 'var(--accent)', categories: null, hasIssuePath: false },
 ]
 
@@ -76,6 +86,14 @@ const ICONS: Record<string, ReactNode> = {
   'plus-circle': <><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></>,
   'chevron-right': <polyline points="9 18 15 12 9 6" />,
   'chevron-down': <polyline points="6 9 12 15 18 9" />,
+  plane: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />,
+  tool: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
+  'id-badge': <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M15 8h3M15 12h3M6 16c.6-1.5 1.7-2 3-2s2.4.5 3 2" /></>,
+  'file-text': <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></>,
+  landmark: <><line x1="3" y1="22" x2="21" y2="22" /><line x1="6" y1="18" x2="6" y2="11" /><line x1="10" y1="18" x2="10" y2="11" /><line x1="14" y1="18" x2="14" y2="11" /><line x1="18" y1="18" x2="18" y2="11" /><path d="M12 2 20 7H4z" /></>,
+  coffee: <><path d="M18 8h1a4 4 0 0 1 0 8h-1" /><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" /><line x1="6" y1="1" x2="6" y2="4" /><line x1="10" y1="1" x2="10" y2="4" /><line x1="14" y1="1" x2="14" y2="4" /></>,
+  shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+  truck: <><rect x="1" y="3" width="15" height="13" /><path d="M16 8h4l3 3v5h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></>,
 }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
