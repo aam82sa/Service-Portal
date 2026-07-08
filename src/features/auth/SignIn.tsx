@@ -16,6 +16,7 @@ const DEV_USERS = [
   { email: 'agent.admin@dev.abccorp.com', label: 'Afnan Admin Officer — agent, Administration' },
   { email: 'agent.proc@dev.abccorp.com', label: 'Amjad Procurement Officer — agent, Procurement' },
   { email: 'agent.pmo@dev.abccorp.com', label: 'Areej PMO Officer — project manager' },
+  { email: 'cyber@dev.abccorp.com', label: 'Cyra Cybersecurity — security approvals' },
   { email: 'biz1@dev.abccorp.com', label: 'Basma Business — requester' },
   { email: 'biz2@dev.abccorp.com', label: 'Bandar Business — requester' },
   { email: 'biz3@dev.abccorp.com', label: 'Dana Business — requester' },

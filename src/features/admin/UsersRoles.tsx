@@ -23,7 +23,7 @@ const ROLE_CHIP: Record<string, { bg: string; fg: string }> = {
   system_admin: { bg: 'var(--red-soft)', fg: 'var(--red)' },
 }
 
-const GLOBAL_ROLES: Role[] = ['user_admin', 'system_admin']
+const GLOBAL_ROLES: Role[] = ['user_admin', 'system_admin', 'cybersecurity']
 const CONTAINER_ROLES: Role[] = ['agent', 'team_lead', 'dept_head']
 
 export function UsersRoles() {

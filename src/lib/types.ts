@@ -12,6 +12,7 @@ export type Role =
   | 'system_admin'
   | 'project_manager'
   | 'pmo_admin'
+  | 'cybersecurity'
 
 export interface Profile {
   id: string
