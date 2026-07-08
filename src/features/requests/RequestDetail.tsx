@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
 import { SlaRing } from './Queue'
 import { Chain, type ApprovalStep } from './Approvals'
+import { LifecycleBar } from '../../components/LifecycleBar'
+import { useLifecycle } from './useLifecycle'
 import type { FormField } from '../catalog/RequestForm'
 
 interface Detail {
@@ -64,9 +66,12 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
   const [overrideTo, setOverrideTo] = useState('')
   const [conversion, setConversion] = useState<ConversionState | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [lifecycleTick, setLifecycleTick] = useState(0)
+  const lifecycle = useLifecycle(requestId, lifecycleTick)
   const isSysAdmin = hasRole('system_admin')
 
   const load = useCallback(() => {
+    setLifecycleTick((t) => t + 1)
     supabase
       .from('requests')
       .select(
@@ -150,6 +155,11 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
       <button className="btn" onClick={onBack} style={{ marginBottom: 14 }}>
         ← Back
       </button>
+      {lifecycle && (
+        <div className="card" style={{ padding: '16px 20px', marginBottom: 14 }}>
+          <LifecycleBar {...lifecycle} />
+        </div>
+      )}
       <div className="card" style={{ padding: 20, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 4, alignSelf: 'stretch', background: c.rail, borderRadius: 2 }} />
