@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { PersonPicker } from '../../components/PersonPicker'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, PORTAL_DEPTS, type DeptCode, type Profile, type Role, type RoleAssignment } from '../../lib/types'
 
@@ -159,10 +160,8 @@ export function UsersRoles() {
             <span style={{ fontSize: 12, fontWeight: 600, color: c!.rail, flex: 1 }}>
               {c!.label} container — roles granted here are scoped to {tab} automatically
             </span>
-            <select className="input" style={{ width: 200 }} value={addMember} onChange={(e) => setAddMember(e.target.value)}>
-              <option value="">Add member…</option>
-              {nonMembers.map((u) => <option key={u.id} value={u.id}>{u.display_name}</option>)}
-            </select>
+            <PersonPicker people={nonMembers} value={addMember || null} width={200}
+              placeholder="Add member…" onPick={(u) => setAddMember(u.id)} />
             <button className="btn primary" disabled={!addMember} onClick={() => addToContainer(addMember, tab)}>
               Add
             </button>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { PersonPicker } from '../../components/PersonPicker'
 import { Chip, SectionLabel, Toggle } from '../../components/ui'
 
 /**
@@ -104,16 +105,11 @@ export function PmoAdmin() {
             Role groups.
           </p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <select
-              className="input" style={{ flex: 1 }}
-              value={picks.user ?? ''}
-              onChange={(e) => setPicks((s) => ({ ...s, user: e.target.value }))}
-            >
-              <option value="">Add a user…</option>
-              {people.filter((p) => !pmoUsers.some((u) => u.id === p.id)).map((p) => (
-                <option key={p.id} value={p.id}>{p.display_name}</option>
-              ))}
-            </select>
+            <PersonPicker
+              people={people.filter((p) => !pmoUsers.some((u) => u.id === p.id))}
+              value={picks.user ?? null} flex={1} placeholder="Add a user…"
+              onPick={(p) => setPicks((s) => ({ ...s, user: p.id }))}
+            />
             <button
               className="btn primary" disabled={!picks.user}
               onClick={() => { toggleRole(picks.user, 'project_manager'); setPicks((s) => ({ ...s, user: '' })) }}
@@ -214,16 +210,11 @@ export function PmoAdmin() {
                     </div>
                   ))}
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <select
-                      className="input" style={{ flex: 1 }}
-                      value={picks[g.id] ?? ''}
-                      onChange={(e) => setPicks((s) => ({ ...s, [g.id]: e.target.value }))}
-                    >
-                      <option value="">Add member…</option>
-                      {people.filter((p) => !gm.some((m) => m.member?.id === p.id)).map((p) => (
-                        <option key={p.id} value={p.id}>{p.display_name}</option>
-                      ))}
-                    </select>
+                    <PersonPicker
+                      people={people.filter((p) => !gm.some((m) => m.member?.id === p.id))}
+                      value={picks[g.id] ?? null} flex={1} placeholder="Add member…"
+                      onPick={(p) => setPicks((s) => ({ ...s, [g.id]: p.id }))}
+                    />
                     <button
                       className="btn primary" disabled={!picks[g.id]}
                       onClick={() => { act(() => supabase.from('pmo_group_members').insert({ group_id: g.id, user_id: picks[g.id] })); setPicks((s) => ({ ...s, [g.id]: '' })) }}
@@ -256,16 +247,11 @@ export function PmoAdmin() {
           ))}
           {committee.length === 0 && <div className="row-desc">No committee members yet.</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <select
-              className="input" style={{ flex: 1 }}
-              value={picks.committee ?? ''}
-              onChange={(e) => setPicks((s) => ({ ...s, committee: e.target.value }))}
-            >
-              <option value="">Add a committee member…</option>
-              {people.filter((p) => !committee.some((c) => c.member?.id === p.id)).map((p) => (
-                <option key={p.id} value={p.id}>{p.display_name}</option>
-              ))}
-            </select>
+            <PersonPicker
+              people={people.filter((p) => !committee.some((c) => c.member?.id === p.id))}
+              value={picks.committee ?? null} flex={1} placeholder="Add a committee member…"
+              onPick={(p) => setPicks((s) => ({ ...s, committee: p.id }))}
+            />
             <button className="btn primary" disabled={!picks.committee}
               onClick={() => { act(() => supabase.from('pmo_committee_members').insert({ user_id: picks.committee })); setPicks((s) => ({ ...s, committee: '' })) }}>
               Add

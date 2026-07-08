@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { PersonPicker as SharedPersonPicker } from '../../components/PersonPicker'
 import { useAuth } from '../auth/AuthProvider'
 import { ImportPanel, downloadTemplate, printLabels } from './AssetImport'
 import { TrackerImportPanel } from './TrackerImport'
@@ -125,31 +126,7 @@ function StatCard({ label, value, suffix, color }: { label: string; value: strin
 function PersonPicker({ people, placeholder, onPick }: {
   people: Person[]; placeholder: string; onPick: (p: Person) => void
 }) {
-  const [q, setQ] = useState('')
-  const [open, setOpen] = useState(false)
-  const matches = q.trim()
-    ? people.filter((p) => `${p.display_name} ${p.upn}`.toLowerCase().includes(q.toLowerCase())).slice(0, 6)
-    : []
-  return (
-    <div style={{ position: 'relative', flex: 1 }}>
-      <input
-        className="input" style={{ padding: '7px 10px', fontSize: 12 }}
-        placeholder={placeholder} value={q}
-        onChange={(e) => { setQ(e.target.value); setOpen(true) }}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-      />
-      {open && matches.length > 0 && (
-        <div className="card" style={{ position: 'absolute', bottom: '108%', left: 0, right: 0, zIndex: 50 }}>
-          {matches.map((p) => (
-            <div key={p.id} className="row" style={{ cursor: 'pointer', padding: '7px 10px' }}
-              onMouseDown={() => { onPick(p); setQ(''); setOpen(false) }}>
-              <span style={{ fontSize: 12.5 }}>{p.display_name}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+  return <SharedPersonPicker people={people} placeholder={placeholder} onPick={onPick} flex={1} dropUp small />
 }
 
 const exportCsv = (name: string, headers: string[], rows: (string | number | null)[][]) => {

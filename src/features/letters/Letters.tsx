@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
+import { PersonPicker } from '../../components/PersonPicker'
 import { DEPT_COLOR, PORTAL_DEPTS, type DeptCode } from '../../lib/types'
 import { readLetter, type ExtractedLetter } from './aiReader'
 
@@ -327,11 +328,11 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
             </div>
             <div>
               <label className="field-label">Transfer ownership</label>
-              <select className="input" style={{ width: 210 }} value=""
-                onChange={(e) => { if (e.target.value) run(supabase.from('letters').update({ owner_id: e.target.value }).eq('id', letter.id)) }}>
-                <option value="">Transfer to…</option>
-                {people.filter((p) => p.id !== letter.owner_id).map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-              </select>
+              <PersonPicker
+                people={people.filter((p) => p.id !== letter.owner_id)} width={210}
+                placeholder="Transfer to…"
+                onPick={(p) => run(supabase.from('letters').update({ owner_id: p.id }).eq('id', letter.id))}
+              />
             </div>
           </div>
         )}
@@ -367,10 +368,8 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
               ))}
               {isOwner && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <select className="input" value={shareUser} onChange={(e) => setShareUser(e.target.value)}>
-                    <option value="">Share with person…</option>
-                    {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-                  </select>
+                  <PersonPicker people={people} value={shareUser || null} flex={1}
+                    placeholder="Share with person…" onPick={(p) => setShareUser(p.id)} />
                   <select className="input" style={{ width: 190 }} value={shareDept} onChange={(e) => setShareDept(e.target.value)}>
                     <option value="">…or department</option>
                     {PORTAL_DEPTS.map((d) => <option key={d} value={d}>{DEPT_COLOR[d].label}</option>)}
@@ -524,9 +523,8 @@ function Register({ people, selfId, settings, onDone }: {
         </div>
         <div>
           <label className="field-label">Owner</label>
-          <select className="input" value={owner} onChange={(e) => setOwner(e.target.value)}>
-            {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-          </select>
+          <PersonPicker people={people} value={owner} placeholder="Owner…"
+            onPick={(p) => setOwner(p.id)} />
         </div>
       </div>
 

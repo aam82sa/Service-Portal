@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { PersonPicker } from '../../components/PersonPicker'
 import { useAuth } from '../auth/AuthProvider'
 import { Chip, SectionLabel } from '../../components/ui'
 import { Chain, type ApprovalStep } from '../requests/Approvals'
@@ -376,10 +377,11 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               <span className="row-desc">→</span>
               <input className="input" type="date" style={{ width: 150 }} value={eEnd} onChange={(e) => setEEnd(e.target.value)} />
               <span className="row-desc" style={{ marginLeft: 12 }}>PM</span>
-              <select className="input" style={{ width: 200 }} value={ePm} onChange={(e) => setEPm(e.target.value)}>
-                <option value="">unassigned</option>
-                {[...people.entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              </select>
+              <PersonPicker
+                people={[{ id: '', display_name: '— unassigned —' }, ...[...people.entries()].map(([id, display_name]) => ({ id, display_name }))]}
+                value={ePm || null} width={200} placeholder="Project manager…"
+                onPick={(p) => setEPm(p.id)}
+              />
             </div>
             {!isPersonal && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -719,12 +721,11 @@ function TeamTab({ projectId, team, assignments, activities, canManage, onChange
       {team.length === 0 && <div className="row-desc">No one assigned yet.</div>}
       {canManage && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <select className="input" style={{ flex: 1 }} value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">Add a team member…</option>
-            {people.filter((p) => !team.some((t) => t.member?.id === p.id)).map((p) => (
-              <option key={p.id} value={p.id}>{p.display_name}</option>
-            ))}
-          </select>
+          <PersonPicker
+            people={people.filter((p) => !team.some((t) => t.member?.id === p.id))}
+            value={pick || null} flex={1} placeholder="Add a team member…"
+            onPick={(p) => setPick(p.id)}
+          />
           <input className="input" type="number" style={{ width: 90 }} value={alloc} onChange={(e) => setAlloc(e.target.value)} min={1} max={100} />
           <button className="btn primary" onClick={add} disabled={!pick}>Assign</button>
         </div>

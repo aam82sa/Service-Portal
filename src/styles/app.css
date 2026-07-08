@@ -250,3 +250,13 @@ h1, h2, h3 { font-family: var(--font-head); color: var(--ink); margin: 0; }
   color: var(--it); font-size: 12px; font-family: var(--font-body);
 }
 .pc-crumb-link:hover { text-decoration: underline; }
+
+/* person picker */
+.pp-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 12px; background: none; border: none; border-top: 1px solid #EDEFF4;
+  font-family: var(--font-body); font-size: 12.5px; color: var(--ink);
+  cursor: pointer; text-align: left;
+}
+.pp-item:first-child { border-top: none; }
+.pp-item:hover { background: var(--accent-soft); }
