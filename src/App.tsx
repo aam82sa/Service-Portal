@@ -20,8 +20,9 @@ const Insights = lazy(() => import('./features/insights/Insights').then((m) => (
 const Projects = lazy(() => import('./features/pmo/Projects').then((m) => ({ default: m.Projects })))
 const ProjectDetail = lazy(() => import('./features/pmo/ProjectDetail').then((m) => ({ default: m.ProjectDetail })))
 const PmoAdmin = lazy(() => import('./features/pmo/PmoAdmin').then((m) => ({ default: m.PmoAdmin })))
+const Letters = lazy(() => import('./features/letters/Letters').then((m) => ({ default: m.Letters })))
 
-type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'pmo' | 'insights' | 'assets' | 'admin' | 'pmoadmin'
+type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'pmo' | 'letters' | 'insights' | 'assets' | 'admin' | 'pmoadmin'
 export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people' }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
@@ -33,6 +34,7 @@ const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
   { id: 'queue', label: 'Department queue', ico: 'inbox', group: 'Workspace' },
   { id: 'approvals', label: 'Approvals', ico: 'check', group: 'Workspace' },
   { id: 'pmo', label: 'Projects', ico: 'folder', group: 'Workspace' },
+  { id: 'letters', label: 'Correspondence', ico: 'mail', group: 'Workspace' },
   { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
   { id: 'assets', label: 'IT assets', ico: 'device', group: 'Workspace' },
   { id: 'pmoadmin', label: 'PMO Admin', ico: 'shield', group: 'Administration' },
@@ -65,6 +67,9 @@ export default function App() {
       canSee('pmo') ??
       (hasRole('project_manager') || hasRole('pmo_admin') || hasRole('executive') ||
         hasRole('dept_head') || isStaff || isSys || isCommittee),
+    letters:
+      canSee('letters') ??
+      (isStaff || hasRole('dept_head') || isSys),
     insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || isSys),
     assets:
       canSee('assets') ??
@@ -212,6 +217,7 @@ export default function App() {
             {activePage === 'approvals' && see.approvals && <Approvals />}
             {activePage === 'pmo' && see.pmo && <Projects onOpen={setProjectId} />}
             {activePage === 'pmoadmin' && see.pmoadmin && <PmoAdmin />}
+            {activePage === 'letters' && see.letters && <Letters />}
             {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
             {activePage === 'assets' && see.assets && (
               <Assets onOpenRequest={setDetailId} initialSection={assetsTab} />

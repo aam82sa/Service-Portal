@@ -1,7 +1,7 @@
 /** Minimal line icons (stroke = currentColor). No icon library needed. */
 export type IconName =
   | 'home' | 'grid' | 'list' | 'briefcase' | 'inbox' | 'check'
-  | 'chart' | 'device' | 'gear' | 'folder' | 'shield' | 'plus' | 'sliders'
+  | 'chart' | 'device' | 'gear' | 'folder' | 'shield' | 'plus' | 'sliders' | 'mail'
 
 const PATHS: Record<IconName, string> = {
   home: 'M3 10.5 12 3l9 7.5M5.5 8.8V20h13V8.8',
@@ -17,6 +17,7 @@ const PATHS: Record<IconName, string> = {
   shield: 'M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3zM9 12l2 2 4-4',
   plus: 'M4 4h16v16H4zM12 8.5v7M8.5 12h7',
   sliders: 'M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4',
+  mail: 'M3 5.5h18v13H3zM3 7l9 6.5L21 7',
 }
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
