@@ -64,6 +64,23 @@ export function previewNumber(format: string, seq = 142, dept = 'ADM', doctype =
     .replace('{doctype}', doctype)
 }
 
+function Watermark({ stamp }: { stamp: string }) {
+  return (
+    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      {Array.from({ length: 60 }, (_, i) => (
+        <div key={i} style={{
+          position: 'absolute', top: i * 84 - 40, left: '-20%', width: '140%',
+          transform: 'rotate(-27deg)', whiteSpace: 'nowrap',
+          fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 600,
+          color: 'rgba(16,25,46,.16)', letterSpacing: '1px',
+        }}>
+          {`${stamp}   ${stamp}   ${stamp}`}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
  * Watermarked viewer. Every rendered copy identifies its viewer: name, id,
  * timestamp, reference and confidentiality tier tiled across the document.
@@ -110,23 +127,19 @@ function Viewer({ letter, file, clear, viewer, onClose }: {
           </span>
           <button className="btn" onClick={onClose}>Close</button>
         </div>
-        <div style={{ position: 'relative', flex: 1, background: 'var(--surface)' }}>
+        <div style={{ position: 'relative', flex: 1, background: 'var(--surface)', overflowY: isPdf ? 'hidden' : 'auto' }}>
           {error && <p className="error-note" style={{ padding: 16 }}>{error}</p>}
-          {url && (isPdf
-            ? <iframe title={file.filename} src={url} style={{ width: '100%', height: '100%', border: 'none' }} />
-            : <img src={url} alt={file.filename} style={{ maxWidth: '100%', maxHeight: '100%', display: 'block', margin: '0 auto' }} />)}
-          {!clear && (
-            <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-              {Array.from({ length: 12 }, (_, i) => (
-                <div key={i} style={{
-                  position: 'absolute', top: `${i * 9 - 6}%`, left: '-20%', width: '140%',
-                  transform: 'rotate(-27deg)', whiteSpace: 'nowrap',
-                  fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 600,
-                  color: 'rgba(16,25,46,.16)', letterSpacing: '1px',
-                }}>
-                  {`${stamp}   ${stamp}   ${stamp}`}
-                </div>
-              ))}
+          {isPdf ? (
+            <>
+              {url && <iframe title={file.filename} src={url} style={{ width: '100%', height: '100%', border: 'none' }} />}
+              {!clear && <Watermark stamp={stamp} />}
+            </>
+          ) : (
+            // tall scans scroll; the watermark wrapper spans the full scrolled
+            // length so no part of the document renders clean
+            <div style={{ position: 'relative', minHeight: '100%' }}>
+              {url && <img src={url} alt={file.filename} style={{ width: '100%', display: 'block' }} />}
+              {!clear && <Watermark stamp={stamp} />}
             </div>
           )}
         </div>
