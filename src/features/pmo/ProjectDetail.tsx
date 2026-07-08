@@ -6,6 +6,7 @@ import { Chip, SectionLabel } from '../../components/ui'
 import { Chain, type ApprovalStep } from '../requests/Approvals'
 import { WbsTree, type Activity, type WbsAssignment, type WbsDependency } from './Wbs'
 import { TimelineView } from './Timeline'
+import { RiskRegister } from './RiskRegister'
 import {
   DEPT_COLOR, PORTAL_DEPTS, PROJECT_STATUS_META,
   type DeptCode, type Project, type ProjectCharter, type ProjectStatus,
@@ -51,7 +52,7 @@ interface AuditRow {
   actor: { display_name: string } | null
 }
 
-type Tab = 'charter' | 'wbs' | 'timeline' | 'baselines' | 'budget' | 'team'
+type Tab = 'charter' | 'wbs' | 'timeline' | 'baselines' | 'budget' | 'risks' | 'team'
 
 const COMPANY_ACTIONS: Partial<Record<ProjectStatus, { to: ProjectStatus; label: string; primary?: boolean }[]>> = {
   draft: [{ to: 'cancelled', label: 'Cancel project' }],
@@ -209,7 +210,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const charter = charters[0] ?? null
   const tabs: Tab[] = isPersonal
     ? ['wbs', 'timeline', 'team']
-    : ['charter', 'wbs', 'timeline', 'baselines', 'budget', 'team']
+    : ['charter', 'wbs', 'timeline', 'baselines', 'budget', 'risks', 'team']
   const activeTab: Tab = tab && tabs.includes(tab) ? tab : tabs[0]
   const actions = (isPersonal ? PERSONAL_ACTIONS : COMPANY_ACTIONS)[project.status] ?? []
   const teamPeople = team.flatMap((t) => (t.member ? [{ id: t.member.id, display_name: t.member.display_name }] : []))
@@ -571,6 +572,10 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
 
       {activeTab === 'budget' && !isPersonal && (
         <BudgetTab projectId={project.id} canManage={canManage} charterApproved={charter?.status === 'approved'} onError={setError} />
+      )}
+
+      {activeTab === 'risks' && !isPersonal && (
+        <RiskRegister projectId={project.id} canManage={canManage} onError={setError} />
       )}
 
       {activeTab === 'team' && (
