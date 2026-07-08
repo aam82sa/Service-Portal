@@ -51,7 +51,7 @@ export function SignIn() {
           <h2 style={{ fontSize: 18 }}>Services Hub</h2>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: 13, margin: '0 0 22px' }}>
-          IT Services · Administration · Logistics
+          E-Services Portal
         </p>
 
         {!isConfigured && (
