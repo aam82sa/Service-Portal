@@ -16,6 +16,7 @@ const ROLES: { id: Role; label: string }[] = [
   { id: 'dept_head', label: 'Dept head' },
   { id: 'user_admin', label: 'User admin' },
   { id: 'system_admin', label: 'Sys admin' },
+  { id: 'cybersecurity', label: 'Cybersecurity' },
 ]
 
 export function PageAccess() {
