@@ -145,6 +145,7 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
   const [shareUser, setShareUser] = useState('')
   const [shareDept, setShareDept] = useState('')
   const [viewing, setViewing] = useState<{ file: LetterFile; clear: boolean } | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isOwner = letter.owner_id === viewer.id
   const conf = CONF_STYLE[letter.confidentiality]
@@ -184,6 +185,30 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
     await supabase.rpc('log_letter_event', { p_letter: letter.id, p_type: 'downloaded', p_detail: { file: f.filename } })
     window.open(data.signedUrl, '_blank')
     load()
+  }
+
+  const attach = async (file: File) => {
+    setError(null)
+    setUploading(true)
+    const path = `${letter.id}/${file.name}`
+    const { error: e1 } = await supabase.storage.from('letters').upload(path, file, { upsert: true })
+    if (e1) { setError(e1.message); setUploading(false); return }
+    // upsert keeps one row per path when the same scan is re-uploaded
+    const { error: e2 } = await supabase.from('letter_files')
+      .delete().eq('letter_id', letter.id).eq('path', path)
+      .then(() => supabase.from('letter_files').insert({
+        letter_id: letter.id, path, filename: file.name, mime: file.type || null, size_bytes: file.size,
+      }))
+    if (e2) setError(e2.message)
+    setUploading(false)
+    load()
+  }
+
+  const removeFile = async (f: LetterFile) => {
+    if (!window.confirm(`Remove ${f.filename} from this letter?`)) return
+    setError(null)
+    await supabase.storage.from('letters').remove([f.path])
+    await run(supabase.from('letter_files').delete().eq('id', f.id))
   }
 
   const qrLabel = async () => {
@@ -269,9 +294,19 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
               {isOwner && letter.confidentiality !== 'confidential' && (
                 <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => download(f)}>Download</button>
               )}
+              {isOwner && (
+                <button className="btn" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--red)' }} onClick={() => removeFile(f)}>×</button>
+              )}
             </span>
           ))}
-          {files.length === 0 && <span className="row-desc">No files attached.</span>}
+          {files.length === 0 && <span className="row-desc">No scanned copy yet — attach one:</span>}
+          <label className="btn" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+            {uploading ? 'Uploading…' : '+ Attach scan'}
+            <input
+              type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={uploading}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) attach(f); e.target.value = '' }}
+            />
+          </label>
         </div>
 
         {isOwner && (
