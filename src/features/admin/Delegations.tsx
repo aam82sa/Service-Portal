@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { PersonPicker } from '../../components/PersonPicker'
 import { useAuth } from '../auth/AuthProvider'
 
 interface Delegation {
@@ -133,15 +134,11 @@ export function Delegations() {
         {rows.length === 0 && <div className="row row-desc">No delegations.</div>}
         {canManage && (
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <select className="input" style={{ width: 160 }} value={form.delegator} onChange={(e) => setForm({ ...form, delegator: e.target.value })}>
-            <option value="">Delegator…</option>
-            {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-          </select>
+          <PersonPicker people={people} value={form.delegator || null} width={180}
+            placeholder="Delegator…" onPick={(p) => setForm({ ...form, delegator: p.id })} />
           <span style={{ color: 'var(--muted)' }}>→</span>
-          <select className="input" style={{ width: 160 }} value={form.delegate} onChange={(e) => setForm({ ...form, delegate: e.target.value })}>
-            <option value="">Delegate…</option>
-            {people.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-          </select>
+          <PersonPicker people={people} value={form.delegate || null} width={180}
+            placeholder="Delegate…" onPick={(p) => setForm({ ...form, delegate: p.id })} />
           <input className="input" type="date" style={{ width: 140 }} value={form.starts} onChange={(e) => setForm({ ...form, starts: e.target.value })} />
           <input className="input" type="date" style={{ width: 140 }} value={form.ends} onChange={(e) => setForm({ ...form, ends: e.target.value })} />
           <input className="input" style={{ flex: 1, minWidth: 120 }} placeholder="Reason (optional)" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
