@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Chip, SectionLabel } from '../../components/ui'
+import { Chip } from '../../components/ui'
 import { PersonPicker } from '../../components/PersonPicker'
 
 /** PMI risk & issue register: 5x5 P x I heatmap, scored register with
@@ -74,15 +74,19 @@ export function scoreBand(score: number): { bg: string; fg: string } {
   if (score >= 5) return { bg: 'var(--amber-soft)', fg: 'var(--amber)' }
   return { bg: 'var(--green-soft)', fg: 'var(--green)' }
 }
+/** 5x5 risk-matrix bands from the design reference (rows p=5..1, cols i=1..5) */
+const HEAT_BG = ['var(--green-soft)', 'var(--amber-soft)', '#F5C9C9', 'var(--red)', '#B23A3A']
+const HEAT_FG = ['var(--green)', 'var(--amber)', '#B23A3A', '#fff', '#fff']
+const HEAT_LEVEL: Record<number, number[]> = {
+  5: [1, 1, 2, 3, 4], 4: [0, 1, 1, 2, 3], 3: [0, 0, 1, 1, 2], 2: [0, 0, 0, 1, 1], 1: [0, 0, 0, 0, 1],
+}
+const heatLevel = (p: number, i: number) => HEAT_LEVEL[p]?.[i - 1] ?? 0
 const code = (prefix: string, seq: number) => `${prefix}-${String(seq).padStart(2, '0')}`
 const isOpenRisk = (r: Risk) => r.status !== 'closed'
 const overdue = (d: string | null) => Boolean(d && new Date(d + 'T23:59:59') < new Date())
-const TrendUp = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5"
-    strokeLinecap="round" strokeLinejoin="round" aria-label="opportunity" style={{ flexShrink: 0 }}>
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
-  </svg>
-)
+const overdueDays = (d: string | null) => (d ? Math.max(0, Math.floor((Date.now() - new Date(d + 'T23:59:59').getTime()) / 86400000)) : 0)
+const fmtReview = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+const RISK_COLS = { display: 'grid', gridTemplateColumns: '48px 1fr 80px 44px 92px 80px 70px', gap: 6 } as const
 
 export function RiskRegister({ projectId, canManage, onError }: {
   projectId: string
@@ -188,9 +192,11 @@ export function RiskRegister({ projectId, canManage, onError }: {
     </div>
   )
   const impactChip = (label: string, v: number) => (
-    <span key={label} className="chip mono" style={{
-      fontSize: 10, background: v >= 4 ? 'var(--red-soft)' : v >= 2 ? 'var(--amber-soft)' : 'var(--surface)',
+    <span key={label} className="chip" style={{
+      fontSize: 10.5,
+      background: v >= 4 ? 'var(--red-soft)' : v >= 2 ? 'var(--amber-soft)' : 'var(--surface)',
       color: v >= 4 ? 'var(--red)' : v >= 2 ? 'var(--amber)' : 'var(--muted)',
+      border: v < 2 ? '1px solid var(--line)' : 'none',
     }}>{label} {v}</span>
   )
 
@@ -206,36 +212,34 @@ export function RiskRegister({ projectId, canManage, onError }: {
       </div>
 
       {tab === 'risks' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '230px 1fr', gap: 14, alignItems: 'start' }}>
-          <div className="card" style={{ padding: 14 }}>
-            <SectionLabel>Probability × impact</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: '14px repeat(5, 1fr)', gap: 3, marginTop: 8 }}>
-              {[5, 4, 3, 2, 1].map((p) => (
-                [<span key={`p${p}`} className="mono" style={{ fontSize: 9, color: 'var(--muted)', alignSelf: 'center' }}>{p}</span>,
-                ...[1, 2, 3, 4, 5].map((i) => {
+        <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: 12, alignItems: 'start' }}>
+          <div className="card" style={{ padding: '13px 15px' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-head)', color: 'var(--ink)', marginBottom: 9 }}>
+              Probability × impact
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 3 }}>
+              {[5, 4, 3, 2, 1].map((p) =>
+                [1, 2, 3, 4, 5].map((i) => {
                   const n = heat.get(`${p}:${i}`) ?? 0
-                  const band = scoreBand(p * i)
+                  const lvl = heatLevel(p, i)
                   const active = cell?.p === p && cell?.i === i
                   return (
                     <button key={`${p}${i}`} onClick={() => setCell(active ? null : { p, i })}
-                      title={`P${p} × I${i} = ${p * i}`}
+                      title={`P${p} × I${i} = ${p * i}${n ? ` · ${n} open` : ''}`}
                       style={{
-                        aspectRatio: '1', border: active ? '2px solid var(--ink)' : '1px solid var(--card)',
-                        borderRadius: 5, background: band.bg, color: n > 0 ? band.fg : 'transparent',
-                        fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        height: 30, border: 'none', borderRadius: 5, background: HEAT_BG[lvl],
+                        outline: active ? '2px solid var(--ink)' : 'none', outlineOffset: -2,
+                        color: n > 0 ? HEAT_FG[lvl] : 'transparent',
+                        fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                       }}>
                       {n || ''}
                     </button>
                   )
-                })]
-              ))}
-              <span />
-              {[1, 2, 3, 4, 5].map((i) => (
-                <span key={`i${i}`} className="mono" style={{ fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>{i}</span>
-              ))}
+                })
+              )}
             </div>
-            <div className="row-desc" style={{ marginTop: 6, fontSize: 10.5 }}>
-              probability ↑ · impact →{cell ? ' · filtered' : ''}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: 'var(--muted)', marginTop: 5 }}>
+              <span>impact →</span><span>↑ probability</span>
             </div>
           </div>
 
@@ -295,85 +299,112 @@ export function RiskRegister({ projectId, canManage, onError }: {
               </div>
             )}
 
+            <div style={{ ...RISK_COLS, padding: '8px 14px', fontSize: 10, color: 'var(--muted)', borderBottom: '1px solid var(--line)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>
+              <span>ID</span><span>Risk</span><span>Category</span><span>P×I</span><span>Response</span><span>Owner</span><span>Review</span>
+            </div>
             {filtered.map((r) => {
               const band = scoreBand(r.score)
               const open = openId === r.id
+              const isOverdue = overdue(r.next_review_date) && isOpenRisk(r)
+              const opp = r.type === 'opportunity'
               return (
-                <div key={r.id} style={{ borderTop: '1px solid #EDEFF4' }}>
-                  <button className="pc-row" onClick={() => setOpenId(open ? null : r.id)}>
-                    <span className="tile-code" style={{ background: 'var(--surface)', color: 'var(--ink)', fontSize: 10.5 }}>{code('R', r.seq)}</span>
-                    <span className="pc-row-main">
-                      <span className="pc-row-name" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {r.title}{r.type === 'opportunity' && <TrendUp />}
-                      </span>
-                      <span className="pc-row-desc">{CATEGORIES.find((c) => c.id === r.category)?.label} · {r.status.replace('_', ' ')}</span>
+                <div key={r.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                  <div onClick={() => setOpenId(open ? null : r.id)}
+                    style={{ ...RISK_COLS, padding: '9px 14px', fontSize: 12, alignItems: 'center', cursor: 'pointer', background: open ? 'var(--it-soft)' : undefined }}>
+                    <span className="mono" style={{ fontSize: 11 }}>{code('R', r.seq)}</span>
+                    <span style={{ fontWeight: opp || r.score >= 15 ? 600 : 400, color: opp ? 'var(--green)' : r.score >= 15 ? 'var(--ink)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.title}{opp ? ' ↗' : ''}
                     </span>
-                    <span className="chip mono" style={{ background: band.bg, color: band.fg, fontSize: 10.5, fontWeight: 700 }}>{r.score}</span>
-                    <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)', fontSize: 10 }}>{r.response_strategy ?? '—'}</span>
-                    <span style={{ fontSize: 11.5, color: 'var(--muted)', width: 120, textAlign: 'right' }}>{r.owner?.display_name ?? '—'}</span>
-                    <span className="mono" style={{ fontSize: 10.5, width: 86, textAlign: 'right', color: overdue(r.next_review_date) && isOpenRisk(r) ? 'var(--red)' : 'var(--muted)' }}>
-                      {r.next_review_date ? (overdue(r.next_review_date) && isOpenRisk(r) ? 'overdue' : r.next_review_date) : '—'}
+                    <span style={{ color: 'var(--muted)' }}>{CATEGORIES.find((c) => c.id === r.category)?.label ?? '—'}</span>
+                    <span className="mono" style={{ fontSize: 10.5, background: band.bg, color: band.fg, borderRadius: 6, padding: '2px 6px', textAlign: 'center', fontWeight: 500 }}>{r.score}</span>
+                    <span style={{ textTransform: 'capitalize' }}>{r.response_strategy ?? '—'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.owner?.display_name ?? '—'}</span>
+                    <span style={{ color: isOverdue ? 'var(--red)' : 'var(--muted)', fontWeight: isOverdue ? 600 : 400 }} className={isOverdue ? '' : 'mono'}>
+                      {isOverdue ? 'overdue' : r.next_review_date ? fmtReview(r.next_review_date) : '—'}
                     </span>
-                  </button>
+                  </div>
                   {open && (
-                    <div style={{ padding: '4px 16px 16px 16px', background: 'var(--surface)' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, margin: '10px 0' }}>
-                        {(['cause', 'title', 'effect'] as const).map((k) => (
-                          <div key={k} style={{ background: 'var(--card)', borderRadius: 10, padding: '8px 10px' }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--muted)' }}>
-                              {k === 'title' ? 'Risk' : k}
-                            </div>
-                            <div style={{ fontSize: 12 }}>{k === 'title' ? r.description ?? r.title : r[k] ?? '—'}</div>
+                    <div style={{ padding: '14px 16px 16px', background: 'var(--surface)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13, flexWrap: 'wrap' }}>
+                        <span className="mono" style={{ fontSize: 11, background: 'var(--red-soft)', color: 'var(--red)', borderRadius: 6, padding: '3px 8px', fontWeight: 500 }}>{code('R', r.seq)}</span>
+                        <span style={{ fontFamily: 'var(--font-head)', fontSize: 14.5, fontWeight: 600, color: 'var(--ink)' }}>{r.title}</span>
+                        <span className="chip" style={{ background: opp ? 'var(--green-soft)' : 'var(--red-soft)', color: opp ? 'var(--green)' : 'var(--red)' }}>
+                          {opp ? 'Opportunity' : 'Threat'} · score {r.score}
+                        </span>
+                        <span style={{ flex: 1 }} />
+                        {canManage && r.status !== 'occurred' && r.status !== 'closed' && (
+                          <button onClick={() => convert(r)}
+                            style={{ fontFamily: 'var(--font-body)', fontSize: 11.5, fontWeight: 500, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', cursor: 'pointer' }}>
+                            Occurred → convert to issue
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                        <div>
+                          <div className="klabel" style={{ marginBottom: 3 }}>Cause → risk → effect</div>
+                          <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.6 }}>
+                            {[r.cause, r.description ?? r.title, r.effect].filter(Boolean).join(' → ') || '—'}
                           </div>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                        {impactChip('schedule', r.impact_schedule)}
-                        {impactChip('cost', r.impact_cost)}
-                        {impactChip('scope', r.impact_scope)}
-                        {impactChip('quality', r.impact_quality)}
-                        {r.contingency_amount != null && (
-                          <span className="chip mono" style={{ fontSize: 10, background: 'var(--it-soft)', color: 'var(--it)' }}>
-                            contingency {r.contingency_amount.toLocaleString()} SAR
-                          </span>
-                        )}
-                        {r.residual_probability != null && r.residual_impact != null && (
-                          <span className="chip mono" style={{ fontSize: 10, background: 'var(--green-soft)', color: 'var(--green)' }}>
-                            residual P{r.residual_probability}×I{r.residual_impact}
-                          </span>
-                        )}
-                      </div>
-                      {r.trigger_note && <p className="row-desc" style={{ margin: '0 0 10px' }}>Trigger: {r.trigger_note}</p>}
-                      {r.actions.length > 0 && (
-                        <div style={{ marginBottom: 10 }}>
-                          <SectionLabel>Response plan</SectionLabel>
+                          {r.trigger_note && (
+                            <>
+                              <div className="klabel" style={{ margin: '11px 0 3px' }}>Trigger / early warning</div>
+                              <div style={{ fontSize: 12.5, color: 'var(--text)' }}>{r.trigger_note}</div>
+                            </>
+                          )}
+                          <div className="klabel" style={{ margin: '11px 0 4px' }}>Impacted objectives</div>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {impactChip('Schedule', r.impact_schedule)}
+                            {impactChip('Cost', r.impact_cost)}
+                            {impactChip('Scope', r.impact_scope)}
+                            {impactChip('Quality', r.impact_quality)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="klabel" style={{ marginBottom: 5 }}>
+                            Response plan{r.response_strategy ? ` — ${r.response_strategy[0].toUpperCase() + r.response_strategy.slice(1)}` : ''}{r.owner?.display_name ? ` · owner ${r.owner.display_name}` : ''}
+                          </div>
+                          {r.actions.length === 0 && <div className="row-desc" style={{ fontSize: 12 }}>No response actions yet.</div>}
                           {r.actions.map((a) => (
-                            <label key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '3px 0', cursor: canManage ? 'pointer' : 'default' }}>
-                              <input type="checkbox" checked={a.is_done} disabled={!canManage}
-                                onChange={() => run(supabase.from('pmo_risk_actions')
-                                  .update({ is_done: !a.is_done, done_at: !a.is_done ? new Date().toISOString() : null })
-                                  .eq('id', a.id))} />
-                              <span style={{ textDecoration: a.is_done ? 'line-through' : 'none', color: a.is_done ? 'var(--muted)' : 'var(--ink)' }}>{a.label}</span>
+                            <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '3px 0', color: a.is_done ? 'var(--muted)' : 'var(--ink)', cursor: canManage ? 'pointer' : 'default' }}>
+                              <span onClick={canManage ? () => run(supabase.from('pmo_risk_actions')
+                                .update({ is_done: !a.is_done, done_at: !a.is_done ? new Date().toISOString() : null }).eq('id', a.id)) : undefined}
+                                style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff',
+                                  background: a.is_done ? 'var(--green)' : 'transparent', border: a.is_done ? 'none' : '1.5px solid var(--line)' }}>
+                                {a.is_done ? '✓' : ''}
+                              </span>
+                              <span style={{ textDecoration: a.is_done ? 'line-through' : 'none' }}>{a.label}</span>
                             </label>
                           ))}
-                        </div>
-                      )}
-                      {canManage && (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <select className="input" style={{ width: 170 }} value={r.status}
-                            onChange={(e) => run(supabase.from('pmo_risks').update({ status: e.target.value }).eq('id', r.id))}>
-                            {RISK_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                          </select>
-                          <input className="input" type="date" style={{ width: 150 }} value={r.next_review_date ?? ''}
-                            onChange={(e) => run(supabase.from('pmo_risks').update({ next_review_date: e.target.value || null }).eq('id', r.id))} />
-                          <span style={{ flex: 1 }} />
-                          {r.status !== 'occurred' && r.status !== 'closed' && (
-                            <button className="btn" style={{ color: 'var(--red)', fontWeight: 600 }} onClick={() => convert(r)}>
-                              Occurred → convert to issue
-                            </button>
+                          <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'wrap' }}>
+                            <div>
+                              <div className="klabel">Residual P×I</div>
+                              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--amber)' }}>
+                                {r.residual_probability != null && r.residual_impact != null ? `${r.residual_probability * r.residual_impact} (after response)` : '—'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="klabel">Contingency</div>
+                              <div className="kval mono">{r.contingency_amount != null ? `SAR ${r.contingency_amount.toLocaleString()}` : '—'}</div>
+                            </div>
+                            <div>
+                              <div className="klabel">Next review</div>
+                              <div style={{ fontSize: 12.5, fontWeight: 600, color: isOverdue ? 'var(--red)' : 'var(--ink)' }}>
+                                {isOverdue ? `overdue ${overdueDays(r.next_review_date)}d` : r.next_review_date ? fmtReview(r.next_review_date) : '—'}
+                              </div>
+                            </div>
+                          </div>
+                          {canManage && (
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+                              <select className="input" style={{ width: 160 }} value={r.status}
+                                onChange={(e) => run(supabase.from('pmo_risks').update({ status: e.target.value }).eq('id', r.id))}>
+                                {RISK_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                              </select>
+                              <input className="input" type="date" style={{ width: 150 }} value={r.next_review_date ?? ''}
+                                onChange={(e) => run(supabase.from('pmo_risks').update({ next_review_date: e.target.value || null }).eq('id', r.id))} />
+                            </div>
                           )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
                 </div>

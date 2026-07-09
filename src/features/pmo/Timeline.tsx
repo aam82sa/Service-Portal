@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { SectionLabel } from '../../components/ui'
+import { useMemo, useState, type ReactNode } from 'react'
 import { STATUS_META, buildTree, type Activity, type WbsDependency } from './Wbs'
 
 /**
@@ -61,11 +60,12 @@ function computeCritical(activities: Activity[], deps: WbsDependency[]): Set<str
   return critical
 }
 
-export function TimelineView({ activities, dependencies, baselineDates, onOpen }: {
+export function TimelineView({ activities, dependencies, baselineDates, onOpen, headerExtra }: {
   activities: Activity[]
   dependencies: WbsDependency[]
   baselineDates?: BaselineDates
   onOpen?: (id: string) => void
+  headerExtra?: ReactNode
 }) {
   const [hover, setHover] = useState<string | null>(null)
 
@@ -113,9 +113,9 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen }
     return <div className="card" style={{ padding: 18 }}><div className="row-desc">Add WBS activities with dates to see the timeline.</div></div>
   }
 
-  const labelW = 240
+  const labelW = 210
   const chartW = 760
-  const rowH = 30
+  const rowH = 32
   const headH = 26
   const W = labelW + chartW
   const H = headH + rows.length * rowH + 8
@@ -147,31 +147,26 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen }
   }
 
   const fmt = (t: number) => new Date(t).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
-  const barY = (i: number) => headH + i * rowH + 6
-  const barH = rowH - 12
+  const barH = 12
+  const barY = (i: number) => headH + i * rowH + (rowH - barH) / 2
 
   return (
     <div className="card" style={{ padding: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-        <SectionLabel>Timeline</SectionLabel>
+      <div className="sechead" style={{ marginBottom: 8 }}>
+        Timeline
         <span style={{ flex: 1 }} />
-        <span style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--muted)', alignItems: 'center' }}>
-          <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--it)', borderRadius: 2, marginRight: 4 }} />activity</span>
-          <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--accent)', borderRadius: 2, marginRight: 4 }} />critical path</span>
-          {baselineDates && Object.keys(baselineDates).length > 0 && (
-            <span><span style={{ display: 'inline-block', width: 10, height: 6, border: '1.5px dashed var(--muted)', borderRadius: 2, marginRight: 4 }} />baseline</span>
-          )}
-          <span><span style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--amber)', transform: 'rotate(45deg)', marginRight: 5 }} />milestone</span>
-          <span style={{ color: 'var(--red)' }}>│ today</span>
+        {headerExtra}
+        <span style={{ display: 'flex', gap: 12, fontSize: 10.5, color: 'var(--muted)', alignItems: 'center', fontFamily: 'var(--font-body)', fontWeight: 400 }}>
+          <span style={{ color: 'var(--accent)' }}>━</span> critical path
+          <span>◆ milestone</span>
+          {baselineDates && Object.keys(baselineDates).length > 0 && <span>▭ baseline</span>}
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 700, fontFamily: 'inherit' }}>
+          <line x1={0} y1={headH} x2={W} y2={headH} stroke="var(--line)" strokeWidth={1} />
           {ticks.map((t, i) => (
-            <g key={i}>
-              <line x1={t.x} y1={headH} x2={t.x} y2={H} stroke="var(--line)" strokeWidth={1} />
-              <text x={t.x + 3} y={14} fontSize={9.5} fill="var(--muted)">{t.label}</text>
-            </g>
+            <text key={i} x={t.x + 3} y={headH - 8} fontSize={10.5} fill="var(--muted)">{t.label}</text>
           ))}
 
           {rows.map((r, i) => {
@@ -183,50 +178,48 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen }
             const base = isCrit ? 'var(--accent-soft)' : 'var(--it-soft)'
             const fill = isCrit ? 'var(--accent)' : 'var(--it)'
             const bl = baselineDates?.[r.a.id]
+            const topLevel = r.a.level === 1
             const tip = `${r.a.code} ${r.a.title}\n${dated ? `${fmt(r.start!)} → ${fmt(r.end!)}` : 'no dates'} · ${meta.pct}% complete${isCrit ? ' · critical path' : ''}`
+            const barW = dated ? Math.max(4, X(r.end! + DAY) - X(r.start!)) : 0
             return (
               <g key={r.a.id} opacity={dim ? 0.35 : 1}
                  onClick={onOpen ? () => onOpen(r.a.id) : undefined}
                  onMouseEnter={() => setHover(r.a.id)} onMouseLeave={() => setHover(null)}
                  style={onOpen ? { cursor: 'pointer' } : undefined}>
-                {i % 2 === 1 && <rect x={0} y={y} width={W} height={rowH} fill="var(--surface)" opacity={0.45} />}
-                {hover === r.a.id && <rect x={0} y={y} width={W} height={rowH} fill={base} opacity={0.5} />}
+                {r.summary && <rect x={0} y={y} width={W} height={rowH} fill="var(--surface)" rx={7} />}
+                {hover === r.a.id && !r.summary && <rect x={0} y={y} width={W} height={rowH} fill={base} opacity={0.5} />}
                 <rect x={0} y={y} width={W} height={rowH} fill="transparent"><title>{tip}</title></rect>
-                <text x={8 + (r.a.level - 1) * 14} y={y + rowH / 2 + 3.5} fontSize={r.summary ? 11 : 10.5}
-                  fontWeight={r.summary ? 700 : 400} fill="var(--ink)">
-                  <tspan fill="var(--accent)" fontFamily="var(--font-mono, monospace)">{r.a.code}</tspan>
-                  {'  ' + (r.a.title.length > 24 ? r.a.title.slice(0, 23) + '…' : r.a.title)}
+                <text x={8 + (r.a.level - 1) * 14} y={y + rowH / 2 + 3.5}
+                  fontSize={12} fontWeight={topLevel ? 600 : 400}
+                  fontFamily={topLevel ? 'var(--font-head)' : 'var(--font-body)'} fill="var(--ink)">
+                  <tspan fill="var(--muted)" fontFamily="var(--font-mono, monospace)" fontSize={10.5}>{r.a.code}</tspan>
+                  {'  ' + (r.a.title.length > 22 ? r.a.title.slice(0, 21) + '…' : r.a.title)}
                 </text>
 
-                {bl && !r.summary && (
-                  <rect x={X(parse(bl.start))} y={y + rowH - 8}
-                    width={Math.max(3, X(parse(bl.end) + DAY) - X(parse(bl.start)))} height={4}
-                    rx={2} fill="none" stroke="var(--muted)" strokeWidth={1.2} strokeDasharray="3 2" />
+                {bl && !r.a.is_milestone && (
+                  <rect x={X(parse(bl.start))} y={barY(i)}
+                    width={Math.max(3, X(parse(bl.end) + DAY) - X(parse(bl.start)))} height={barH}
+                    rx={6} fill="none" stroke="#AEB6C6" strokeWidth={1.5} strokeDasharray="3 2" />
                 )}
 
                 {dated && r.a.is_milestone ? (
                   <g>
-                    <polygon
-                      points={`${X(r.start!)},${y + 8} ${X(r.start!) + 6.5},${y + rowH / 2} ${X(r.start!)},${y + rowH - 8} ${X(r.start!) - 6.5},${y + rowH / 2}`}
-                      fill={isCrit ? 'var(--red)' : 'var(--amber)'} />
-                    <text x={X(r.start!) + 10} y={y + rowH / 2 + 3} fontSize={9} fill="var(--muted)">{fmt(r.start!)}</text>
+                    <rect x={X(r.start!) - 6} y={y + rowH / 2 - 6} width={12} height={12} rx={2.5}
+                      fill={isCrit ? 'var(--red)' : 'var(--amber)'}
+                      transform={`rotate(45 ${X(r.start!)} ${y + rowH / 2})`} />
+                    <text x={X(r.start!) + 12} y={y + rowH / 2 + 3.5} fontSize={10} fill="var(--muted)"
+                      fontFamily="var(--font-mono, monospace)">{fmt(r.start!)}</text>
                   </g>
                 ) : dated ? (
-                  r.summary ? (
-                    // thin bracket spanning the children
-                    <path d={`M ${X(r.start!)} ${y + rowH / 2 + 5} v -5 h ${Math.max(4, X(r.end! + DAY) - X(r.start!))} v 5`}
-                      fill="none" stroke="var(--ink-3)" strokeWidth={2.5} opacity={0.7} />
-                  ) : (
-                    <g>
-                      <rect x={X(r.start!)} y={barY(i)} width={Math.max(4, X(r.end! + DAY) - X(r.start!))} height={barH}
-                        rx={5} fill={base} stroke={fill} strokeWidth={1} />
-                      {meta.pct > 0 && (
-                        <rect x={X(r.start!)} y={barY(i)}
-                          width={Math.max(3, (X(r.end! + DAY) - X(r.start!)) * (meta.pct / 100))}
-                          height={barH} rx={5} fill={fill} />
-                      )}
-                    </g>
-                  )
+                  <g>
+                    <rect x={X(r.start!)} y={barY(i)} width={barW} height={barH}
+                      rx={6} fill={base} stroke={fill} strokeWidth={1} />
+                    {meta.pct > 0 && (
+                      <rect x={X(r.start!)} y={barY(i)}
+                        width={Math.max(3, barW * (meta.pct / 100))}
+                        height={barH} rx={6} fill={fill} />
+                    )}
+                  </g>
                 ) : (
                   <text x={labelW + 6} y={y + rowH / 2 + 3.5} fontSize={9.5} fill="var(--muted)">no dates</text>
                 )}
@@ -256,10 +249,10 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen }
             )
           })}
 
-          <line x1={tx} y1={headH - 2} x2={tx} y2={H} stroke="var(--red)" strokeWidth={2} />
+          <line x1={tx} y1={headH} x2={tx} y2={H} stroke="var(--red)" strokeWidth={2} opacity={0.75} />
           <g>
-            <rect x={tx - 19} y={2} width={38} height={15} rx={7.5} fill="var(--red)" />
-            <text x={tx} y={12.5} fontSize={9} fill="#fff" textAnchor="middle" fontWeight={600}>today</text>
+            <rect x={tx - 18} y={headH - 15} width={36} height={14} rx={4} fill="var(--red-soft)" />
+            <text x={tx} y={headH - 5} fontSize={9.5} fill="var(--red)" textAnchor="middle" fontWeight={600}>today</text>
           </g>
         </svg>
       </div>

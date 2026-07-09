@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Page v2 + Risk Register — Design Reference (match closely)</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#10192E;--ink-2:#1A2540;--ink-3:#243356;--surface:#F4F5F8;--card:#FFFFFF;--line:#E4E7EE;--text:#1B2437;--muted:#6B7280;--accent:#D97757;--accent-soft:#FBEFE9;--green:#2E9E6B;--green-soft:#E7F5EE;--amber:#DE9B2D;--amber-soft:#FBF2DF;--red:#D64545;--red-soft:#FBEAEA;--it:#3E6DD8;--it-soft:#EAF0FC;--admin:#8A5FC9;--admin-soft:#F2EDFA;--radius:14px;--font-head:'Space Grotesk',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'JetBrains Mono',monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--surface);font-family:var(--font-body);color:var(--text);padding:28px;max-width:1060px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+.mono{font-family:var(--font-mono)}
+.chip{font-size:11px;font-weight:600;border-radius:999px;padding:3px 10px;letter-spacing:.02em}
+.klabel{font-size:10.5px;color:var(--muted)}
+.kval{font-size:12.5px;font-weight:500;color:var(--ink)}
+.avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600}
+.sechead{display:flex;align-items:center;gap:8px;font-family:var(--font-head);font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:10px}
+.note{font-size:11px;color:var(--muted);margin:26px 0 10px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="note">Screen 1 — project detail (one page, no tabs)</div>
+
+<div class="card" style="padding:16px 20px;margin-bottom:12px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span class="mono" style="font-size:12px;background:var(--it-soft);color:var(--it);border-radius:7px;padding:4px 9px;font-weight:500">PRJ-012</span>
+    <span style="font-family:var(--font-head);font-size:17px;font-weight:600;color:var(--ink)">ERP Finance Module Rollout</span>
+    <span class="chip" style="background:var(--it-soft);color:var(--it)">Execution</span>
+    <span style="flex:1"></span>
+    <span style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)">Health
+      <span title="Schedule — SPI 0.97" style="width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-soft)"></span>
+      <span title="Cost — CPI 0.88" style="width:11px;height:11px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 3px var(--amber-soft)"></span>
+      <span title="Scope" style="width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-soft)"></span>
+    </span>
+  </div>
+  <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)">
+    <div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:var(--admin-soft);color:var(--admin)">SA</div><div><div class="klabel">Sponsor</div><div class="kval">S. Alotaibi</div></div></div>
+    <div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:var(--it-soft);color:var(--it)">AD</div><div><div class="klabel">Project manager</div><div class="kval">Ady</div></div></div>
+    <div><div class="klabel">Department</div><div class="kval">IT</div></div>
+    <div><div class="klabel">Timeline</div><div class="kval">01 May → 30 Sep 2026</div></div>
+    <div><div class="klabel">Budget</div><div class="kval mono">SAR 480,000</div></div>
+    <div><div class="klabel">Charter</div><div class="kval" style="color:var(--green)">Approved</div></div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+  <div class="card" style="padding:12px 15px"><div class="klabel">Complete</div><div style="font-family:var(--font-head);font-size:21px;font-weight:600;color:var(--ink);margin-top:2px">54%</div><div style="height:4px;background:var(--surface);border-radius:999px;margin-top:7px"><div style="height:4px;width:54%;background:var(--it);border-radius:999px"></div></div></div>
+  <div class="card" style="padding:12px 15px"><div class="klabel">Schedule (SPI)</div><div style="font-family:var(--font-head);font-size:21px;font-weight:600;color:var(--green);margin-top:2px">0.97</div><div style="font-size:10.5px;color:var(--muted);margin-top:5px">on track</div></div>
+  <div class="card" style="padding:12px 15px"><div class="klabel">Cost (CPI)</div><div style="font-family:var(--font-head);font-size:21px;font-weight:600;color:var(--amber);margin-top:2px">0.88</div><div style="font-size:10.5px;color:var(--amber);margin-top:5px">watch spend</div></div>
+  <div class="card" style="padding:12px 15px"><div class="klabel">Risks / issues</div><div style="font-family:var(--font-head);font-size:21px;font-weight:600;color:var(--ink);margin-top:2px">4 <span style="font-size:12px;color:var(--red);font-weight:500">(1 high)</span></div><div style="font-size:10.5px;color:var(--muted);margin-top:5px">2 issues open</div></div>
+</div>
+
+<div class="card" style="padding:14px 18px;margin-bottom:12px">
+  <div class="sechead">Timeline<span style="flex:1"></span><span style="font-size:10.5px;color:var(--muted);font-family:var(--font-body);font-weight:400">━ critical path · ◆ milestone · ▭ baseline</span></div>
+  <div style="display:grid;grid-template-columns:120px 1fr;font-size:10.5px;color:var(--muted)">
+    <div></div>
+    <div style="display:flex;border-bottom:1px solid var(--line);padding-bottom:4px"><span style="flex:1">May</span><span style="flex:1">Jun</span><span style="flex:1">Jul</span><span style="flex:1">Aug</span><span style="flex:1">Sep</span></div>
+  </div>
+  <div style="position:relative;margin-top:2px">
+    <div style="position:absolute;left:calc(120px + (100% - 120px)*0.44);top:0;bottom:0;width:2px;background:var(--red);opacity:.75;z-index:2"></div>
+    <div style="position:absolute;left:calc(120px + (100% - 120px)*0.44);top:-3px;transform:translateX(-50%);font-size:9.5px;color:var(--red);background:var(--red-soft);border-radius:4px;padding:1px 6px;z-index:2;font-weight:600">today</div>
+    <div style="display:grid;grid-template-columns:120px 1fr;align-items:center;height:32px">
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-head);color:var(--ink)">1. Discovery</div>
+      <div style="position:relative;height:18px"><div style="position:absolute;left:0;width:18%;top:3px;height:12px;border-radius:6px;background:var(--it)"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:120px 1fr;align-items:center;height:32px;background:var(--surface);border-radius:7px">
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-head);color:var(--ink);padding-left:4px">2. Build</div>
+      <div style="position:relative;height:18px">
+        <div style="position:absolute;left:14%;width:44%;top:14px;height:3px;border-radius:2px;background:#C9CFDB;border:1px dashed #AEB6C6"></div>
+        <div style="position:absolute;left:16%;width:46%;top:3px;height:12px;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent)"></div>
+        <div style="position:absolute;left:16%;width:28%;top:3px;height:12px;border-radius:6px 0 0 6px;background:var(--accent)"></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:120px 1fr;align-items:center;height:32px">
+      <div style="font-size:12px;color:var(--text);padding-left:14px">2.1 Integrations</div>
+      <div style="position:relative;height:18px"><div style="position:absolute;left:30%;width:26%;top:3px;height:12px;border-radius:6px;background:var(--it-soft);border:1px solid var(--it)"></div><div style="position:absolute;left:30%;width:14%;top:3px;height:12px;border-radius:6px 0 0 6px;background:var(--it)"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:120px 1fr;align-items:center;height:32px;background:var(--surface);border-radius:7px">
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-head);color:var(--ink);padding-left:4px">3. UAT</div>
+      <div style="position:relative;height:18px"><div style="position:absolute;left:62%;width:20%;top:3px;height:12px;border-radius:6px;background:var(--card);border:1.5px dashed #AEB6C6"></div><div style="position:absolute;left:84%;top:2px;width:12px;height:12px;background:var(--amber);transform:rotate(45deg);border-radius:2.5px"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:120px 1fr;align-items:center;height:32px">
+      <div style="font-size:12px;font-weight:600;font-family:var(--font-head);color:var(--ink)">4. Go-live</div>
+      <div style="position:relative;height:18px"><div style="position:absolute;left:88%;top:2px;width:12px;height:12px;background:var(--red);transform:rotate(45deg);border-radius:2.5px"></div><span style="position:absolute;left:91.5%;top:2px;font-size:10px;color:var(--muted)" class="mono">30 Sep</span></div>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div class="card" style="padding:14px 17px">
+    <div class="sechead">Risks and issues<span style="flex:1"></span><span style="font-size:11px;color:var(--it);font-family:var(--font-body);font-weight:500;cursor:pointer">Open register →</span></div>
+    <div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><span class="chip mono" style="background:var(--red);color:#fff;font-size:10px;border-radius:6px">20</span><span style="font-size:12.5px;flex:1;font-weight:500;color:var(--ink)">Integration vendor delay</span><span class="mono" style="font-size:10.5px;color:var(--muted)">R-03</span></div>
+    <div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><span class="chip mono" style="background:var(--amber-soft);color:var(--amber);font-size:10px;border-radius:6px">12</span><span style="font-size:12.5px;flex:1;color:var(--text)">UAT resource availability</span><span class="mono" style="font-size:10.5px;color:var(--muted)">R-04</span></div>
+    <div style="display:flex;gap:8px;align-items:center;padding:7px 0"><span class="chip" style="background:var(--red-soft);color:var(--red);font-size:10px;border-radius:6px">ISSUE</span><span style="font-size:12.5px;flex:1;color:var(--text)">Test data quality</span><span class="mono" style="font-size:10.5px;color:var(--muted)">I-02</span></div>
+  </div>
+  <div class="card" style="padding:14px 17px">
+    <div class="sechead">Budget</div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span>Spent</span><span class="mono" style="color:var(--ink);font-weight:500">SAR 261,400</span></div>
+    <div style="height:9px;background:var(--surface);border-radius:999px;margin:7px 0"><div style="height:9px;width:62%;background:var(--amber);border-radius:999px"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted)"><span>62% of SAR 480,000</span><span>54% work done</span></div>
+    <div style="font-size:11.5px;color:var(--amber);margin-top:8px;font-weight:500">Spending ahead of progress — CPI 0.88</div>
+  </div>
+  <div class="card" style="padding:14px 17px">
+    <div class="sechead">Work breakdown<span style="flex:1"></span><span style="font-size:11px;color:var(--it);font-family:var(--font-body);font-weight:500;cursor:pointer">Open full WBS →</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="mono" style="font-size:10px;color:var(--muted)">1.0</span><span style="font-size:12.5px;flex:1">Discovery</span><span style="font-size:10.5px;color:var(--green);font-weight:600">100%</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="mono" style="font-size:10px;color:var(--muted)">2.0</span><span style="font-size:12.5px;flex:1">Build (12 activities)</span><span style="font-size:10.5px;color:var(--text);font-weight:600">61%</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="mono" style="font-size:10px;color:var(--muted)">3.0</span><span style="font-size:12.5px;flex:1">UAT (6 activities)</span><span style="font-size:10.5px;color:var(--muted);font-weight:600">0%</span></div>
+  </div>
+  <div class="card" style="padding:14px 17px">
+    <div class="sechead">Latest activity</div>
+    <div style="font-size:12px;color:var(--text);padding:5px 0;border-bottom:1px solid var(--line)">Charter change request CR-02 approved · <span style="color:var(--muted)">2h ago</span></div>
+    <div style="font-size:12px;color:var(--text);padding:5px 0;border-bottom:1px solid var(--line)">Activity 2.4 marked complete · <span style="color:var(--muted)">Yesterday</span></div>
+    <div style="font-size:12px;color:var(--text);padding:5px 0">Risk R-03 raised to HIGH · <span style="color:var(--muted)">Sun</span></div>
+  </div>
+</div>
+
+<div class="note">Screen 2 — risk register (heatmap + table + detail drawer)</div>
+
+<div style="display:grid;grid-template-columns:250px 1fr;gap:12px;margin-bottom:12px">
+  <div class="card" style="padding:13px 15px">
+    <div style="font-size:12px;font-weight:600;font-family:var(--font-head);color:var(--ink);margin-bottom:9px">Probability × impact</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px">
+      <div style="height:30px;background:var(--amber-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div><div style="height:30px;background:#F5C9C9;border-radius:5px"></div><div style="height:30px;background:var(--red);border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px" class="mono">1</div><div style="height:30px;background:#B23A3A;border-radius:5px"></div>
+      <div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--amber);font-weight:600;font-size:12px" class="mono">1</div><div style="height:30px;background:#F5C9C9;border-radius:5px"></div><div style="height:30px;background:var(--red);border-radius:5px"></div>
+      <div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--green-soft);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--green);font-weight:600;font-size:12px" class="mono">1</div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div><div style="height:30px;background:#F5C9C9;border-radius:5px"></div>
+      <div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div>
+      <div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--green-soft);border-radius:5px"></div><div style="height:30px;background:var(--amber-soft);border-radius:5px"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted);margin-top:5px"><span>impact →</span><span>↑ probability</span></div>
+  </div>
+  <div class="card" style="padding:4px 0;overflow:hidden">
+    <div style="display:grid;grid-template-columns:48px 1fr 80px 44px 92px 80px 70px;gap:6px;padding:8px 14px;font-size:10px;color:var(--muted);border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.05em;font-weight:600">
+      <span>ID</span><span>Risk</span><span>Category</span><span>P×I</span><span>Response</span><span>Owner</span><span>Review</span>
+    </div>
+    <div style="display:grid;grid-template-columns:48px 1fr 80px 44px 92px 80px 70px;gap:6px;padding:9px 14px;font-size:12px;align-items:center;border-bottom:1px solid var(--line);background:var(--it-soft)">
+      <span class="mono" style="font-size:11px">R-03</span><span style="font-weight:600;color:var(--ink)">Integration vendor delay</span><span style="color:var(--muted)">External</span><span class="mono" style="font-size:10.5px;background:var(--red);color:#fff;border-radius:6px;padding:2px 6px;text-align:center;font-weight:500">20</span><span>Mitigate</span><span>Ady</span><span style="color:var(--red);font-weight:600">overdue</span>
+    </div>
+    <div style="display:grid;grid-template-columns:48px 1fr 80px 44px 92px 80px 70px;gap:6px;padding:9px 14px;font-size:12px;align-items:center;border-bottom:1px solid var(--line)">
+      <span class="mono" style="font-size:11px">R-04</span><span>UAT resource availability</span><span style="color:var(--muted)">Organiz.</span><span class="mono" style="font-size:10.5px;background:var(--amber-soft);color:var(--amber);border-radius:6px;padding:2px 6px;text-align:center;font-weight:500">12</span><span>Accept</span><span>S. Alotaibi</span><span>14 Jul</span>
+    </div>
+    <div style="display:grid;grid-template-columns:48px 1fr 80px 44px 92px 80px 70px;gap:6px;padding:9px 14px;font-size:12px;align-items:center">
+      <span class="mono" style="font-size:11px">R-05</span><span style="color:var(--green)">Early vendor discount ↗</span><span style="color:var(--muted)">External</span><span class="mono" style="font-size:10.5px;background:var(--green-soft);color:var(--green);border-radius:6px;padding:2px 6px;text-align:center;font-weight:500">6</span><span>Exploit</span><span>Ady</span><span>21 Jul</span>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="padding:16px 20px">
+  <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px">
+    <span class="mono" style="font-size:11px;background:var(--red-soft);color:var(--red);border-radius:6px;padding:3px 8px;font-weight:500">R-03</span>
+    <span style="font-family:var(--font-head);font-size:14.5px;font-weight:600;color:var(--ink)">Integration vendor delay</span>
+    <span class="chip" style="background:var(--red-soft);color:var(--red)">Threat · score 20</span>
+    <span style="flex:1"></span>
+    <button style="font-family:var(--font-body);font-size:11.5px;font-weight:500;background:var(--ink);color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer">Occurred → convert to issue</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+    <div>
+      <div class="klabel" style="margin-bottom:3px">Cause → risk → effect</div>
+      <div style="font-size:12.5px;color:var(--text);line-height:1.6">Vendor understaffed (cause) → API delivery may slip 4+ weeks (risk) → go-live misses 30 Sep, penalty clause triggers (effect on schedule + cost)</div>
+      <div class="klabel" style="margin:11px 0 3px">Trigger / early warning</div>
+      <div style="font-size:12.5px;color:var(--text)">Vendor misses weekly drop 2 times in a row</div>
+      <div class="klabel" style="margin:11px 0 4px">Impacted objectives</div>
+      <div style="display:flex;gap:6px"><span class="chip" style="background:var(--red-soft);color:var(--red);font-size:10.5px">Schedule 5</span><span class="chip" style="background:var(--amber-soft);color:var(--amber);font-size:10.5px">Cost 4</span><span class="chip" style="background:var(--surface);color:var(--muted);font-size:10.5px;border:1px solid var(--line)">Scope 2</span></div>
+    </div>
+    <div>
+      <div class="klabel" style="margin-bottom:5px">Response plan — Mitigate · owner Ady</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;color:var(--muted)"><span style="width:15px;height:15px;border-radius:4px;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px">✓</span><span style="text-decoration:line-through">Weekly vendor checkpoint established</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0"><span style="width:15px;height:15px;border-radius:4px;border:1.5px solid var(--line)"></span><span>Parallel in-house stub for critical API</span></div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0"><span style="width:15px;height:15px;border-radius:4px;border:1.5px solid var(--line)"></span><span>Contract penalty review with Legal</span></div>
+      <div style="display:flex;gap:18px;margin-top:12px">
+        <div><div class="klabel">Residual P×I</div><div style="font-size:12.5px;font-weight:600;color:var(--amber)">8 (after response)</div></div>
+        <div><div class="klabel">Contingency</div><div class="kval mono">SAR 40,000</div></div>
+        <div><div class="klabel">Next review</div><div style="font-size:12.5px;font-weight:600;color:var(--red)">overdue 3d</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
