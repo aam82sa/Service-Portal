@@ -30,7 +30,7 @@ interface RiskLite {
   impact_scope: number
   type: string
 }
-interface IssueLite { id: string; severity: string; status: string }
+interface IssueLite { id: string; seq: number; title: string; severity: string; status: string }
 interface TeamRow {
   id: string
   allocation_percent: number
@@ -115,22 +115,28 @@ function RagDot({ tone, title }: { tone: string; title: string }) {
     <span
       title={title}
       style={{
-        width: 12, height: 12, borderRadius: 6, display: 'inline-block',
+        width: 11, height: 11, borderRadius: '50%', display: 'inline-block',
         background: RAG_COLOR[tone], boxShadow: `0 0 0 3px ${RAG_SOFT[tone]}`,
       }}
     />
   )
 }
 
-function Av({ name }: { name: string }) {
+const AV_TONE: Record<string, { bg: string; fg: string }> = {
+  it: { bg: 'var(--it-soft)', fg: 'var(--it)' },
+  admin: { bg: 'var(--admin-soft)', fg: 'var(--admin)' },
+}
+
+function Av({ name, tone = 'it' }: { name: string; tone?: 'it' | 'admin' }) {
   const initials = name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+  const t = AV_TONE[tone]
   return (
     <span
       title={name}
       style={{
-        width: 26, height: 26, borderRadius: 13, background: 'var(--it-soft)', color: 'var(--it)',
+        width: 28, height: 28, borderRadius: '50%', background: t.bg, color: t.fg,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 700, flexShrink: 0,
+        fontSize: 10.5, fontWeight: 600, flexShrink: 0,
       }}
     >
       {initials}
@@ -138,12 +144,28 @@ function Av({ name }: { name: string }) {
   )
 }
 
-function Metric({ label, value, sub, title }: { label: string; value: string; sub?: string; title?: string }) {
+function Metric({ label, value, valueColor, sub, subColor, pct, title }: {
+  label: string
+  value: React.ReactNode
+  valueColor?: string
+  sub?: string
+  subColor?: string
+  pct?: number
+  title?: string
+}) {
   return (
-    <div className="card" style={{ padding: '14px 16px', flex: 1, minWidth: 0 }} title={title}>
-      <div className="row-desc" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
-      <div className="mono" style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{value}</div>
-      {sub && <div className="row-desc" style={{ fontSize: 12, marginTop: 2 }}>{sub}</div>}
+    <div className="card" style={{ padding: '12px 15px', minWidth: 0 }} title={title}>
+      <div className="klabel">{label}</div>
+      <div style={{ fontFamily: 'var(--font-head)', fontSize: 21, fontWeight: 600, color: valueColor ?? 'var(--ink)', marginTop: 2 }}>
+        {value}
+      </div>
+      {pct != null ? (
+        <div style={{ height: 4, background: 'var(--surface)', borderRadius: 999, marginTop: 7 }}>
+          <div style={{ height: 4, width: `${Math.min(100, Math.max(0, pct))}%`, background: 'var(--it)', borderRadius: 999 }} />
+        </div>
+      ) : sub ? (
+        <div style={{ fontSize: 10.5, color: subColor ?? 'var(--muted)', marginTop: 5 }}>{sub}</div>
+      ) : null}
     </div>
   )
 }
@@ -155,18 +177,29 @@ function SectionCard({ label, action, onAction, children }: {
   children: React.ReactNode
 }) {
   return (
-    <div className="card" style={{ padding: 16, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-        <SectionLabel>{label}</SectionLabel>
+    <div className="card" style={{ padding: '14px 17px', minWidth: 0 }}>
+      <div className="sechead">
+        {label}
         <span style={{ flex: 1 }} />
-        {onAction && (
-          <button className="btn" style={{ padding: '2px 10px', fontSize: 12 }} onClick={onAction}>{action}</button>
-        )}
+        {onAction && <button className="card-link" onClick={onAction}>{action} →</button>}
       </div>
       {children}
     </div>
   )
 }
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const ago = (iso: string) => {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`
+  const d = Math.round(s / 86400)
+  return d === 1 ? 'yesterday' : d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+const fmtDay = (d: string, withYear: boolean) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', ...(withYear ? { year: 'numeric' } : {}) })
+const fmtRange = (s: string | null, e: string | null) =>
+  s && e ? `${fmtDay(s, false)} → ${fmtDay(e, true)}` : s ? `${fmtDay(s, true)} → —` : e ? `— → ${fmtDay(e, true)}` : '—'
 
 const STEP_LABEL = (s: InternalStep) =>
   s.step === 'dept_head'
@@ -278,7 +311,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       .select('id, seq, title, score, status, impact_scope, type')
       .eq('project_id', projectId).order('score', { ascending: false })
       .then(({ data }) => setRisks((data as RiskLite[]) ?? []))
-    supabase.from('pmo_issues').select('id, severity, status').eq('project_id', projectId)
+    supabase.from('pmo_issues').select('id, seq, title, severity, status').eq('project_id', projectId).order('created_at')
       .then(({ data }) => setIssues((data as IssueLite[]) ?? []))
   }, [projectId])
 
@@ -469,6 +502,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   const cpi = costBl && bac != null && bac > 0 && acTotal > 0 ? ((pctComplete / 100) * bac) / acTotal : null
 
   const openRisks = risks.filter((r) => r.status !== 'closed')
+  const highRisks = openRisks.filter((r) => r.score >= 15).length
   const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'in_progress')
   const ragOf = (v: number | null) => (v == null ? 'muted' : v >= 0.95 ? 'green' : v >= 0.85 ? 'amber' : 'red')
   const scopeRag = openIssues.some((i) => i.severity === 'critical')
@@ -488,55 +522,64 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   return (
     <>
       <button className="btn" onClick={onBack} style={{ marginBottom: 14 }}>← Projects</button>
-      <div className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Chip mono tone="ink">{project.code}</Chip>
-          <h2 className="page-head" style={{ flex: 1, margin: 0 }}>{project.name}</h2>
+      <div className="card" style={{ padding: '16px 20px', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontSize: 12, background: 'var(--it-soft)', color: 'var(--it)', borderRadius: 7, padding: '4px 9px', fontWeight: 500 }}>
+            {project.code}
+          </span>
+          <span style={{ fontFamily: 'var(--font-head)', fontSize: 17, fontWeight: 600, color: 'var(--ink)' }}>{project.name}</span>
           {isPersonal && <Chip tone="it">Personal tracker</Chip>}
           <Chip tone={meta.tone}>{meta.label}</Chip>
+          {project.origin_type === 'converted' && <Chip tone="muted">converted from a ticket</Chip>}
+          <span style={{ flex: 1 }} />
           {!isPersonal && (
-            <span style={{ display: 'inline-flex', gap: 8, marginLeft: 6, alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: 'var(--muted)' }}>
+              Health
               <RagDot tone={ragOf(spi)} title={spi != null ? `Schedule — SPI ${spi.toFixed(2)}` : 'Schedule — requires approved baseline'} />
               <RagDot tone={ragOf(cpi)} title={cpi != null ? `Cost — CPI ${cpi.toFixed(2)}` : 'Cost — requires approved baseline'} />
               <RagDot tone={scopeRag} title={`Scope — ${scopeNote}`} />
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, fontSize: 13, flexWrap: 'wrap' }}>
-          {project.pm?.display_name ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Av name={project.pm.display_name} />
-              <span><span className="row-desc">PM </span>{project.pm.display_name}</span>
-            </span>
-          ) : (
-            <span className="row-desc">PM unassigned</span>
+        <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginTop: 14, paddingTop: 13, borderTop: '1px solid var(--line)' }}>
+          {sponsorName && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Av name={sponsorName} tone="admin" />
+              <div><div className="klabel">Sponsor</div><div className="kval">{sponsorName}</div></div>
+            </div>
           )}
-          {sponsorName && sponsorName !== project.pm?.display_name && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Av name={sponsorName} />
-              <span><span className="row-desc">Sponsor </span>{sponsorName}</span>
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Av name={project.pm?.display_name ?? '—'} tone="it" />
+            <div><div className="klabel">Project manager</div><div className="kval">{project.pm?.display_name ?? 'Unassigned'}</div></div>
+          </div>
+          {!isPersonal && (
+            <div>
+              <div className="klabel">Department</div>
+              <div className="kval">
+                {project.department_scope.length > 0
+                  ? project.department_scope.map((d) => DEPT_COLOR[d]?.label ?? d).join(', ')
+                  : 'Cross-functional'}
+              </div>
+            </div>
           )}
-          <span className="row-desc">·</span>
-          <span>
-            {isPersonal
-              ? 'visible only to you and your team'
-              : project.department_scope.length > 0
-                ? project.department_scope.map((d) => DEPT_COLOR[d]?.label ?? d).join(', ')
-                : 'Cross-functional'}
-          </span>
-          <span className="row-desc">·</span>
-          <span className="mono">{project.planned_start ?? '—'} → {project.planned_end ?? '—'}</span>
+          <div>
+            <div className="klabel">Timeline</div>
+            <div className="kval">{fmtRange(project.planned_start, project.planned_end)}</div>
+          </div>
           {!isPersonal && (
             <>
-              <span className="row-desc">·</span>
-              <span className="mono">{charter?.estimated_budget != null ? `${charter.estimated_budget.toLocaleString()} SAR` : 'no budget'}</span>
-              <Chip tone={charter ? (charter.status === 'approved' ? 'green' : charter.status === 'rejected' ? 'red' : charter.status === 'submitted' ? 'amber' : 'muted') : 'muted'}>
-                {charter ? `charter ${charter.status}` : 'no charter'}
-              </Chip>
+              <div>
+                <div className="klabel">Budget</div>
+                <div className="kval mono">{charter?.estimated_budget != null ? `SAR ${charter.estimated_budget.toLocaleString()}` : '—'}</div>
+              </div>
+              <div>
+                <div className="klabel">Charter</div>
+                <div className="kval" style={{ color: charter?.status === 'approved' ? 'var(--green)' : charter?.status === 'rejected' ? 'var(--red)' : charter?.status === 'submitted' ? 'var(--amber)' : 'var(--muted)' }}>
+                  {charter ? charter.status[0].toUpperCase() + charter.status.slice(1) : 'None'}
+                </div>
+              </div>
             </>
           )}
-          {project.origin_type === 'converted' && <Chip tone="muted">converted from a ticket</Chip>}
         </div>
       </div>
 
@@ -626,15 +669,12 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
       )}
 
       {subview === null && isPersonal && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="card" style={{ padding: 16 }}>
-            <SectionLabel>Timeline</SectionLabel>
-            <TimelineView
-              activities={activities}
-              dependencies={dependencies}
-              onOpen={(id) => setFocusActivity(id)}
-            />
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <TimelineView
+            activities={activities}
+            dependencies={dependencies}
+            onOpen={(id) => setFocusActivity(id)}
+          />
           <WbsTree
             projectId={project.id}
             activities={activities}
@@ -654,98 +694,112 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
 
       {subview === null && !isPersonal && (
         <>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
+            <Metric label="Complete" value={`${pctComplete}%`} pct={pctComplete} />
             <Metric
-              label="% complete"
-              value={`${pctComplete}%`}
-              sub={`${leaves.filter((l) => l.status === 'done').length} of ${leaves.length} activities done`}
-            />
-            <Metric
-              label="SPI — schedule"
+              label="Schedule (SPI)"
               value={spi != null ? spi.toFixed(2) : '—'}
-              sub={spi != null
-                ? spi >= 0.95 ? 'on schedule' : spi >= 0.85 ? 'slightly behind plan' : 'behind schedule'
-                : 'requires approved baseline'}
-              title={spi != null && pvPct != null
-                ? `Earned ${pctComplete}% vs ${Math.round(pvPct * 100)}% planned by today`
-                : 'requires approved baseline'}
+              valueColor={RAG_COLOR[ragOf(spi)]}
+              sub={spi == null ? 'requires baseline' : spi >= 0.95 ? 'on track' : spi >= 0.85 ? 'watch schedule' : 'behind schedule'}
+              subColor={spi != null && spi < 0.95 ? RAG_COLOR[ragOf(spi)] : 'var(--muted)'}
+              title={spi != null && pvPct != null ? `Earned ${pctComplete}% vs ${Math.round(pvPct * 100)}% planned by today` : 'requires approved baseline'}
             />
             <Metric
-              label="CPI — cost"
+              label="Cost (CPI)"
               value={cpi != null ? cpi.toFixed(2) : '—'}
-              sub={cpi != null
-                ? cpi >= 0.95 ? 'on budget' : cpi >= 0.85 ? 'slightly over plan' : 'over budget'
-                : 'requires approved baseline'}
-              title={cpi != null && bac != null
-                ? `EV ${Math.round((pctComplete / 100) * bac).toLocaleString()} / AC ${acTotal.toLocaleString()} SAR`
-                : 'requires approved baseline'}
+              valueColor={RAG_COLOR[ragOf(cpi)]}
+              sub={cpi == null ? 'requires baseline' : cpi >= 0.95 ? 'on budget' : cpi >= 0.85 ? 'watch spend' : 'over budget'}
+              subColor={cpi != null && cpi < 0.95 ? RAG_COLOR[ragOf(cpi)] : 'var(--muted)'}
+              title={cpi != null && bac != null ? `EV ${Math.round((pctComplete / 100) * bac).toLocaleString()} / AC ${acTotal.toLocaleString()} SAR` : 'requires approved baseline'}
             />
             <Metric
-              label="Risks · issues"
-              value={`${openRisks.length} · ${openIssues.length}`}
-              sub="open risks · open issues"
+              label="Risks / issues"
+              value={<>{openRisks.length}{highRisks > 0 && <span style={{ fontSize: 12, color: 'var(--red)', fontWeight: 500 }}> ({highRisks} high)</span>}</>}
+              sub={`${openIssues.length} issue${openIssues.length === 1 ? '' : 's'} open`}
             />
           </div>
 
-          <div className="card" style={{ padding: 16, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-              <SectionLabel>Timeline</SectionLabel>
-              <span style={{ flex: 1 }} />
-              {schedBl && <Chip tone="muted">schedule baseline v{schedBl.version}</Chip>}
-              <button className="btn" style={{ padding: '2px 10px', fontSize: 12, marginLeft: 8 }} onClick={() => setSubview('baselines')}>
-                Baselines
-              </button>
-            </div>
+          <div style={{ marginBottom: 12 }}>
             <TimelineView
               activities={activities}
               dependencies={dependencies}
               baselineDates={schedBl ? baselineDates : undefined}
               onOpen={(id) => { setFocusActivity(id); setSubview('wbs') }}
+              headerExtra={
+                <button className="card-link" style={{ marginRight: 12 }} onClick={() => setSubview('baselines')}>
+                  Baselines{schedBl ? ` · v${schedBl.version}` : ''}
+                </button>
+              }
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <SectionCard label="Risks & issues" action="Open register" onAction={() => setSubview('risks')}>
-              {openRisks.slice(0, 3).map((r) => {
-                const band = scoreBand(r.score)
-                return (
-                  <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
-                    <span className="mono row-desc">R-{String(r.seq).padStart(2, '0')}</span>
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
-                    <span className="mono" style={{ fontSize: 11, padding: '1px 8px', borderRadius: 999, background: band.bg, color: band.fg }}>{r.score}</span>
-                  </div>
-                )
-              })}
-              {openRisks.length === 0 && <div className="row-desc">No open risks.</div>}
-              <div className="row-desc" style={{ marginTop: 8, fontSize: 12 }}>
-                {openRisks.length} open risks · {openIssues.length} open issues
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <SectionCard label="Risks and issues" action="Open register" onAction={() => setSubview('risks')}>
+              {(() => {
+                const rShow = openRisks.slice(0, openIssues.length > 0 ? 2 : 3)
+                const iShow = openIssues.slice(0, 3 - rShow.length)
+                const rows = [
+                  ...rShow.map((r) => ({ key: r.id, kind: 'risk' as const, r })),
+                  ...iShow.map((i) => ({ key: i.id, kind: 'issue' as const, i })),
+                ]
+                if (rows.length === 0) return <div className="row-desc">No open risks or issues.</div>
+                return rows.map((row, idx) => {
+                  const last = idx === rows.length - 1
+                  if (row.kind === 'risk') {
+                    const r = row.r
+                    const chip = r.score >= 15
+                      ? { bg: 'var(--red)', fg: '#fff' }
+                      : r.score >= 5 ? { bg: 'var(--amber-soft)', fg: 'var(--amber)' } : { bg: 'var(--green-soft)', fg: 'var(--green)' }
+                    return (
+                      <div key={row.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
+                        <span className="chip mono" style={{ background: chip.bg, color: chip.fg, fontSize: 10, borderRadius: 6 }}>{r.score}</span>
+                        <span style={{ fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: r.score >= 15 ? 500 : 400, color: r.type === 'opportunity' ? 'var(--green)' : r.score >= 15 ? 'var(--ink)' : 'var(--text)' }}>
+                          {r.title}{r.type === 'opportunity' ? ' ↗' : ''}
+                        </span>
+                        <span className="mono" style={{ fontSize: 10.5, color: 'var(--muted)' }}>R-{String(r.seq).padStart(2, '0')}</span>
+                      </div>
+                    )
+                  }
+                  const i = row.i
+                  return (
+                    <div key={row.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
+                      <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)', fontSize: 10, borderRadius: 6 }}>ISSUE</span>
+                      <span style={{ fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>{i.title}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--muted)' }}>I-{String(i.seq).padStart(2, '0')}</span>
+                    </div>
+                  )
+                })
+              })()}
             </SectionCard>
 
             <SectionCard label="Budget" action="Open budget" onAction={() => setSubview('budget')}>
-              <div className="mono" style={{ fontSize: 13 }}>
-                {acTotal.toLocaleString()} / {bac != null ? bac.toLocaleString() : '—'} SAR committed
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
+                <span>Committed</span>
+                <span className="mono" style={{ color: 'var(--ink)', fontWeight: 500 }}>SAR {acTotal.toLocaleString()}</span>
               </div>
-              <div style={{ position: 'relative', height: 10, borderRadius: 5, background: 'var(--line)', margin: '10px 0' }}>
-                <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: `${acPct}%`, borderRadius: 5, background: 'var(--it)' }} />
-                <div title={`${pctComplete}% complete`} style={{ position: 'absolute', top: -3, bottom: -3, left: `${Math.min(100, pctComplete)}%`, width: 2, background: 'var(--accent)' }} />
+              <div style={{ height: 9, background: 'var(--surface)', borderRadius: 999, margin: '7px 0' }}>
+                <div style={{ height: 9, width: `${acPct}%`, background: 'var(--amber)', borderRadius: 999 }} />
               </div>
-              <div className="row-desc" style={{ fontSize: 12 }}>
-                {acPct}% committed vs {pctComplete}% complete — {cpiWords}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--muted)' }}>
+                <span>{acPct}% of {bac != null ? `SAR ${bac.toLocaleString()}` : '—'}</span>
+                <span>{pctComplete}% work done</span>
+              </div>
+              <div style={{ fontSize: 11.5, marginTop: 8, fontWeight: 500, color: cpi == null ? 'var(--muted)' : RAG_COLOR[ragOf(cpi)] }}>
+                {cpi == null ? cpiWords : `${cpiWords} — CPI ${cpi.toFixed(2)}`}
               </div>
             </SectionCard>
 
             <SectionCard label="Work breakdown" action="Open full WBS" onAction={() => setSubview('wbs')}>
               {topLevel.slice(0, 5).map((t) => {
                 const p = pctOf(t.id)
+                const kids = activities.filter((a) => a.parent_wbs_id === t.id).length
                 return (
-                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid var(--line)', fontSize: 13 }}>
-                    <span className="mono row-desc">{t.code}</span>
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                    <span style={{ width: 70, height: 6, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
-                      <span style={{ display: 'block', width: `${p}%`, height: '100%', background: p === 100 ? 'var(--green)' : 'var(--it)' }} />
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+                    <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>{t.code}</span>
+                    <span style={{ fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.title}{kids > 0 ? ` (${kids} activit${kids === 1 ? 'y' : 'ies'})` : ''}
                     </span>
-                    <span className="mono" style={{ fontSize: 12, width: 38, textAlign: 'right' }}>{p}%</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: p === 100 ? 'var(--green)' : p > 0 ? 'var(--text)' : 'var(--muted)' }}>{p}%</span>
                   </div>
                 )
               })}
@@ -753,17 +807,18 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
             </SectionCard>
 
             <SectionCard label="Latest activity">
-              {audit.slice(0, 5).map((e) => (
-                <div key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '5px 0', borderTop: '1px solid var(--line)', fontSize: 12 }}>
-                  <span className="mono row-desc" style={{ minWidth: 78 }}>{new Date(e.created_at).toLocaleDateString()}</span>
-                  <Chip tone={e.action === 'revoked' || e.action === 'corrected' ? 'red' : 'muted'} style={{ fontSize: 10 }}>{e.area} {e.action}</Chip>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {e.actor?.display_name ?? '—'}
-                    {e.area === 'status' && ` · ${e.detail.from} → ${e.detail.to}`}
-                    {e.detail.type && ` · ${e.detail.type} v${e.detail.version}`}
-                  </span>
-                </div>
-              ))}
+              {audit.slice(0, 5).map((e, idx) => {
+                const last = idx === Math.min(5, audit.length) - 1
+                const detail = e.area === 'status' && e.detail.from
+                  ? ` ${e.detail.from} → ${e.detail.to}`
+                  : e.detail.type ? ` ${e.detail.type} v${e.detail.version}` : ''
+                return (
+                  <div key={e.id} style={{ fontSize: 12, color: 'var(--text)', padding: '5px 0', borderBottom: last ? 'none' : '1px solid var(--line)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {e.actor?.display_name ? `${e.actor.display_name} — ` : ''}{cap(e.area)} {e.action}{detail}
+                    <span style={{ color: 'var(--muted)' }}> · {ago(e.created_at)}</span>
+                  </div>
+                )
+              })}
               {audit.length === 0 && <div className="row-desc">No audited events yet.</div>}
             </SectionCard>
 
@@ -776,11 +831,11 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
                     </Chip>
                     {charters.length > 1 && <Chip tone="muted">{charters.length} versions</Chip>}
                     <span style={{ flex: 1 }} />
-                    <span className="mono" style={{ fontSize: 12 }}>
-                      {charter.estimated_budget != null ? `${charter.estimated_budget.toLocaleString()} SAR` : ''}
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      {charter.estimated_budget != null ? `SAR ${charter.estimated_budget.toLocaleString()}` : ''}
                     </span>
                   </div>
-                  <div style={{ fontSize: 13, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {charter.objective}
                   </div>
                 </>
@@ -794,7 +849,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
                 {team.slice(0, 10).map((t) => t.member && <Av key={t.id} name={t.member.display_name} />)}
                 {team.length === 0
                   ? <span className="row-desc">No one assigned yet.</span>
-                  : <span className="row-desc" style={{ marginLeft: 6 }}>{team.length} member{team.length === 1 ? '' : 's'}</span>}
+                  : <span className="klabel" style={{ marginLeft: 6 }}>{team.length} member{team.length === 1 ? '' : 's'}</span>}
               </div>
             </SectionCard>
           </div>
