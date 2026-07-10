@@ -114,7 +114,7 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
   }
 
   const labelW = 210
-  const chartW = 760
+  const chartW = 900
   const rowH = 32
   const headH = 26
   const W = labelW + chartW
@@ -163,7 +163,7 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 700, fontFamily: 'inherit' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} style={{ maxWidth: '100%', height: 'auto', minWidth: 700, fontFamily: 'inherit' }}>
           <line x1={0} y1={headH} x2={W} y2={headH} stroke="var(--line)" strokeWidth={1} />
           {ticks.map((t, i) => (
             <text key={i} x={t.x + 3} y={headH - 8} fontSize={10.5} fill="var(--muted)">{t.label}</text>
