@@ -20,6 +20,7 @@ interface Detail {
   created_at: string
   sla_response_due: string | null
   sla_resolution_due: string | null
+  sla_paused_at: string | null
   service: { code: string; name: string; form_schema: FormField[] } | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
@@ -173,7 +174,7 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
               {req.assignee ? ` · assigned to ${req.assignee.display_name}` : ' · unassigned'}
             </div>
           </div>
-          <SlaRing createdAt={req.created_at} due={req.sla_resolution_due} />
+          <SlaRing createdAt={req.created_at} due={req.sla_resolution_due} pausedAt={req.sla_paused_at} />
           <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
             {req.priority}
           </span>
