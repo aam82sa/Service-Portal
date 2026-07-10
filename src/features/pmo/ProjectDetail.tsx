@@ -114,11 +114,26 @@ function RagDot({ tone, title }: { tone: string; title: string }) {
   return (
     <span
       title={title}
-      style={{
-        width: 11, height: 11, borderRadius: '50%', display: 'inline-block',
-        background: RAG_COLOR[tone], boxShadow: `0 0 0 3px ${RAG_SOFT[tone]}`,
-      }}
+      style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', background: RAG_COLOR[tone] }}
     />
+  )
+}
+
+const SEC_ICONS: Record<string, string> = {
+  gantt: 'M4 5h9M4 10h14M4 15h6',
+  risk: 'M12 3 2.5 20h19zM12 10v4M12 17.2v.1',
+  budget: 'M3 7h15a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7V6a2 2 0 0 1 2-2h11M17 12.5v.1',
+  wbs: 'M4 5h7M8 5v14M8 11h6M8 18h6M17 10h3M17 17h3',
+  activity: 'M3 12h4l3 7 4-14 3 7h4',
+  charter: 'M6 3h9l4 4v14H6zM14 3v4h4M9 12h7M9 16h7',
+  team: 'M8 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20a5 5 0 0 1 10 0M16 5a3 3 0 0 1 0 6M15 20a5 5 0 0 1 5-2',
+}
+function SecIcon({ name }: { name: string }) {
+  return (
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth={1.7}
+      strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+      <path d={SEC_ICONS[name]} />
+    </svg>
   )
 }
 
@@ -136,7 +151,7 @@ function Av({ name, tone = 'it' }: { name: string; tone?: 'it' | 'admin' }) {
       style={{
         width: 28, height: 28, borderRadius: '50%', background: t.bg, color: t.fg,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 10.5, fontWeight: 600, flexShrink: 0,
+        fontSize: 10.5, fontWeight: 500, flexShrink: 0,
       }}
     >
       {initials}
@@ -154,34 +169,36 @@ function Metric({ label, value, valueColor, sub, subColor, pct, title }: {
   title?: string
 }) {
   return (
-    <div className="card" style={{ padding: '12px 15px', minWidth: 0 }} title={title}>
+    <div className="card pmo-card" style={{ borderRadius: 10, padding: '12px 14px', minWidth: 0 }} title={title}>
       <div className="klabel">{label}</div>
-      <div style={{ fontFamily: 'var(--font-head)', fontSize: 21, fontWeight: 600, color: valueColor ?? 'var(--ink)', marginTop: 2 }}>
+      <div style={{ fontSize: 20, fontWeight: 500, color: valueColor ?? 'var(--ink)', marginTop: 2 }}>
         {value}
       </div>
       {pct != null ? (
-        <div style={{ height: 4, background: 'var(--surface)', borderRadius: 999, marginTop: 7 }}>
+        <div style={{ height: 4, background: 'var(--surface)', borderRadius: 999, marginTop: 6 }}>
           <div style={{ height: 4, width: `${Math.min(100, Math.max(0, pct))}%`, background: 'var(--it)', borderRadius: 999 }} />
         </div>
       ) : sub ? (
-        <div style={{ fontSize: 10.5, color: subColor ?? 'var(--muted)', marginTop: 5 }}>{sub}</div>
+        <div style={{ fontSize: 10.5, color: subColor ?? 'var(--muted)', marginTop: 4 }}>{sub}</div>
       ) : null}
     </div>
   )
 }
 
-function SectionCard({ label, action, onAction, children }: {
+function SectionCard({ label, icon, action, onAction, children }: {
   label: string
+  icon: string
   action?: string
   onAction?: () => void
   children: React.ReactNode
 }) {
   return (
-    <div className="card" style={{ padding: '14px 17px', minWidth: 0 }}>
-      <div className="sechead">
+    <div className="card pmo-card" style={{ padding: '14px 16px', minWidth: 0 }}>
+      <div className="sechead" style={{ marginBottom: 8 }}>
+        <SecIcon name={icon} />
         {label}
         <span style={{ flex: 1 }} />
-        {onAction && <button className="card-link" onClick={onAction}>{action} →</button>}
+        {onAction && <button className="card-link" onClick={onAction}>{action}</button>}
       </div>
       {children}
     </div>
@@ -522,18 +539,18 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
   return (
     <>
       <button className="btn" onClick={onBack} style={{ marginBottom: 14 }}>← Projects</button>
-      <div className="card" style={{ padding: '16px 20px', marginBottom: 12 }}>
+      <div className="card pmo-card" style={{ padding: '16px 18px', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span className="mono" style={{ fontSize: 12, background: 'var(--it-soft)', color: 'var(--it)', borderRadius: 7, padding: '4px 9px', fontWeight: 500 }}>
+          <span className="mono" style={{ fontSize: 12, background: 'var(--it-soft)', color: 'var(--it)', borderRadius: 6, padding: '4px 8px' }}>
             {project.code}
           </span>
-          <span style={{ fontFamily: 'var(--font-head)', fontSize: 17, fontWeight: 600, color: 'var(--ink)' }}>{project.name}</span>
+          <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--ink)' }}>{project.name}</span>
           {isPersonal && <Chip tone="it">Personal tracker</Chip>}
           <Chip tone={meta.tone}>{meta.label}</Chip>
           {project.origin_type === 'converted' && <Chip tone="muted">converted from a ticket</Chip>}
           <span style={{ flex: 1 }} />
           {!isPersonal && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: 'var(--muted)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
               Health
               <RagDot tone={ragOf(spi)} title={spi != null ? `Schedule — SPI ${spi.toFixed(2)}` : 'Schedule — requires approved baseline'} />
               <RagDot tone={ragOf(cpi)} title={cpi != null ? `Cost — CPI ${cpi.toFixed(2)}` : 'Cost — requires approved baseline'} />
@@ -541,8 +558,8 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginTop: 14, paddingTop: 13, borderTop: '1px solid var(--line)' }}>
-          {sponsorName && (
+        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--line)' }}>
+          {sponsorName && sponsorName !== project.pm?.display_name && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Av name={sponsorName} tone="admin" />
               <div><div className="klabel">Sponsor</div><div className="kval">{sponsorName}</div></div>
@@ -734,7 +751,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <SectionCard label="Risks and issues" action="Open register" onAction={() => setSubview('risks')}>
+            <SectionCard label="Risks and issues" icon="risk" action="Open register" onAction={() => setSubview('risks')}>
               {(() => {
                 const rShow = openRisks.slice(0, openIssues.length > 0 ? 2 : 3)
                 const iShow = openIssues.slice(0, 3 - rShow.length)
@@ -747,13 +764,15 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
                   const last = idx === rows.length - 1
                   if (row.kind === 'risk') {
                     const r = row.r
-                    const chip = r.score >= 15
-                      ? { bg: 'var(--red)', fg: '#fff' }
-                      : r.score >= 5 ? { bg: 'var(--amber-soft)', fg: 'var(--amber)' } : { bg: 'var(--green-soft)', fg: 'var(--green)' }
+                    const tag = r.type === 'opportunity'
+                      ? { label: 'OPP', bg: 'var(--green-soft)', fg: 'var(--green)' }
+                      : r.score >= 15 ? { label: 'HIGH', bg: 'var(--red-soft)', fg: 'var(--red)' }
+                      : r.score >= 5 ? { label: 'MED', bg: 'var(--amber-soft)', fg: 'var(--amber)' }
+                      : { label: 'LOW', bg: 'var(--green-soft)', fg: 'var(--green)' }
                     return (
-                      <div key={row.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
-                        <span className="chip mono" style={{ background: chip.bg, color: chip.fg, fontSize: 10, borderRadius: 6 }}>{r.score}</span>
-                        <span style={{ fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: r.score >= 15 ? 500 : 400, color: r.type === 'opportunity' ? 'var(--green)' : r.score >= 15 ? 'var(--ink)' : 'var(--text)' }}>
+                      <div key={row.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: last ? 'none' : '0.5px solid var(--line)' }}>
+                        <span style={{ fontSize: 10, fontWeight: 500, background: tag.bg, color: tag.fg, borderRadius: 5, padding: '2px 7px' }}>{tag.label}</span>
+                        <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: r.type === 'opportunity' ? 'var(--green)' : 'var(--text)' }}>
                           {r.title}{r.type === 'opportunity' ? ' ↗' : ''}
                         </span>
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--muted)' }}>R-{String(r.seq).padStart(2, '0')}</span>
@@ -762,9 +781,9 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
                   }
                   const i = row.i
                   return (
-                    <div key={row.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: last ? 'none' : '1px solid var(--line)' }}>
-                      <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)', fontSize: 10, borderRadius: 6 }}>ISSUE</span>
-                      <span style={{ fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>{i.title}</span>
+                    <div key={row.key} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: last ? 'none' : '0.5px solid var(--line)' }}>
+                      <span style={{ fontSize: 10, fontWeight: 500, background: 'var(--red-soft)', color: 'var(--red)', borderRadius: 5, padding: '2px 7px' }}>ISSUE</span>
+                      <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text)' }}>{i.title}</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--muted)' }}>I-{String(i.seq).padStart(2, '0')}</span>
                     </div>
                   )
@@ -772,48 +791,48 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               })()}
             </SectionCard>
 
-            <SectionCard label="Budget" action="Open budget" onAction={() => setSubview('budget')}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
+            <SectionCard label="Budget" icon="budget" action="Open budget" onAction={() => setSubview('budget')}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--ink-3)' }}>
                 <span>Committed</span>
-                <span className="mono" style={{ color: 'var(--ink)', fontWeight: 500 }}>SAR {acTotal.toLocaleString()}</span>
+                <span className="mono" style={{ color: 'var(--ink)' }}>SAR {acTotal.toLocaleString()}</span>
               </div>
-              <div style={{ height: 9, background: 'var(--surface)', borderRadius: 999, margin: '7px 0' }}>
-                <div style={{ height: 9, width: `${acPct}%`, background: 'var(--amber)', borderRadius: 999 }} />
+              <div style={{ height: 8, background: 'var(--surface)', borderRadius: 999, margin: '6px 0' }}>
+                <div style={{ height: 8, width: `${acPct}%`, background: 'var(--amber)', borderRadius: 999 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--muted)' }}>
                 <span>{acPct}% of {bac != null ? `SAR ${bac.toLocaleString()}` : '—'}</span>
                 <span>{pctComplete}% work done</span>
               </div>
-              <div style={{ fontSize: 11.5, marginTop: 8, fontWeight: 500, color: cpi == null ? 'var(--muted)' : RAG_COLOR[ragOf(cpi)] }}>
+              <div style={{ fontSize: 11, marginTop: 6, color: cpi == null ? 'var(--muted)' : RAG_COLOR[ragOf(cpi)] }}>
                 {cpi == null ? cpiWords : `${cpiWords} — CPI ${cpi.toFixed(2)}`}
               </div>
             </SectionCard>
 
-            <SectionCard label="Work breakdown" action="Open full WBS" onAction={() => setSubview('wbs')}>
+            <SectionCard label="Work breakdown" icon="wbs" action="Open full WBS" onAction={() => setSubview('wbs')}>
               {topLevel.slice(0, 5).map((t) => {
                 const p = pctOf(t.id)
                 const kids = activities.filter((a) => a.parent_wbs_id === t.id).length
                 return (
                   <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
                     <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>{t.code}</span>
-                    <span style={{ fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {t.title}{kids > 0 ? ` (${kids} activit${kids === 1 ? 'y' : 'ies'})` : ''}
                     </span>
-                    <span style={{ fontSize: 10.5, fontWeight: 600, color: p === 100 ? 'var(--green)' : p > 0 ? 'var(--text)' : 'var(--muted)' }}>{p}%</span>
+                    <span style={{ fontSize: 10.5, color: p === 100 ? 'var(--green)' : p > 0 ? 'var(--ink-3)' : 'var(--muted)' }}>{p}%</span>
                   </div>
                 )
               })}
               {topLevel.length === 0 && <div className="row-desc">No WBS yet.</div>}
             </SectionCard>
 
-            <SectionCard label="Latest activity">
+            <SectionCard label="Latest activity" icon="activity">
               {audit.slice(0, 5).map((e, idx) => {
                 const last = idx === Math.min(5, audit.length) - 1
                 const detail = e.area === 'status' && e.detail.from
                   ? ` ${e.detail.from} → ${e.detail.to}`
                   : e.detail.type ? ` ${e.detail.type} v${e.detail.version}` : ''
                 return (
-                  <div key={e.id} style={{ fontSize: 12, color: 'var(--text)', padding: '5px 0', borderBottom: last ? 'none' : '1px solid var(--line)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div key={e.id} style={{ fontSize: 11.5, color: 'var(--ink-3)', padding: '5px 0', borderBottom: last ? 'none' : '0.5px solid var(--line)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {e.actor?.display_name ? `${e.actor.display_name} — ` : ''}{cap(e.area)} {e.action}{detail}
                     <span style={{ color: 'var(--muted)' }}> · {ago(e.created_at)}</span>
                   </div>
@@ -822,7 +841,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               {audit.length === 0 && <div className="row-desc">No audited events yet.</div>}
             </SectionCard>
 
-            <SectionCard label="Charter" action="Open charter" onAction={() => setSubview('charter')}>
+            <SectionCard label="Charter" icon="charter" action="Open charter" onAction={() => setSubview('charter')}>
               {charter ? (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -844,7 +863,7 @@ export function ProjectDetail({ projectId, onBack }: { projectId: string; onBack
               )}
             </SectionCard>
 
-            <SectionCard label="Team" action="Manage" onAction={() => setSubview('team')}>
+            <SectionCard label="Team" icon="team" action="Manage" onAction={() => setSubview('team')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {team.slice(0, 10).map((t) => t.member && <Av key={t.id} name={t.member.display_name} />)}
                 {team.length === 0
