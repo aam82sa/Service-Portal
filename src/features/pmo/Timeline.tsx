@@ -113,9 +113,9 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
     return <div className="card" style={{ padding: 18 }}><div className="row-desc">Add WBS activities with dates to see the timeline.</div></div>
   }
 
-  const labelW = 210
+  const labelW = 200
   const chartW = 900
-  const rowH = 32
+  const rowH = 30
   const headH = 26
   const W = labelW + chartW
   const H = headH + rows.length * rowH + 8
@@ -147,19 +147,19 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
   }
 
   const fmt = (t: number) => new Date(t).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
-  const barH = 12
+  const barH = 10
   const barY = (i: number) => headH + i * rowH + (rowH - barH) / 2
 
   return (
-    <div className="card" style={{ padding: 18 }}>
-      <div className="sechead" style={{ marginBottom: 8 }}>
+    <div className="card pmo-card" style={{ padding: '14px 16px' }}>
+      <div className="sechead" style={{ marginBottom: 10 }}>
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth={1.7}
+          strokeLinecap="round" aria-hidden="true"><path d="M4 5h9M4 10h14M4 15h6" /></svg>
         Timeline
         <span style={{ flex: 1 }} />
         {headerExtra}
-        <span style={{ display: 'flex', gap: 12, fontSize: 10.5, color: 'var(--muted)', alignItems: 'center', fontFamily: 'var(--font-body)', fontWeight: 400 }}>
-          <span style={{ color: 'var(--accent)' }}>━</span> critical path
-          <span>◆ milestone</span>
-          {baselineDates && Object.keys(baselineDates).length > 0 && <span>▭ baseline</span>}
+        <span style={{ fontSize: 10.5, color: 'var(--muted)', fontWeight: 400 }}>
+          <span style={{ color: 'var(--accent)' }}>—</span> critical path · ◆ milestone · ░ baseline
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
@@ -175,8 +175,8 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
             const isCrit = critical.has(r.a.id)
             const dated = r.start !== null && r.end !== null
             const dim = hover !== null && !connected.has(r.a.id)
-            const base = isCrit ? 'var(--accent-soft)' : 'var(--it-soft)'
-            const fill = isCrit ? 'var(--accent)' : 'var(--it)'
+            const remainder = isCrit ? '#993C1D' : 'var(--it)'
+            const progress = isCrit ? '#D85A30' : 'var(--green)'
             const bl = baselineDates?.[r.a.id]
             const topLevel = r.a.level === 1
             const tip = `${r.a.code} ${r.a.title}\n${dated ? `${fmt(r.start!)} → ${fmt(r.end!)}` : 'no dates'} · ${meta.pct}% complete${isCrit ? ' · critical path' : ''}`
@@ -186,25 +186,24 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
                  onClick={onOpen ? () => onOpen(r.a.id) : undefined}
                  onMouseEnter={() => setHover(r.a.id)} onMouseLeave={() => setHover(null)}
                  style={onOpen ? { cursor: 'pointer' } : undefined}>
-                {r.summary && <rect x={0} y={y} width={W} height={rowH} fill="var(--surface)" rx={7} />}
-                {hover === r.a.id && !r.summary && <rect x={0} y={y} width={W} height={rowH} fill={base} opacity={0.5} />}
+                {r.summary && <rect x={0} y={y} width={W} height={rowH} fill="var(--surface)" rx={6} />}
+                {hover === r.a.id && !r.summary && <rect x={0} y={y} width={W} height={rowH} fill="var(--it-soft)" opacity={0.5} />}
                 <rect x={0} y={y} width={W} height={rowH} fill="transparent"><title>{tip}</title></rect>
                 <text x={8 + (r.a.level - 1) * 14} y={y + rowH / 2 + 3.5}
-                  fontSize={12} fontWeight={topLevel ? 600 : 400}
-                  fontFamily={topLevel ? 'var(--font-head)' : 'var(--font-body)'} fill="var(--ink)">
-                  <tspan fill="var(--muted)" fontFamily="var(--font-mono, monospace)" fontSize={10.5}>{r.a.code}</tspan>
-                  {'  ' + (r.a.title.length > 22 ? r.a.title.slice(0, 21) + '…' : r.a.title)}
+                  fontSize={11.5} fontWeight={topLevel ? 500 : 400} fill="var(--ink)">
+                  <tspan fill="var(--muted)" fontFamily="var(--font-mono, monospace)" fontSize={10}>{r.a.code}</tspan>
+                  {'  ' + (r.a.title.length > 24 ? r.a.title.slice(0, 23) + '…' : r.a.title)}
                 </text>
 
                 {bl && !r.a.is_milestone && (
-                  <rect x={X(parse(bl.start))} y={barY(i)}
-                    width={Math.max(3, X(parse(bl.end) + DAY) - X(parse(bl.start)))} height={barH}
-                    rx={6} fill="none" stroke="#AEB6C6" strokeWidth={1.5} strokeDasharray="3 2" />
+                  <rect x={X(parse(bl.start))} y={barY(i) + barH + 1}
+                    width={Math.max(3, X(parse(bl.end) + DAY) - X(parse(bl.start)))} height={3}
+                    rx={1.5} fill="#C9CFDB" />
                 )}
 
                 {dated && r.a.is_milestone ? (
                   <g>
-                    <rect x={X(r.start!) - 6} y={y + rowH / 2 - 6} width={12} height={12} rx={2.5}
+                    <rect x={X(r.start!) - 6} y={y + rowH / 2 - 6} width={12} height={12} rx={2}
                       fill={isCrit ? 'var(--red)' : 'var(--amber)'}
                       transform={`rotate(45 ${X(r.start!)} ${y + rowH / 2})`} />
                     <text x={X(r.start!) + 12} y={y + rowH / 2 + 3.5} fontSize={10} fill="var(--muted)"
@@ -212,12 +211,11 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
                   </g>
                 ) : dated ? (
                   <g>
-                    <rect x={X(r.start!)} y={barY(i)} width={barW} height={barH}
-                      rx={6} fill={base} stroke={fill} strokeWidth={1} />
+                    <rect x={X(r.start!)} y={barY(i)} width={barW} height={barH} rx={5} fill={remainder} />
                     {meta.pct > 0 && (
                       <rect x={X(r.start!)} y={barY(i)}
                         width={Math.max(3, barW * (meta.pct / 100))}
-                        height={barH} rx={6} fill={fill} />
+                        height={barH} rx={5} fill={progress} />
                     )}
                   </g>
                 ) : (
@@ -249,10 +247,10 @@ export function TimelineView({ activities, dependencies, baselineDates, onOpen, 
             )
           })}
 
-          <line x1={tx} y1={headH} x2={tx} y2={H} stroke="var(--red)" strokeWidth={2} opacity={0.75} />
+          <line x1={tx} y1={headH} x2={tx} y2={H} stroke="var(--red)" strokeWidth={2} opacity={0.7} />
           <g>
-            <rect x={tx - 18} y={headH - 15} width={36} height={14} rx={4} fill="var(--red-soft)" />
-            <text x={tx} y={headH - 5} fontSize={9.5} fill="var(--red)" textAnchor="middle" fontWeight={600}>today</text>
+            <rect x={tx - 17} y={headH - 15} width={34} height={13} rx={4} fill="var(--red-soft)" />
+            <text x={tx} y={headH - 5.5} fontSize={9.5} fill="var(--red)" textAnchor="middle">today</text>
           </g>
         </svg>
       </div>
