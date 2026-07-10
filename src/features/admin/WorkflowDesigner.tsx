@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type Service } from '../../lib/types'
+import {
+  validateWorkflow,
+  type WorkflowGraph,
+  type WorkflowStatus,
+  type WorkflowStepDef,
+  type WorkflowTransition,
+} from '../../lib/workflowValidate'
 
-type Status =
-  | 'new' | 'triaged' | 'in_progress' | 'pending_approval' | 'pending_requester'
-  | 'escalated' | 'resolved' | 'closed' | 'cancelled'
+type Status = WorkflowStatus
 
 const STATUSES: Status[] = [
   'new', 'triaged', 'in_progress', 'pending_approval', 'pending_requester',
@@ -24,9 +29,9 @@ const TRIGGER_CATALOG = [
   'ack email', 'start SLA', 'pause SLA', 'auto-assign', 'DoA chain', 'notify team lead', 'CSAT survey',
 ]
 
-interface Transition { from: Status; to: Status }
-interface StepDef { id: Status; triggers: string[] }
-interface Graph { steps: StepDef[]; transitions: Transition[] }
+type Transition = WorkflowTransition
+type StepDef = WorkflowStepDef
+type Graph = WorkflowGraph
 
 const DEFAULT_TRANSITIONS: Transition[] = [
   { from: 'new', to: 'triaged' }, { from: 'new', to: 'cancelled' },
@@ -139,27 +144,7 @@ export function WorkflowDesigner() {
   }
 
   const validate = (): string[] => {
-    const errs: string[] = []
-    if (!graph.transitions.some((t) => t.from === 'new')) {
-      errs.push('There is no transition out of New.')
-    }
-    const reachable = new Set<Status>(['new'])
-    let grew = true
-    while (grew) {
-      grew = false
-      for (const t of graph.transitions) {
-        if (reachable.has(t.from) && !reachable.has(t.to)) {
-          reachable.add(t.to)
-          grew = true
-        }
-      }
-    }
-    if (!reachable.has('closed')) errs.push('Closed is not reachable from New.')
-    if (service?.requires_approval) {
-      if (!has('in_progress', 'pending_approval') || !has('pending_approval', 'in_progress')) {
-        errs.push('This service requires approval — the Pending approval step cannot be removed.')
-      }
-    }
+    const errs = validateWorkflow(graph, { requiresApproval: service?.requires_approval })
     setProblems(errs)
     return errs
   }
