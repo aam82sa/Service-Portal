@@ -1,0 +1,5 @@
+# Function config — send-notification is protected by the X-Hook-Secret
+# shared secret (HOOK_SECRET), not JWT: Database Webhooks post without a user
+# token. Deploy: supabase functions deploy send-notification
+[functions.send-notification]
+verify_jwt = false
