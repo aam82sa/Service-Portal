@@ -13,6 +13,7 @@ interface WorkRow {
   priority: string
   created_at: string
   sla_resolution_due: string | null
+  sla_paused_at: string | null
 }
 
 function Section({
@@ -44,7 +45,7 @@ function Section({
               <span style={{ width: 4, alignSelf: 'stretch', background: c.rail, borderRadius: 2 }} />
               <span className="mono" style={{ fontSize: 12, width: 84 }}>{r.ref}</span>
               <span className="row-title" style={{ flex: 1 }}>{r.title}</span>
-              <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} />
+              <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} pausedAt={r.sla_paused_at} />
               <span className="chip" style={{ background: c.soft, color: c.rail }}>
                 {r.status.replace('_', ' ')}
               </span>
@@ -65,7 +66,7 @@ export function MyWork({ onOpen }: { onOpen: (id: string) => void }) {
 
   useEffect(() => {
     const uid = session!.user.id
-    const cols = 'id, ref, title, dept, status, priority, created_at, sla_resolution_due'
+    const cols = 'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at'
     supabase
       .from('requests').select(cols)
       .eq('assignee_id', uid).not('status', 'in', '(closed,cancelled)').order('created_at')

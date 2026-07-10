@@ -12,6 +12,7 @@ interface QueueRow {
   priority: string
   created_at: string
   sla_resolution_due: string | null
+  sla_paused_at: string | null
   assignee_id: string | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
@@ -27,28 +28,35 @@ const NEXT_ACTIONS: Record<string, { label: string; to: string; primary?: boolea
   resolved: [{ label: 'Close', to: 'closed', primary: true }],
 }
 
-export function SlaRing({ createdAt, due }: { createdAt: string; due: string | null }) {
+export function SlaRing({ createdAt, due, pausedAt }: {
+  createdAt: string
+  due: string | null
+  pausedAt?: string | null
+}) {
   if (!due) return null
+  // paused (pending requester): the clock freezes at the pause instant
+  const ref = pausedAt ? new Date(pausedAt).getTime() : Date.now()
   const total = new Date(due).getTime() - new Date(createdAt).getTime()
-  const left = new Date(due).getTime() - Date.now()
+  const left = new Date(due).getTime() - ref
   const frac = Math.max(0, Math.min(1, left / total))
-  const color = left <= 0 ? 'var(--red)' : frac < 0.2 ? 'var(--amber)' : 'var(--green)'
+  const color = pausedAt ? 'var(--muted)' : left <= 0 ? 'var(--red)' : frac < 0.2 ? 'var(--amber)' : 'var(--green)'
   const r = 9
   const circ = 2 * Math.PI * r
   const hoursLeft = Math.round(left / 3600000)
   return (
-    <span title={left <= 0 ? 'SLA breached' : `${hoursLeft}h to SLA target`}
+    <span
+      title={pausedAt ? 'SLA paused — waiting on the requester' : left <= 0 ? 'SLA breached' : `${hoursLeft}h to SLA target`}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r={r} fill="none" stroke="var(--line)" strokeWidth="3" />
         <circle
           cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="3"
-          strokeDasharray={`${circ * frac} ${circ}`}
+          strokeDasharray={pausedAt ? '2 3' : `${circ * frac} ${circ}`}
           strokeLinecap="round" transform="rotate(-90 12 12)"
         />
       </svg>
       <span className="mono" style={{ fontSize: 10.5, color }}>
-        {left <= 0 ? 'breached' : `${hoursLeft}h`}
+        {pausedAt ? 'paused' : left <= 0 ? 'breached' : `${hoursLeft}h`}
       </span>
     </span>
   )
@@ -64,7 +72,7 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
     supabase
       .from('requests')
       .select(
-        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, assignee_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
+        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, assignee_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
       )
       .not('status', 'in', '(closed,cancelled)')
       .order('created_at')
@@ -111,7 +119,7 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
                   {r.assignee ? `assigned to ${r.assignee.display_name}` : 'unassigned'}
                 </div>
               </div>
-              <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} />
+              <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} pausedAt={r.sla_paused_at} />
               <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
                 {r.priority}
               </span>
