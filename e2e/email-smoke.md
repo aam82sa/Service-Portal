@@ -31,9 +31,12 @@ read from **Vault** at send time — store it once in the SQL editor:
 select vault.create_secret('<HOOK_SECRET value>', 'hook_secret');
 ```
 
-Use the same value as the function's `HOOK_SECRET` secret. Stacks without the
-Vault entry (fresh local/CI resets) skip dispatch silently. No dashboard
-webhook is needed — remove any previously-created one to avoid double sends.
+Use the same value as the function's `HOOK_SECRET` secret. This is a
+**once-per-environment** step — hosted Vault cannot be seeded by migrations
+(secrets must never live in the repo). Stacks without the Vault entry (fresh
+local/CI resets) skip dispatch silently. No dashboard webhook is needed —
+remove any previously-created one to avoid double sends. Full sequence:
+`docs/deploy-runbook.md`.
 
 ## 3. Sanity checks
 

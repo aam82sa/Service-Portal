@@ -3,12 +3,14 @@
 -- dashboard-configured Database Webhook so the wiring lives in the repo.
 --
 -- The X-Hook-Secret value is read from Vault at send time and is NOT stored
--- in this file (this repo is public). Configure it once in the SQL editor:
+-- in this file (this repo is public). REQUIRED SETUP — ONCE PER ENVIRONMENT
+-- (Vault contents cannot be seeded by migrations); run in the SQL editor:
 --
 --   select vault.create_secret('<HOOK_SECRET value>', 'hook_secret');
 --
--- Stacks without the secret (fresh local/CI resets) skip silently, so no
--- test traffic ever reaches the hosted function.
+-- Use the same value as the function's HOOK_SECRET secret. See
+-- docs/deploy-runbook.md §3. Stacks without the secret (fresh local/CI
+-- resets) skip silently, so no test traffic ever reaches the hosted function.
 
 do $$ begin
   create extension if not exists pg_net;
