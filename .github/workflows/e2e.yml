@@ -33,6 +33,15 @@ jobs:
           } > .env.local
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Supabase diagnostics on failure
+        if: failure()
+        run: |
+          supabase status || true
+          docker ps -a || true
+          for c in $(docker ps -aq --filter "name=supabase"); do
+            echo "===== logs: $(docker inspect --format '{{.Name}}' "$c") ====="
+            docker logs --tail 200 "$c" 2>&1 || true
+          done
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
