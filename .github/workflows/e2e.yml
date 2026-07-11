@@ -5,8 +5,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * *'
-  push:
-    branches: [e2e-run]  # temporary: iterate the job where the integration cannot dispatch
 
 jobs:
   e2e:
