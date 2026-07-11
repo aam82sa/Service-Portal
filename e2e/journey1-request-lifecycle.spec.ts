@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { USERS, openService, signInAs, signOut } from './helpers/auth'
+import { USERS, openService, signInAs, signOut, submittedRef } from './helpers/auth'
 
 /**
  * Golden journey 1 — the plain request lifecycle:
@@ -10,18 +10,20 @@ import { USERS, openService, signInAs, signOut } from './helpers/auth'
 test('AC-03 travels new → triaged → in progress → resolved end to end', async ({ page }) => {
   // ---- requester submits ----
   await signInAs(page, USERS.requester)
-  await openService(page, ['IT services', 'Access & identity'], 'AC-03')
-  const title = page.locator('input.input').first()
-  await title.fill(`E2E password reset ${Date.now()}`)
+  await openService(page, 'IT services', 'Access & identity', 'AC-03')
+  // AC-03 form: account (text, required) + what-needs-resetting (dropdown, required)
+  await page.locator('input.input[type="text"]').first().fill('basma@abccorp.com')
+  await page.locator('select.input').last().selectOption('Password')
   await page.getByRole('button', { name: 'Submit request' }).click()
-  await expect(page.getByText(/submitted|REQ-/i).first()).toBeVisible()
+  await expect(page.getByText('Request submitted')).toBeVisible({ timeout: 15_000 })
+  const ref = await submittedRef(page)
   await signOut(page)
 
   // ---- agent triages and resolves ----
   await signInAs(page, USERS.itAgent)
-  await page.getByText('Queue', { exact: true }).click()
-  const row = page.locator('.row', { hasText: 'E2E password reset' }).first()
-  await expect(row).toBeVisible()
+  await page.getByText('Department queue', { exact: true }).click()
+  const row = page.locator('.row', { hasText: ref }).first()
+  await expect(row).toBeVisible({ timeout: 15_000 })
   await row.getByRole('button', { name: 'Assign to me' }).click()
   await row.getByRole('button', { name: 'Triage' }).click()
   await row.getByRole('button', { name: 'Start' }).click()
@@ -32,10 +34,10 @@ test('AC-03 travels new → triaged → in progress → resolved end to end', as
   // ---- requester sees resolved + lifecycle bar on the Resolved step ----
   await signInAs(page, USERS.requester)
   await page.getByText('My requests', { exact: true }).click()
-  await page.locator('.row', { hasText: 'E2E password reset' }).first().click()
-  await expect(page.locator('.chip', { hasText: 'resolved' }).first()).toBeVisible()
+  await page.locator('.row', { hasText: ref }).first().click()
+  await expect(page.locator('.chip', { hasText: 'resolved' }).first()).toBeVisible({ timeout: 15_000 })
   const bar = page.locator('.lb')
   await expect(bar).toBeVisible()
-  // the current (amber) node on the bar is Resolved — step 5 of the happy path
+  // the current node on the happy path — step 5 of new → … → resolved → closed
   await expect(bar.getByText('Resolved', { exact: true })).toBeVisible()
 })
