@@ -18,6 +18,8 @@ interface ReqRow {
   status: string
   created_at: string
   sla_resolution_due: string | null
+  escalated_at: string | null
+  escalation_note: string | null
   service: { id: string; code: string; name: string; parent_id: string | null; requires_approval: boolean } | null
 }
 interface ApprovalRow {
@@ -181,6 +183,10 @@ function assemble(req: ReqRow, approvals: ApprovalRow[], events: EventRow[], gra
 
   if (status === 'pending_requester') { state = 'pending_requester'; stateNote = stateNote ?? 'Paused until the requester replies' }
   if (status === 'escalated') { state = 'escalated'; stateNote = stateNote ?? 'SLA breached — escalated to the team lead' }
+  if (req.escalated_at && !['resolved', 'closed', 'cancelled'].includes(status)) {
+    state = 'escalated'
+    stateNote = req.escalation_note ?? 'SLA breached — escalated to the team lead'
+  }
   if (status === 'cancelled') { state = 'rejected'; stateNote = 'Request cancelled' }
 
   // completion metadata: a step completes when the next milestone is reached
@@ -230,7 +236,7 @@ export function useLifecycle(requestId: string, refreshKey = 0): LifecycleBarPro
     const run = async () => {
       const { data: req } = await supabase
         .from('requests')
-        .select('id, ref, title, dept, status, created_at, sla_resolution_due, service:services(id, code, name, parent_id, requires_approval)')
+        .select('id, ref, title, dept, status, created_at, sla_resolution_due, escalated_at, escalation_note, service:services(id, code, name, parent_id, requires_approval)')
         .eq('id', requestId)
         .single()
       if (!req || !alive) return
