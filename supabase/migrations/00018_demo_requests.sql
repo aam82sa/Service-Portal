@@ -28,6 +28,12 @@ begin
     raise notice 'demo data skipped — requests table already populated';
     return;
   end if;
+  -- dev demo data only makes sense where the early tester profiles exist
+  -- (fresh local resets never saw those sign-ins)
+  if not exists (select 1 from profiles where id = requesters[1]) then
+    raise notice 'demo data skipped — tester profiles not present on this stack';
+    return;
+  end if;
   for svc in select id, name from services where is_active loop
     foreach uid in array requesters loop
       i := i + 1;

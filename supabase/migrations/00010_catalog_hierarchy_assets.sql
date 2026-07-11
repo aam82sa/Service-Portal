@@ -194,18 +194,28 @@ begin
 end $$;
 
 -- ============ Dev dummy data (visualization) ============
-insert into assets (tag, category, model, serial, status, assigned_to, request_id, purchased_on) values
-  ('ABC-LT-0001', 'laptop',  'Dell Latitude 7440',   'DL7440-8842', 'assigned', '11111111-1111-4111-8111-111111111101', (select id from requests where ref = 'REQ-2500'), '2026-07-01'),
-  ('ABC-LT-0002', 'laptop',  'ThinkPad X1 Carbon',   'TP-X1-2231',  'assigned', '11111111-1111-4111-8111-111111111102', null, '2025-03-14'),
-  ('ABC-LT-0003', 'laptop',  'Dell Latitude 5540',   'DL5540-1190', 'assigned', '11111111-1111-4111-8111-111111111103', null, '2025-01-20'),
-  ('ABC-LT-0004', 'laptop',  'ThinkPad T14',         'TP-T14-7765', 'repair',   '11111111-1111-4111-8111-111111111104', null, '2024-09-02'),
-  ('ABC-LT-0005', 'laptop',  'Dell Latitude 5540',   'DL5540-1191', 'in_stock', null, null, '2025-01-20'),
-  ('ABC-MN-0001', 'monitor', 'Dell U2723QE 27"',     'U27-55821',   'assigned', '11111111-1111-4111-8111-111111111101', null, '2025-05-05'),
-  ('ABC-MN-0002', 'monitor', 'Dell U2723QE 27"',     'U27-55822',   'assigned', '11111111-1111-4111-8111-111111111107', null, '2025-05-05'),
-  ('ABC-MN-0003', 'monitor', 'LG 34WN80C 34"',       'LG34-00318',  'in_stock', null, null, '2025-08-11'),
-  ('ABC-PH-0001', 'phone',   'iPhone 15',            'IP15-90332',  'assigned', '11111111-1111-4111-8111-111111111102', null, '2025-11-30'),
-  ('ABC-PH-0002', 'phone',   'Samsung Galaxy S24',   'SG24-11208',  'in_stock', null, null, '2025-11-30'),
-  ('ABC-PR-0001', 'printer', 'HP LaserJet Pro M479', 'HPM479-2210', 'retired',  null, null, '2021-02-15')
+-- Holders that never signed in on a given stack (e.g. a fresh local reset)
+-- fall back to unassigned stock rather than violating the profiles FK.
+insert into assets (tag, category, model, serial, status, assigned_to, request_id, purchased_on)
+select v.tag, v.category, v.model, v.serial,
+       case when v.holder is not null and p.id is null then 'in_stock'::asset_status else v.status::asset_status end,
+       p.id,
+       case when v.tag = 'ABC-LT-0001' then (select id from requests where ref = 'REQ-2500') end,
+       v.purchased_on::date
+from (values
+  ('ABC-LT-0001', 'laptop',  'Dell Latitude 7440',   'DL7440-8842', 'assigned', '11111111-1111-4111-8111-111111111101'::uuid, '2026-07-01'),
+  ('ABC-LT-0002', 'laptop',  'ThinkPad X1 Carbon',   'TP-X1-2231',  'assigned', '11111111-1111-4111-8111-111111111102', '2025-03-14'),
+  ('ABC-LT-0003', 'laptop',  'Dell Latitude 5540',   'DL5540-1190', 'assigned', '11111111-1111-4111-8111-111111111103', '2025-01-20'),
+  ('ABC-LT-0004', 'laptop',  'ThinkPad T14',         'TP-T14-7765', 'repair',   '11111111-1111-4111-8111-111111111104', '2024-09-02'),
+  ('ABC-LT-0005', 'laptop',  'Dell Latitude 5540',   'DL5540-1191', 'in_stock', null, '2025-01-20'),
+  ('ABC-MN-0001', 'monitor', 'Dell U2723QE 27"',     'U27-55821',   'assigned', '11111111-1111-4111-8111-111111111101', '2025-05-05'),
+  ('ABC-MN-0002', 'monitor', 'Dell U2723QE 27"',     'U27-55822',   'assigned', '11111111-1111-4111-8111-111111111107', '2025-05-05'),
+  ('ABC-MN-0003', 'monitor', 'LG 34WN80C 34"',       'LG34-00318',  'in_stock', null, '2025-08-11'),
+  ('ABC-PH-0001', 'phone',   'iPhone 15',            'IP15-90332',  'assigned', '11111111-1111-4111-8111-111111111102', '2025-11-30'),
+  ('ABC-PH-0002', 'phone',   'Samsung Galaxy S24',   'SG24-11208',  'in_stock', null, '2025-11-30'),
+  ('ABC-PR-0001', 'printer', 'HP LaserJet Pro M479', 'HPM479-2210', 'retired',  null, '2021-02-15')
+) as v(tag, category, model, serial, status, holder, purchased_on)
+left join profiles p on p.id = v.holder
 on conflict do nothing;
 
 insert into licenses (name, vendor, seats, expires_on) values
