@@ -24,11 +24,22 @@ export async function signOut(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible({ timeout: 10_000 })
 }
 
-/** Drill through the portal tiles and open a service by its code chip. */
-export async function openService(page: Page, tilePath: string[], code: string): Promise<void> {
+/**
+ * Drill through the portal to a service form:
+ * New request → department tile → "Request something" → category tile → service row.
+ */
+export async function openService(page: Page, deptTile: string, categoryTile: string, code: string): Promise<void> {
   await page.getByText('New request', { exact: true }).click()
-  for (const tile of tilePath) {
-    await page.getByText(tile, { exact: true }).first().click()
-  }
+  await expect(page.getByText('Choose a department')).toBeVisible({ timeout: 15_000 })
+  await page.getByText(deptTile, { exact: true }).first().click()
+  await page.getByText('Request something', { exact: true }).click()
+  await page.getByText(categoryTile, { exact: true }).first().click()
   await page.locator(`.pc-row:has-text("${code}")`).first().click()
+}
+
+/** The confirmation screen's reference number (REQ-xxxx). */
+export async function submittedRef(page: Page): Promise<string> {
+  const ref = await page.locator('p.mono').first().textContent()
+  expect(ref).toMatch(/^REQ-/)
+  return ref!.trim()
 }
