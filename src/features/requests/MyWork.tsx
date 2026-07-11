@@ -14,6 +14,7 @@ interface WorkRow {
   created_at: string
   sla_resolution_due: string | null
   sla_paused_at: string | null
+  escalated_at: string | null
 }
 
 function Section({
@@ -49,6 +50,11 @@ function Section({
               <span className="chip" style={{ background: c.soft, color: c.rail }}>
                 {r.status.replace('_', ' ')}
               </span>
+              {r.escalated_at && (
+                <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>
+                  escalated
+                </span>
+              )}
             </div>
           )
         })}
@@ -66,7 +72,7 @@ export function MyWork({ onOpen }: { onOpen: (id: string) => void }) {
 
   useEffect(() => {
     const uid = session!.user.id
-    const cols = 'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at'
+    const cols = 'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at'
     supabase
       .from('requests').select(cols)
       .eq('assignee_id', uid).not('status', 'in', '(closed,cancelled)').order('created_at')

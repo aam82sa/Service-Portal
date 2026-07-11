@@ -13,6 +13,7 @@ interface QueueRow {
   created_at: string
   sla_resolution_due: string | null
   sla_paused_at: string | null
+  escalated_at: string | null
   assignee_id: string | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
@@ -72,7 +73,7 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
     supabase
       .from('requests')
       .select(
-        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, assignee_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
+        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at, assignee_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
       )
       .not('status', 'in', '(closed,cancelled)')
       .order('created_at')
@@ -126,6 +127,12 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
               <span className="chip" style={{ background: c.soft, color: c.rail }}>
                 {r.status.replace('_', ' ')}
               </span>
+              {r.escalated_at && (
+                <span className="chip" title="SLA breached — escalated per the escalation rules"
+                  style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>
+                  escalated
+                </span>
+              )}
               {!r.assignee_id && (
                 <button className="btn" onClick={() => update(r.id, { assignee_id: session!.user.id })}>
                   Assign to me
