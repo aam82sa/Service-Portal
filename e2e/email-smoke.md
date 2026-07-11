@@ -17,18 +17,23 @@ SMTP_FROM      = services-hub@abccorp.com
 HOOK_SECRET    = <long random string>
 ```
 
-## 2. Deploy + wire the webhook
+## 2. Deploy + wire the trigger
 
 ```bash
 supabase functions deploy send-notification   # verify_jwt=false via config.toml
 ```
 
-Dashboard → Database → Webhooks → **Create**:
-- Table `request_events`, events **INSERT**
-- Type: HTTP request → the function URL
-- Header `X-Hook-Secret: <HOOK_SECRET value>`
+The dispatch trigger is migration-managed (00046): `request_events` INSERT →
+`net.http_post` to the function with the `X-Hook-Secret` header. The secret is
+read from **Vault** at send time — store it once in the SQL editor:
 
-(Optional: a second webhook on `letter_events` INSERT — accepted, no-op for now.)
+```sql
+select vault.create_secret('<HOOK_SECRET value>', 'hook_secret');
+```
+
+Use the same value as the function's `HOOK_SECRET` secret. Stacks without the
+Vault entry (fresh local/CI resets) skip dispatch silently. No dashboard
+webhook is needed — remove any previously-created one to avoid double sends.
 
 ## 3. Sanity checks
 

@@ -1,9 +1,9 @@
-import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.1/mod.ts'
+import nodemailer from 'npm:nodemailer@6.9.14'
 import type { MailMessage, MailProvider, SendResult } from './types.ts'
 
 /**
- * SMTP provider — STARTTLS on 587. Point the five secrets at the Mailtrap
- * sandbox inbox for all testing (SMTP_HOST=sandbox.smtp.mailtrap.io,
+ * SMTP provider — nodemailer, STARTTLS on 587. Point the five secrets at the
+ * Mailtrap sandbox inbox for all testing (SMTP_HOST=sandbox.smtp.mailtrap.io,
  * SMTP_PORT=587, SMTP_USER/SMTP_PASS from the inbox settings, SMTP_FROM any
  * address). No card required on the free tier.
  */
@@ -17,27 +17,23 @@ export function smtpProvider(env: (k: string) => string | undefined): MailProvid
       if (!host || !user || !pass || !from) {
         return { ok: false, provider: 'smtp', detail: 'SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM not configured' }
       }
-      const client = new SMTPClient({
-        connection: {
-          hostname: host,
-          port: Number(env('SMTP_PORT') ?? '587'),
-          tls: false, // 587 = plain connect, denomailer upgrades via STARTTLS
-          auth: { username: user, password: pass },
-        },
+      const transporter = nodemailer.createTransport({
+        host,
+        port: Number(env('SMTP_PORT') ?? '587'),
+        secure: false, // 587: plain connect, upgraded via STARTTLS
+        requireTLS: true,
+        auth: { user, pass },
       })
       try {
-        await client.send({
+        await transporter.sendMail({
           from,
-          to: msg.to,
+          to: msg.to.join(', '),
           subject: msg.subject,
-          content: 'auto',
           html: msg.html,
         })
         return { ok: true, provider: 'smtp' }
       } catch (e) {
         return { ok: false, provider: 'smtp', detail: e instanceof Error ? e.message : String(e) }
-      } finally {
-        try { await client.close() } catch { /* already closed */ }
       }
     },
   }
