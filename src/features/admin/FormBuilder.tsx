@@ -16,7 +16,21 @@ const FIELD_TYPES: FormField['type'][] = [
   'amount',
   'date',
   'dropdown',
+  'yesno',
+  'costcenter',
+  'attachment',
+  'asset_picker',
+  'employee_picker',
 ]
+
+/** builder hint shown under rows for types with server-backed data */
+const TYPE_HINT: Partial<Record<FormField['type'], string>> = {
+  costcenter: 'options come from the admin-maintained cost-center list below',
+  attachment: 'files upload to secure storage; required = at least one file',
+  asset_picker: "lists the requester's own assigned assets",
+  employee_picker: 'searchable picker over active people',
+  yesno: 'stored as a true/false value',
+}
 
 export function FormBuilder() {
   const { hasRole } = useAuth()
@@ -187,7 +201,7 @@ export function FormBuilder() {
             />
             <select
               className="input"
-              style={{ width: 110 }}
+              style={{ width: 130 }}
               value={f.type}
               onChange={(e) => patch(i, { type: e.target.value as FormField['type'] })}
             >
@@ -226,6 +240,11 @@ export function FormBuilder() {
               ×
             </button>
           </div>
+          {TYPE_HINT[f.type] && (
+            <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', fontSize: 11, color: 'var(--muted)' }}>
+              {TYPE_HINT[f.type]}
+            </div>
+          )}
           {f.type === 'dropdown' && (
             <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>options</span>
@@ -321,7 +340,66 @@ export function FormBuilder() {
           {fields.length === 0 && <span className="row-desc">No fields yet — add them above.</span>}
         </div>
       </div>
+      <CostCenterAdmin onError={setError} />
       {error && <p className="error-note">{error}</p>}
+    </>
+  )
+}
+
+interface CostCenterRow { code: string; name: string; dept: string | null; is_active: boolean }
+
+/** The admin-maintained list backing `costcenter` fields. */
+function CostCenterAdmin({ onError }: { onError: (m: string) => void }) {
+  const { hasRole } = useAuth()
+  const canEdit = hasRole('system_admin') || hasRole('dept_admin')
+  const [rows, setRows] = useState<CostCenterRow[]>([])
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+
+  const load = () => {
+    supabase.from('cost_centers').select('code, name, dept, is_active').order('code')
+      .then(({ data }) => setRows((data as CostCenterRow[]) ?? []))
+  }
+  useEffect(load, [])
+
+  const add = async () => {
+    const { error } = await supabase.from('cost_centers').insert({ code: code.trim().toUpperCase(), name: name.trim() })
+    if (error) onError(error.message)
+    setCode(''); setName('')
+    load()
+  }
+
+  const toggle = async (r: CostCenterRow) => {
+    const { error } = await supabase.from('cost_centers').update({ is_active: !r.is_active }).eq('code', r.code)
+    if (error) onError(error.message)
+    load()
+  }
+
+  return (
+    <>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', margin: '14px 0 6px' }}>
+        Cost centers — options for costcenter fields
+      </div>
+      <div className="card">
+        {rows.map((r) => (
+          <div className="row" key={r.code} style={{ opacity: r.is_active ? 1 : 0.55 }}>
+            <span className="mono" style={{ width: 110, fontSize: 12 }}>{r.code}</span>
+            <span style={{ flex: 1, fontSize: 13 }}>{r.name}</span>
+            <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>{r.dept ?? 'shared'}</span>
+            {canEdit && (
+              <button className={`toggle${r.is_active ? ' on' : ''}`} onClick={() => toggle(r)} aria-label={`${r.code} active`} />
+            )}
+          </div>
+        ))}
+        {rows.length === 0 && <div className="row row-desc">No cost centers yet.</div>}
+        {canEdit && (
+          <div className="row" style={{ gap: 8 }}>
+            <input className="input" style={{ width: 130 }} placeholder="CC-XX-00" value={code} onChange={(e) => setCode(e.target.value)} />
+            <input className="input" style={{ flex: 1 }} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <button className="btn primary" onClick={add} disabled={!code.trim() || !name.trim()}>Add</button>
+          </div>
+        )}
+      </div>
     </>
   )
 }
