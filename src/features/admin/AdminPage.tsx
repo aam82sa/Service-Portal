@@ -3,6 +3,7 @@ import { FeatureToggles } from './FeatureToggles'
 import { UsersRoles } from './UsersRoles'
 import { FormBuilder } from './FormBuilder'
 import { WorkflowDesigner } from './WorkflowDesigner'
+import { TeamsAssignment } from './TeamsAssignment'
 import { EmailStudio } from './EmailStudio'
 import { SlaCalendar } from './SlaCalendar'
 import { Delegations } from './Delegations'
@@ -29,6 +30,7 @@ export function AdminPage({ section }: { section: AdminSection }) {
     case 'services': return <ServiceBuilder />
     case 'forms': return <FormBuilder />
     case 'workflows': return <WorkflowDesigner />
+    case 'teams': return <TeamsAssignment />
     case 'users': return <UsersRoles />
     case 'delegation': return <Delegations />
     default: return null
