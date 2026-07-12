@@ -2,7 +2,7 @@ import type { DeptCode, Role } from '../../lib/types'
 
 export type AdminSection =
   | 'functions' | 'access' | 'email' | 'sla' | 'announcements'
-  | 'services' | 'forms' | 'workflows' | 'users' | 'delegation'
+  | 'services' | 'forms' | 'workflows' | 'teams' | 'users' | 'delegation'
 
 export interface AdminSectionDef {
   id: AdminSection
@@ -32,6 +32,7 @@ export function getAdminSections(hasRole: HasRole): AdminSectionDef[] {
     out.push({ id: 'services', label: 'Service builder', ico: 'Sv', group })
     out.push({ id: 'forms', label: 'Form builder', ico: 'Fb', group })
     out.push({ id: 'workflows', label: 'Workflow designer', ico: 'Wf', group })
+    out.push({ id: 'teams', label: 'Teams & assignment', ico: 'Tm', group })
   }
   if (isUsr) {
     out.push({ id: 'users', label: 'User management', ico: 'Um', group: 'User admin' })
