@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode, type Service } from '../../lib/types'
 import type { FormField } from '../catalog/RequestForm'
+import type { FieldRule } from '../../lib/formRules'
 
 interface ServiceRow extends Service {
   form_schema: FormField[]
@@ -275,6 +276,7 @@ export function FormBuilder() {
               />
             </div>
           )}
+          <RuleEditor field={f} index={i} fields={fields} patch={patch} />
           </div>
         ))}
         <div className="row">
@@ -343,6 +345,86 @@ export function FormBuilder() {
       <CostCenterAdmin onError={setError} />
       {error && <p className="error-note">{error}</p>}
     </>
+  )
+}
+
+const RULE_OPS: FieldRule['op'][] = ['eq', 'neq', 'gte', 'lte', 'in']
+
+/** describe a rule for the chip list */
+const ruleText = (r: FieldRule) =>
+  `${r.effect} when ${r.when} ${r.op} ${Array.isArray(r.value) ? r.value.join(', ') : String(r.value)}`
+
+/**
+ * Per-field conditions editor: show/require this field when another field
+ * matches. Only fields EARLIER in the form can be referenced, so evaluation
+ * order is always well-defined.
+ */
+function RuleEditor({
+  field, index, fields, patch,
+}: {
+  field: FormField
+  index: number
+  fields: FormField[]
+  patch: (i: number, p: Partial<FormField>) => void
+}) {
+  const sources = fields.slice(0, index).filter((s) => s.key && s.key !== field.key)
+  const [when, setWhen] = useState('')
+  const [op, setOp] = useState<FieldRule['op']>('eq')
+  const [value, setValue] = useState('')
+  const [effect, setEffect] = useState<FieldRule['effect']>('show')
+
+  const rules = field.rules ?? []
+  if (sources.length === 0 && rules.length === 0) return null
+
+  const add = () => {
+    if (!when || value.trim() === '') return
+    const v: FieldRule['value'] = op === 'in' ? value.split(',').map((s) => s.trim()).filter(Boolean) : value.trim()
+    patch(index, { rules: [...rules, { when, op, value: v, effect }] })
+    setValue('')
+  }
+
+  return (
+    <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--muted)' }}>conditions</span>
+      {rules.map((r, j) => (
+        <span key={j} className="chip" style={{ background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--line)', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+          {ruleText(r)}
+          <span
+            style={{ cursor: 'pointer', color: 'var(--red)' }}
+            onClick={() => patch(index, { rules: rules.filter((_, k) => k !== j) })}
+          >
+            ×
+          </span>
+        </span>
+      ))}
+      {sources.length > 0 && (
+        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+          <select className="input" style={{ width: 78, padding: '3px 6px', fontSize: 11.5 }} value={effect}
+            onChange={(e) => setEffect(e.target.value as FieldRule['effect'])}>
+            <option value="show">show</option>
+            <option value="require">require</option>
+          </select>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>when</span>
+          <select className="input" style={{ width: 130, padding: '3px 6px', fontSize: 11.5 }} value={when}
+            onChange={(e) => setWhen(e.target.value)}>
+            <option value="">earlier field…</option>
+            {sources.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <select className="input" style={{ width: 62, padding: '3px 6px', fontSize: 11.5 }} value={op}
+            onChange={(e) => setOp(e.target.value as FieldRule['op'])}>
+            {RULE_OPS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <input className="input" style={{ width: 130, padding: '3px 8px', fontSize: 12 }}
+            placeholder={op === 'in' ? 'a, b, c' : 'value'} value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+          <button className="btn" style={{ padding: '2px 8px', fontSize: 11.5 }} onClick={add}
+            disabled={!when || value.trim() === ''}>
+            + add
+          </button>
+        </span>
+      )}
+    </div>
   )
 }
 

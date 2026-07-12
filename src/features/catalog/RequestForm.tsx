@@ -6,6 +6,7 @@ import { FileUpload } from '../../components/FileUpload'
 import { PersonPicker } from '../../components/PersonPicker'
 import { Toggle } from '../../components/ui'
 import { validateSubmission, type FieldValue } from '../../lib/formValidate'
+import { effectiveFields, type FieldRule, type RuleValues } from '../../lib/formRules'
 
 export interface FormField {
   key: string
@@ -16,6 +17,8 @@ export interface FormField {
   options?: string[]
   visible?: boolean
   required?: boolean
+  /** show/require-if conditions evaluated live against other fields */
+  rules?: FieldRule[]
   /** layout width in the request form: full row (default) or half row */
   width?: 'full' | 'half'
 }
@@ -36,7 +39,7 @@ export function RequestForm({
   onDone: () => void
 }) {
   const { session } = useAuth()
-  const fields = (service.form_schema ?? []).filter((f) => f.visible !== false)
+  const allFields = service.form_schema ?? []
   const [values, setValues] = useState<Record<string, string>>({})
   const [attachments, setAttachments] = useState<string[]>([])
   const [missing, setMissing] = useState<string[]>([])
@@ -47,7 +50,7 @@ export function RequestForm({
   const requestId = useMemo(() => crypto.randomUUID(), [])
   const c = DEPT_COLOR[service.dept]
 
-  const needs = (t: FormField['type']) => fields.some((f) => f.type === t)
+  const needs = (t: FormField['type']) => allFields.some((f) => f.type === t)
   const [costCenters, setCostCenters] = useState<CostCenter[]>([])
   const [ownAssets, setOwnAssets] = useState<OwnAsset[]>([])
   const [people, setPeople] = useState<Person[]>([])
@@ -77,6 +80,12 @@ export function RequestForm({
     if (f.type === 'attachment') return attachments
     return values[f.key]
   }
+
+  // live show/require-if evaluation: hidden fields are not rendered, not
+  // submitted, and never required (the SQL validator re-runs the same rules)
+  const ruleValues: RuleValues = {}
+  for (const f of allFields) ruleValues[f.key] = fieldValue(f)
+  const fields = effectiveFields(allFields, ruleValues)
 
   const submit = async () => {
     const bag: Record<string, FieldValue> = {}
