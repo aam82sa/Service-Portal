@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { PersonPicker } from '../../components/PersonPicker'
 
 interface QueueRow {
   id: string
@@ -15,8 +16,22 @@ interface QueueRow {
   sla_paused_at: string | null
   escalated_at: string | null
   assignee_id: string | null
+  team_id: string | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
+}
+
+interface Team {
+  id: string
+  dept: DeptCode
+  name: string
+}
+
+interface Membership {
+  team_id: string
+  profile_id: string
+  is_lead: boolean
+  profile: { display_name: string } | null
 }
 
 const NEXT_ACTIONS: Record<string, { label: string; to: string; primary?: boolean }[]> = {
@@ -64,16 +79,20 @@ export function SlaRing({ createdAt, due, pausedAt }: {
 }
 
 export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
-  const { session } = useAuth()
+  const { session, hasRole } = useAuth()
   const [rows, setRows] = useState<QueueRow[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
+  const [members, setMembers] = useState<Membership[]>([])
+  const [filter, setFilter] = useState<string>('all')     // all | unrouted | <team id>
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const uid = session!.user.id
 
   const load = useCallback(() => {
     supabase
       .from('requests')
       .select(
-        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at, assignee_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
+        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at, assignee_id, team_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
       )
       .not('status', 'in', '(closed,cancelled)')
       .order('created_at')
@@ -82,9 +101,54 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
         else setRows((data as unknown as QueueRow[]) ?? [])
         setLoaded(true)
       })
+    supabase.from('teams').select('id, dept, name').order('name')
+      .then(({ data }) => setTeams((data as Team[]) ?? []))
+    supabase.from('team_members').select('team_id, profile_id, is_lead, profile:profiles(display_name)')
+      .then(({ data }) => setMembers((data as unknown as Membership[]) ?? []))
   }, [])
 
   useEffect(load, [load])
+
+  const teamName = useMemo(() => new Map(teams.map((t) => [t.id, t.name])), [teams])
+  const myTeamIds = useMemo(
+    () => new Set(members.filter((m) => m.profile_id === uid).map((m) => m.team_id)),
+    [members, uid],
+  )
+  const myLeadTeamIds = useMemo(
+    () => new Set(members.filter((m) => m.profile_id === uid && m.is_lead).map((m) => m.team_id)),
+    [members, uid],
+  )
+
+  // depts present in my queue; team tabs come from them
+  const myDepts = useMemo(() => new Set(rows.map((r) => r.dept)), [rows])
+  const tabTeams = teams.filter((t) => myDepts.has(t.dept))
+  const isManager = [...myDepts].some((d) => hasRole('dept_head', d) || hasRole('dept_admin', d))
+  const unroutedCount = rows.filter((r) => r.team_id === null).length
+
+  const visible = rows.filter((r) => {
+    if (filter === 'all') return true
+    if (filter === 'unrouted') return r.team_id === null
+    return r.team_id === filter
+  })
+
+  /** can this user push (assign to a person) on this row? */
+  const pushScope = (r: QueueRow): 'dept' | 'team' | null => {
+    if (hasRole('dept_head', r.dept) || hasRole('dept_admin', r.dept) || hasRole('system_admin')) return 'dept'
+    if (hasRole('team_lead', r.dept)) return 'team'
+    if (r.team_id && myLeadTeamIds.has(r.team_id)) return 'team'
+    return null
+  }
+
+  const assignOptions = (r: QueueRow, scope: 'dept' | 'team') => {
+    const teamIds = scope === 'dept'
+      ? new Set(teams.filter((t) => t.dept === r.dept).map((t) => t.id))
+      : new Set(r.team_id ? [r.team_id] : [])
+    const seen = new Set<string>()
+    return members
+      .filter((m) => teamIds.has(m.team_id) && m.profile)
+      .filter((m) => (seen.has(m.profile_id) ? false : (seen.add(m.profile_id), true)))
+      .map((m) => ({ id: m.profile_id, display_name: m.profile!.display_name }))
+  }
 
   const update = async (id: string, patch: Record<string, unknown>) => {
     setError(null)
@@ -97,14 +161,38 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
     <>
       <h2 className="page-head">Department queue</h2>
       <p className="page-sub">
-        Open requests in your department. Transitions are validated and audit-logged by the
-        database.
+        Open requests in your department, organized by team. Officers claim from their team
+        queue; leads and heads assign. Everything is validated and audit-logged by the database.
       </p>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button className={`btn${filter === 'all' ? ' primary' : ''}`} onClick={() => setFilter('all')}>
+          All
+        </button>
+        {tabTeams.map((t) => (
+          <button key={t.id} className={`btn${filter === t.id ? ' primary' : ''}`} onClick={() => setFilter(t.id)}>
+            {t.name}
+            {myTeamIds.has(t.id) && <span style={{ opacity: 0.7 }}> · mine</span>}
+          </button>
+        ))}
+        {isManager && (
+          <button
+            className={`btn${filter === 'unrouted' ? ' primary' : ''}`}
+            style={unroutedCount > 0 ? { color: 'var(--amber)' } : undefined}
+            onClick={() => setFilter('unrouted')}
+          >
+            Unrouted{unroutedCount > 0 ? ` (${unroutedCount})` : ''}
+          </button>
+        )}
+      </div>
+
       <div className="card">
-        {rows.map((r) => {
+        {visible.map((r) => {
           const c = DEPT_COLOR[r.dept]
           const actions = NEXT_ACTIONS[r.status] ?? []
-          const mine = r.assignee_id === session!.user.id
+          const mine = r.assignee_id === uid
+          const scope = pushScope(r)
+          const isHead = scope === 'dept'
           return (
             <div className="row" key={r.id}>
               <span
@@ -117,6 +205,7 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
                 <div className="row-title">{r.title}</div>
                 <div className="row-desc">
                   {r.requester?.display_name ?? 'Unknown'} ·{' '}
+                  {r.team_id ? teamName.get(r.team_id) ?? 'team' : 'unrouted'} ·{' '}
                   {r.assignee ? `assigned to ${r.assignee.display_name}` : 'unassigned'}
                 </div>
               </div>
@@ -133,9 +222,36 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
                   escalated
                 </span>
               )}
-              {!r.assignee_id && (
-                <button className="btn" onClick={() => update(r.id, { assignee_id: session!.user.id })}>
+              {scope && (
+                <PersonPicker
+                  small width={150}
+                  people={assignOptions(r, scope)}
+                  value={r.assignee_id}
+                  placeholder="Assign to…"
+                  onPick={(p) => update(r.id, { assignee_id: p.id })}
+                />
+              )}
+              {isHead && (
+                <select
+                  className="input" style={{ width: 120, padding: '4px 8px', fontSize: 12 }}
+                  value={r.team_id ?? ''}
+                  onChange={(e) => update(r.id, { team_id: e.target.value || null })}
+                  title="Move to another team"
+                >
+                  <option value="">unrouted</option>
+                  {teams.filter((t) => t.dept === r.dept).map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              )}
+              {!scope && !r.assignee_id && (
+                <button className="btn" onClick={() => update(r.id, { assignee_id: uid })}>
                   Assign to me
+                </button>
+              )}
+              {!scope && mine && (
+                <button className="btn" onClick={() => update(r.id, { assignee_id: null })}>
+                  Hand back
                 </button>
               )}
               {(mine || !r.assignee_id) &&
@@ -151,8 +267,10 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
             </div>
           )
         })}
-        {loaded && rows.length === 0 && !error && (
-          <div className="row row-desc">The queue is clear.</div>
+        {loaded && visible.length === 0 && !error && (
+          <div className="row row-desc">
+            {filter === 'unrouted' ? 'Nothing unrouted — routing rules are covering everything.' : 'The queue is clear.'}
+          </div>
         )}
         {!loaded && !error && <div className="row row-desc">Loading queue…</div>}
       </div>
