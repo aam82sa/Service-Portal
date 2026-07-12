@@ -7,6 +7,7 @@ import { TeamsAssignment } from './TeamsAssignment'
 import { EmailStudio } from './EmailStudio'
 import { SlaCalendar } from './SlaCalendar'
 import { DoaMatrix } from './DoaMatrix'
+import { AuditLog } from './AuditLog'
 import { Delegations } from './Delegations'
 import { Announcements } from './Announcements'
 import { ServiceBuilder } from './ServiceBuilder'
@@ -28,6 +29,7 @@ export function AdminPage({ section }: { section: AdminSection }) {
     case 'email': return <EmailStudio />
     case 'sla': return <SlaCalendar />
     case 'doa': return <DoaMatrix />
+    case 'audit': return <AuditLog />
     case 'announcements': return <Announcements />
     case 'services': return <ServiceBuilder />
     case 'forms': return <FormBuilder />
