@@ -230,7 +230,87 @@ export function SlaCalendar() {
           </div>
         </div>
       </div>
+      <PriorityMatrixEditor onError={setError} />
       {error && <p className="error-note">{error}</p>}
+    </>
+  )
+}
+
+interface MatrixCell { impact: number; urgency: number; priority: 'P1' | 'P2' | 'P3' | 'P4' }
+
+const PRIORITY_COLOR: Record<MatrixCell['priority'], string> = {
+  P1: 'var(--red)', P2: 'var(--amber)', P3: 'var(--it)', P4: 'var(--muted)',
+}
+const LEVEL_LABEL = ['', 'Low (1)', 'Medium (2)', 'High (3)']
+
+/**
+ * The impact × urgency → priority matrix applied automatically to incident
+ * submissions (server-side, migration 00051). Edits are audit-logged.
+ */
+function PriorityMatrixEditor({ onError }: { onError: (m: string) => void }) {
+  const [cells, setCells] = useState<MatrixCell[]>([])
+  const [saved, setSaved] = useState(false)
+
+  const load = useCallback(() => {
+    supabase.from('priority_matrix').select('impact, urgency, priority')
+      .then(({ data, error }) => {
+        if (error) onError(error.message)
+        else setCells((data as MatrixCell[]) ?? [])
+      })
+  }, [onError])
+  useEffect(load, [load])
+
+  const cell = (i: number, u: number) => cells.find((c) => c.impact === i && c.urgency === u)
+
+  const patch = async (i: number, u: number, p: MatrixCell['priority']) => {
+    const { error } = await supabase.from('priority_matrix')
+      .update({ priority: p }).eq('impact', i).eq('urgency', u)
+    if (error) onError(error.message)
+    else setSaved(true)
+    load()
+  }
+
+  if (cells.length === 0) return null
+
+  return (
+    <>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', margin: '14px 0 6px' }}>
+        Priority matrix — impact × urgency → P1–P4 (applied to incident submissions)
+      </div>
+      <div className="card" style={{ padding: 16, maxWidth: 560 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '110px repeat(3, 1fr)', gap: 6, alignItems: 'center' }}>
+          <span />
+          {[1, 2, 3].map((u) => (
+            <span key={u} style={{ fontSize: 10.5, color: 'var(--muted)', textAlign: 'center' }}>
+              Urgency {LEVEL_LABEL[u]}
+            </span>
+          ))}
+          {[3, 2, 1].map((i) => (
+            <div key={i} style={{ display: 'contents' }}>
+              <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>Impact {LEVEL_LABEL[i]}</span>
+              {[1, 2, 3].map((u) => {
+                const c = cell(i, u)
+                return (
+                  <select
+                    key={u}
+                    className="input mono"
+                    aria-label={`impact ${i} urgency ${u}`}
+                    style={{ textAlign: 'center', fontWeight: 700, color: c ? PRIORITY_COLOR[c.priority] : undefined }}
+                    value={c?.priority ?? 'P3'}
+                    onChange={(e) => patch(i, u, e.target.value as MatrixCell['priority'])}
+                  >
+                    {(['P1', 'P2', 'P3', 'P4'] as const).map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>
+          {saved ? 'Saved — new incident submissions use the updated mapping. Changes are audit-logged.'
+            : 'Incidents whose form captures impact + urgency are prioritized from this matrix; other requests keep their service default.'}
+        </div>
+      </div>
     </>
   )
 }
