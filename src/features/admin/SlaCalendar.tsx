@@ -231,7 +231,145 @@ export function SlaCalendar() {
         </div>
       </div>
       <PriorityMatrixEditor onError={setError} />
+      <EscalationRulesAdmin services={services} onError={setError} />
       {error && <p className="error-note">{error}</p>}
+    </>
+  )
+}
+
+interface EscalationRule {
+  id: string
+  trigger_on: 'sla_warning' | 'sla_breached'
+  dept: DeptCode | null
+  service_id: string | null
+  actions: { notify_roles?: string[]; bump_priority?: boolean; escalate_status?: boolean }
+  is_enabled: boolean
+}
+
+const NOTIFY_ROLES = ['team_lead', 'dept_head', 'dept_admin', 'system_admin', 'executive']
+
+/**
+ * CRUD over escalation_rules (consumed by the sla_check sweep). "Escalate"
+ * sets the escalated_at marker — it never mutates status (00047 rule).
+ * Every change is audit-logged by the database.
+ */
+function EscalationRulesAdmin({ services, onError }: { services: Svc[]; onError: (m: string) => void }) {
+  const [rules, setRules] = useState<EscalationRule[]>([])
+  const [draft, setDraft] = useState<{ trigger_on: EscalationRule['trigger_on']; dept: string; service_id: string }>(
+    { trigger_on: 'sla_breached', dept: '', service_id: '' })
+
+  const load = useCallback(() => {
+    supabase.from('escalation_rules').select('*').order('created_at')
+      .then(({ data, error }) => {
+        if (error) onError(error.message)
+        else setRules((data as EscalationRule[]) ?? [])
+      })
+  }, [onError])
+  useEffect(load, [load])
+
+  const run = async (q: PromiseLike<{ error: { message: string } | null }>) => {
+    const { error } = await q
+    if (error) onError(error.message)
+    load()
+  }
+
+  const patchActions = (r: EscalationRule, p: Partial<EscalationRule['actions']>) =>
+    run(supabase.from('escalation_rules').update({ actions: { ...r.actions, ...p } }).eq('id', r.id))
+
+  const svcCode = (id: string | null) => services.find((s) => s.id === id)?.code
+
+  return (
+    <>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', margin: '14px 0 6px' }}>
+        Escalation rules — what the SLA sweep does on warning / breach · most specific rule wins
+      </div>
+      <div className="card">
+        {rules.map((r) => (
+          <div className="row" key={r.id} style={{ gap: 8, flexWrap: 'wrap', opacity: r.is_enabled ? 1 : 0.55 }}>
+            <span className="chip mono" style={{
+              background: r.trigger_on === 'sla_breached' ? 'var(--red-soft)' : 'var(--amber-soft)',
+              color: r.trigger_on === 'sla_breached' ? 'var(--red)' : 'var(--amber)',
+            }}>
+              {r.trigger_on === 'sla_breached' ? 'breach' : 'warning'}
+            </span>
+            <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
+              {r.dept ?? 'all depts'}{r.service_id ? ` · ${svcCode(r.service_id) ?? 'service'}` : ''}
+            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>notify</span>
+            {NOTIFY_ROLES.map((role) => {
+              const on = (r.actions.notify_roles ?? []).includes(role)
+              return (
+                <span key={role} className="chip" style={{
+                  cursor: 'pointer',
+                  background: on ? 'var(--accent-soft)' : 'var(--surface)',
+                  color: on ? 'var(--accent)' : 'var(--muted)',
+                }}
+                  onClick={() => patchActions(r, {
+                    notify_roles: on
+                      ? (r.actions.notify_roles ?? []).filter((x) => x !== role)
+                      : [...(r.actions.notify_roles ?? []), role],
+                  })}
+                >
+                  {role.replace('_', ' ')}
+                </span>
+              )
+            })}
+            <span style={{ flex: 1 }} />
+            <button className={`btn${r.actions.bump_priority ? ' primary' : ''}`}
+              style={{ padding: '2px 10px', fontSize: 11.5 }}
+              title="One-level priority bump on breach"
+              onClick={() => patchActions(r, { bump_priority: !r.actions.bump_priority })}>
+              bump priority
+            </button>
+            <button className={`btn${r.actions.escalate_status ? ' primary' : ''}`}
+              style={{ padding: '2px 10px', fontSize: 11.5 }}
+              title="Sets the escalated marker (never changes status)"
+              onClick={() => patchActions(r, { escalate_status: !r.actions.escalate_status })}>
+              escalate
+            </button>
+            <button
+              className={`toggle${r.is_enabled ? ' on' : ''}`}
+              onClick={() => run(supabase.from('escalation_rules').update({ is_enabled: !r.is_enabled }).eq('id', r.id))}
+              aria-label={`rule enabled: ${r.is_enabled}`}
+            />
+            <button className="btn" style={{ padding: '2px 8px', color: 'var(--red)' }}
+              onClick={() => run(supabase.from('escalation_rules').delete().eq('id', r.id))}
+              aria-label="Delete rule">
+              ×
+            </button>
+          </div>
+        ))}
+        {rules.length === 0 && <div className="row row-desc">No escalation rules — breaches are stamped but nothing else happens.</div>}
+        <div className="row" style={{ gap: 8 }}>
+          <select className="input" style={{ width: 130 }} value={draft.trigger_on}
+            onChange={(e) => setDraft((s) => ({ ...s, trigger_on: e.target.value as EscalationRule['trigger_on'] }))}>
+            <option value="sla_breached">on breach</option>
+            <option value="sla_warning">on warning</option>
+          </select>
+          <select className="input" style={{ width: 120 }} value={draft.dept}
+            onChange={(e) => setDraft((s) => ({ ...s, dept: e.target.value, service_id: '' }))}>
+            <option value="">all depts</option>
+            {(['IT', 'ADMIN', 'LOG', 'PROC'] as const).map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select className="input" style={{ width: 200 }} value={draft.service_id}
+            onChange={(e) => setDraft((s) => ({ ...s, service_id: e.target.value }))}>
+            <option value="">all services</option>
+            {services.filter((s) => !draft.dept || s.dept === draft.dept).map((s) => (
+              <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+            ))}
+          </select>
+          <button className="btn primary"
+            onClick={() => run(supabase.from('escalation_rules').insert({
+              trigger_on: draft.trigger_on,
+              dept: draft.dept || null,
+              service_id: draft.service_id || null,
+              actions: { notify_roles: ['team_lead'], bump_priority: false, escalate_status: true },
+              is_enabled: true,
+            }))}>
+            Add rule
+          </button>
+        </div>
+      </div>
     </>
   )
 }
