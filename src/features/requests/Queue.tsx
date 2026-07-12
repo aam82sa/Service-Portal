@@ -34,6 +34,23 @@ interface Membership {
   profile: { display_name: string } | null
 }
 
+interface ViewFilter {
+  team?: string                              // team id | 'unrouted'
+  status?: string
+  priority?: string
+  assignee?: 'me' | 'unassigned'
+  sla?: 'breached' | 'warning' | 'paused' | 'escalated'
+}
+
+interface SavedView {
+  id: string
+  owner_id: string
+  name: string
+  scope: 'personal' | 'team'
+  team_id: string | null
+  filter: ViewFilter
+}
+
 const NEXT_ACTIONS: Record<string, { label: string; to: string; primary?: boolean }[]> = {
   new: [{ label: 'Triage', to: 'triaged', primary: true }],
   triaged: [{ label: 'Start', to: 'in_progress', primary: true }],
@@ -84,6 +101,14 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<Membership[]>([])
   const [filter, setFilter] = useState<string>('all')     // all | unrouted | <team id>
+  const [fStatus, setFStatus] = useState('')
+  const [fPriority, setFPriority] = useState('')
+  const [fAssignee, setFAssignee] = useState('')
+  const [fSla, setFSla] = useState('')
+  const [views, setViews] = useState<SavedView[]>([])
+  const [activeView, setActiveView] = useState<string | null>(null)
+  const [viewName, setViewName] = useState('')
+  const [shareTeam, setShareTeam] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const uid = session!.user.id
@@ -105,6 +130,8 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
       .then(({ data }) => setTeams((data as Team[]) ?? []))
     supabase.from('team_members').select('team_id, profile_id, is_lead, profile:profiles(display_name)')
       .then(({ data }) => setMembers((data as unknown as Membership[]) ?? []))
+    supabase.from('saved_views').select('*').order('created_at')
+      .then(({ data }) => setViews((data as SavedView[]) ?? []))
   }, [])
 
   useEffect(load, [load])
@@ -125,11 +152,79 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
   const isManager = [...myDepts].some((d) => hasRole('dept_head', d) || hasRole('dept_admin', d))
   const unroutedCount = rows.filter((r) => r.team_id === null).length
 
+  const slaState = (r: QueueRow): string | null => {
+    if (r.escalated_at) return 'escalated'
+    if (r.sla_paused_at) return 'paused'
+    if (!r.sla_resolution_due) return null
+    const total = new Date(r.sla_resolution_due).getTime() - new Date(r.created_at).getTime()
+    const left = new Date(r.sla_resolution_due).getTime() - Date.now()
+    if (left <= 0) return 'breached'
+    if (total > 0 && left / total < 0.2) return 'warning'
+    return null
+  }
+
   const visible = rows.filter((r) => {
-    if (filter === 'all') return true
-    if (filter === 'unrouted') return r.team_id === null
-    return r.team_id === filter
+    if (filter === 'unrouted' && r.team_id !== null) return false
+    if (filter !== 'all' && filter !== 'unrouted' && r.team_id !== filter) return false
+    if (fStatus && r.status !== fStatus) return false
+    if (fPriority && r.priority !== fPriority) return false
+    if (fAssignee === 'me' && r.assignee_id !== uid) return false
+    if (fAssignee === 'unassigned' && r.assignee_id !== null) return false
+    if (fSla && slaState(r) !== fSla) return false
+    return true
   })
+
+  const currentFilter = (): ViewFilter => {
+    const f: ViewFilter = {}
+    if (filter !== 'all') f.team = filter
+    if (fStatus) f.status = fStatus
+    if (fPriority) f.priority = fPriority
+    if (fAssignee) f.assignee = fAssignee as ViewFilter['assignee']
+    if (fSla) f.sla = fSla as ViewFilter['sla']
+    return f
+  }
+  const anyFilter = Object.keys(currentFilter()).length > 0
+
+  const applyView = (v: SavedView) => {
+    setActiveView(v.id)
+    setFilter(v.filter.team ?? 'all')
+    setFStatus(v.filter.status ?? '')
+    setFPriority(v.filter.priority ?? '')
+    setFAssignee(v.filter.assignee ?? '')
+    setFSla(v.filter.sla ?? '')
+  }
+
+  const clearFilters = () => {
+    setActiveView(null)
+    setFilter('all')
+    setFStatus('')
+    setFPriority('')
+    setFAssignee('')
+    setFSla('')
+  }
+
+  const saveView = async () => {
+    if (!viewName.trim()) return
+    setError(null)
+    const { error: e } = await supabase.from('saved_views').insert({
+      owner_id: uid,
+      name: viewName.trim(),
+      scope: shareTeam ? 'team' : 'personal',
+      team_id: shareTeam || null,
+      filter: currentFilter(),
+    })
+    if (e) setError(e.message)
+    else setViewName('')
+    load()
+  }
+
+  const dropView = async (v: SavedView) => {
+    setError(null)
+    const { error: e } = await supabase.from('saved_views').delete().eq('id', v.id)
+    if (e) setError(e.message)
+    if (activeView === v.id) clearFilters()
+    load()
+  }
 
   /** can this user push (assign to a person) on this row? */
   const pushScope = (r: QueueRow): 'dept' | 'team' | null => {
@@ -166,11 +261,11 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
       </p>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        <button className={`btn${filter === 'all' ? ' primary' : ''}`} onClick={() => setFilter('all')}>
+        <button className={`btn${filter === 'all' ? ' primary' : ''}`} onClick={() => { setFilter('all'); setActiveView(null) }}>
           All
         </button>
         {tabTeams.map((t) => (
-          <button key={t.id} className={`btn${filter === t.id ? ' primary' : ''}`} onClick={() => setFilter(t.id)}>
+          <button key={t.id} className={`btn${filter === t.id ? ' primary' : ''}`} onClick={() => { setFilter(t.id); setActiveView(null) }}>
             {t.name}
             {myTeamIds.has(t.id) && <span style={{ opacity: 0.7 }}> · mine</span>}
           </button>
@@ -179,10 +274,85 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
           <button
             className={`btn${filter === 'unrouted' ? ' primary' : ''}`}
             style={unroutedCount > 0 ? { color: 'var(--amber)' } : undefined}
-            onClick={() => setFilter('unrouted')}
+            onClick={() => { setFilter('unrouted'); setActiveView(null) }}
           >
             Unrouted{unroutedCount > 0 ? ` (${unroutedCount})` : ''}
           </button>
+        )}
+        {views.length > 0 && <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)' }} />}
+        {views.map((v) => (
+          <span key={v.id} style={{ display: 'inline-flex' }}>
+            <button
+              className={`btn${activeView === v.id ? ' primary' : ''}`}
+              title={v.scope === 'team' ? `Shared with ${teamName.get(v.team_id ?? '') ?? 'team'}` : 'Personal view'}
+              style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+              onClick={() => applyView(v)}
+            >
+              {v.scope === 'team' ? '⚑ ' : ''}{v.name}
+            </button>
+            {(v.owner_id === uid || (v.team_id != null && myLeadTeamIds.has(v.team_id))) && (
+              <button className="btn" aria-label={`Delete view ${v.name}`}
+                style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeft: 'none', padding: '2px 7px', color: 'var(--red)' }}
+                onClick={() => dropView(v)}>
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select className="input" style={{ width: 150, padding: '4px 8px', fontSize: 12 }}
+          value={fStatus} onChange={(e) => { setFStatus(e.target.value); setActiveView(null) }}>
+          <option value="">any status</option>
+          {['new', 'triaged', 'in_progress', 'pending_approval', 'pending_requester', 'resolved'].map((s) => (
+            <option key={s} value={s}>{s.replace('_', ' ')}</option>
+          ))}
+        </select>
+        <select className="input" style={{ width: 100, padding: '4px 8px', fontSize: 12 }}
+          value={fPriority} onChange={(e) => { setFPriority(e.target.value); setActiveView(null) }}>
+          <option value="">any priority</option>
+          {['P1', 'P2', 'P3', 'P4'].map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className="input" style={{ width: 130, padding: '4px 8px', fontSize: 12 }}
+          value={fAssignee} onChange={(e) => { setFAssignee(e.target.value); setActiveView(null) }}>
+          <option value="">any assignee</option>
+          <option value="me">assigned to me</option>
+          <option value="unassigned">unassigned</option>
+        </select>
+        <select className="input" style={{ width: 130, padding: '4px 8px', fontSize: 12 }}
+          value={fSla} onChange={(e) => { setFSla(e.target.value); setActiveView(null) }}>
+          <option value="">any SLA state</option>
+          <option value="breached">breached</option>
+          <option value="warning">at risk</option>
+          <option value="paused">paused</option>
+          <option value="escalated">escalated</option>
+        </select>
+        {anyFilter && (
+          <>
+            <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={clearFilters}>
+              Clear
+            </button>
+            <span style={{ flex: 1 }} />
+            <input className="input" style={{ width: 160, padding: '4px 8px', fontSize: 12 }}
+              placeholder="Save view as…" value={viewName}
+              onChange={(e) => setViewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveView() }} />
+            {myLeadTeamIds.size > 0 && (
+              <select className="input" style={{ width: 160, padding: '4px 8px', fontSize: 12 }}
+                title="Share with a team you lead"
+                value={shareTeam} onChange={(e) => setShareTeam(e.target.value)}>
+                <option value="">personal</option>
+                {teams.filter((t) => myLeadTeamIds.has(t.id)).map((t) => (
+                  <option key={t.id} value={t.id}>share: {t.name}</option>
+                ))}
+              </select>
+            )}
+            <button className="btn primary" style={{ padding: '4px 10px', fontSize: 12 }}
+              disabled={!viewName.trim()} onClick={saveView}>
+              Save view
+            </button>
+          </>
         )}
       </div>
 
