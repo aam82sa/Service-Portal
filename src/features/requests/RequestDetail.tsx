@@ -28,6 +28,15 @@ interface Detail {
   assignee: { display_name: string } | null
   approvals: ApprovalStep[]
   project_id: string | null
+  parent_request_id: string | null
+}
+
+interface ChildRow {
+  id: string
+  ref: string
+  title: string
+  status: string
+  service: { code: string } | null
 }
 
 interface ConversionState {
@@ -52,6 +61,8 @@ function eventText(e: Ev): string {
     case 'approval_requested': return `sent for approval (${d.steps} step${Number(d.steps) > 1 ? 's' : ''})`
     case 'approval_decided': return `step ${d.step} ${d.decision}${d.comment ? ` — "${d.comment}"` : ''}`
     case 'comment': return `commented: "${d.body}"`
+    case 'children_spawned': return `spawned ${d.count} child request${Number(d.count) === 1 ? '' : 's'}`
+    case 'children_completed': return 'all child requests completed — parent resolved automatically'
     default: return e.event_type.replace('_', ' ')
   }
 }
@@ -68,6 +79,8 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
   const [comment, setComment] = useState('')
   const [overrideTo, setOverrideTo] = useState('')
   const [conversion, setConversion] = useState<ConversionState | null>(null)
+  const [children, setChildren] = useState<ChildRow[]>([])
+  const [parentRef, setParentRef] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lifecycleTick, setLifecycleTick] = useState(0)
   const lifecycle = useLifecycle(requestId, lifecycleTick)
@@ -84,8 +97,21 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
       .single()
       .then(({ data, error: e }) => {
         if (e) setError(e.message)
-        else setReq(data as unknown as Detail)
+        else {
+          const d = data as unknown as Detail
+          setReq(d)
+          if (d.parent_request_id) {
+            supabase.from('requests').select('ref').eq('id', d.parent_request_id).single()
+              .then(({ data: p }) => setParentRef((p as { ref: string } | null)?.ref ?? null))
+          } else setParentRef(null)
+        }
       })
+    supabase
+      .from('requests')
+      .select('id, ref, title, status, service:services(code)')
+      .eq('parent_request_id', requestId)
+      .order('ref')
+      .then(({ data }) => setChildren((data as unknown as ChildRow[]) ?? []))
     supabase
       .from('request_events')
       .select('id, event_type, detail, created_at, actor:profiles(display_name)')
@@ -262,6 +288,47 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
           </div>
         )}
       </div>
+
+      {(children.length > 0 || parentRef) && (
+        <div className="card" style={{ padding: 20, marginBottom: 14 }}>
+          {parentRef && (
+            <div style={{ fontSize: 13, marginBottom: children.length > 0 ? 12 : 0 }}>
+              <span className="chip" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', marginRight: 8 }}>
+                work order
+              </span>
+              Spawned from <span className="mono" style={{ color: 'var(--accent)' }}>{parentRef}</span> —
+              resolving it feeds back into the parent automatically.
+            </div>
+          )}
+          {children.length > 0 && (
+            <>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 8 }}>
+                Child requests · parent auto-resolves when all of them are done
+              </div>
+              {children.map((ch) => (
+                <div key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 13, borderTop: '1px solid var(--line)' }}>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--accent)' }}>{ch.ref}</span>
+                  {ch.service && (
+                    <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)', fontSize: 10 }}>
+                      {ch.service.code}
+                    </span>
+                  )}
+                  <span style={{ flex: 1 }}>{ch.title}</span>
+                  <span
+                    className="chip"
+                    style={{
+                      background: ['resolved', 'closed'].includes(ch.status) ? 'var(--green-soft)' : 'var(--surface)',
+                      color: ['resolved', 'closed'].includes(ch.status) ? 'var(--green)' : 'var(--muted)',
+                    }}
+                  >
+                    {ch.status.replace('_', ' ')}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="card" style={{ padding: 20, marginBottom: 16 }}>
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>Attachments</div>
