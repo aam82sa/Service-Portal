@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
 import { SlaRing } from './Queue'
+import { FileUpload } from '../../components/FileUpload'
 import { Chain, type ApprovalStep } from './Approvals'
 import { LifecycleBar } from '../../components/LifecycleBar'
 import { useLifecycle } from './useLifecycle'
@@ -21,6 +22,7 @@ interface Detail {
   sla_response_due: string | null
   sla_resolution_due: string | null
   sla_paused_at: string | null
+  requester_id: string
   service: { code: string; name: string; form_schema: FormField[] } | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
@@ -259,6 +261,15 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
             </button>
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>Attachments</div>
+        <FileUpload
+          requestId={req.id}
+          canUpload={req.requester_id === profile?.id || hasRole('agent', req.dept) || hasRole('team_lead', req.dept) || hasRole('system_admin')}
+          onError={setError}
+        />
       </div>
 
       <div className="card" style={{ padding: 20 }}>
