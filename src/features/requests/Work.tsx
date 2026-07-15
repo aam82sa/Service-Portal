@@ -84,7 +84,11 @@ const PRIO_FACETS = [
   { key: 'P4', label: 'P4 Low', dot: 'var(--line)' },
 ] as const
 
-export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; initialView?: WorkView }) {
+export function Work({ onOpen, initialView, onViewChange }: {
+  onOpen: (id: string) => void
+  initialView?: WorkView
+  onViewChange?: (v: WorkView) => void
+}) {
   const { session, hasRole } = useAuth()
   const { t } = useTranslation()
   const uid = session!.user.id
@@ -95,7 +99,11 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [view, setView] = useState<WorkView>(initialView ?? 'mine')
+  const [view, setViewState] = useState<WorkView>(initialView ?? 'mine')
+  const setView = (v: WorkView) => {
+    setViewState(v)
+    onViewChange?.(v)
+  }
   const [fTeam, setFTeam] = useState('')
   const [fStatus, setFStatus] = useState('')
   const [fPriority, setFPriority] = useState('')

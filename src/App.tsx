@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { useAuth } from './features/auth/AuthProvider'
 import { SignIn } from './features/auth/SignIn'
@@ -26,6 +27,14 @@ type Page = 'home' | 'portal' | 'requests' | 'work' | 'pmo' | 'letters' | 'insig
 export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people'; workView?: WorkView }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
+/** URL home of each page — deep-linkable and bookmarkable */
+const PATH: Record<Page, string> = {
+  home: '/', portal: '/new', requests: '/requests', work: '/work',
+  pmo: '/projects', letters: '/letters', insights: '/insights',
+  assets: '/assets', admin: '/admin', pmoadmin: '/pmo-admin',
+}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const NAV: { id: Page; tkey: string; ico: IconName; group?: 'workspace' | 'administration' }[] = [
   { id: 'home', tkey: 'nav.overview', ico: 'home' },
   { id: 'portal', tkey: 'nav.newRequest', ico: 'plus' },
@@ -42,12 +51,20 @@ const NAV: { id: Page; tkey: string; ico: IconName; group?: 'workspace' | 'admin
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, canSee, signOut } = useAuth()
   const { t, i18n } = useTranslation()
-  const [page, setPage] = useState<Page>('home')
-  const [adminSection, setAdminSection] = useState<AdminSection | null>(null)
+  const loc = useLocation()
+  const nav = useNavigate()
   const [assetsTab, setAssetsTab] = useState<'hardware' | 'licenses' | 'people'>('hardware')
-  const [workView, setWorkView] = useState<WorkView | undefined>(undefined)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
+
+  // ---- URL is the source of truth ----
+  const segs = loc.pathname.split('/').filter(Boolean)
+  const base = '/' + (segs[0] ?? '')
+  const page = (Object.entries(PATH).find(([, path]) => path === base)?.[0] ?? 'home') as Page
+  const detailParam = segs[0] === 'requests' ? segs[1] ?? null : null
+  const projectParam = segs[0] === 'projects' ? segs[1] ?? null : null
+  const adminSection = (segs[0] === 'admin' ? (segs[1] as AdminSection | undefined) : undefined) ?? null
+  const workView = (new URLSearchParams(loc.search).get('view') as WorkView | null) ?? undefined
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-folded') === '1')
   const [workBadge, setWorkBadge] = useState(0)
   const [isCommittee, setIsCommittee] = useState(false)
@@ -79,19 +96,59 @@ export default function App() {
   const firstVisible: Page = NAV.find((n) => see[n.id])?.id ?? 'home'
 
   const go: Navigate = (p, opts) => {
-    setDetailId(null)
-    setProjectId(null)
-    if (opts?.admin) setAdminSection(opts.admin)
     if (opts?.assetsTab) setAssetsTab(opts.assetsTab)
-    setWorkView(opts?.workView)
-    setPage(p)
+    let path = PATH[p]
+    if (p === 'admin' && opts?.admin) path = `/admin/${opts.admin}`
+    if (p === 'work' && opts?.workView) path = `/work?view=${opts.workView}`
+    nav(path)
   }
+  const openRequest = (id: string) => nav(`/requests/${id}`)
+  const openProject = (id: string) => nav(`/projects/${id}`)
+  const goBack = () => (window.history.length > 1 ? nav(-1) : nav('/'))
+
+  // /requests/:refOrId — accept both, then canonicalize the URL to the REF
+  useEffect(() => {
+    if (!detailParam) {
+      setDetailId(null)
+      return
+    }
+    if (UUID_RE.test(detailParam)) {
+      setDetailId(detailParam)
+      supabase.from('requests').select('ref').eq('id', detailParam).single()
+        .then(({ data }) => {
+          const ref = (data as { ref: string } | null)?.ref
+          if (ref) nav(`/requests/${ref}`, { replace: true })
+        })
+    } else {
+      supabase.from('requests').select('id').eq('ref', detailParam.toUpperCase()).single()
+        .then(({ data }) => setDetailId((data as { id: string } | null)?.id ?? null))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailParam])
+
+  // /projects/:codeOrId — same treatment with the PJ- code
+  useEffect(() => {
+    if (!projectParam) {
+      setProjectId(null)
+      return
+    }
+    if (UUID_RE.test(projectParam)) {
+      setProjectId(projectParam)
+      supabase.from('projects').select('code').eq('id', projectParam).single()
+        .then(({ data }) => {
+          const code = (data as { code: string } | null)?.code
+          if (code) nav(`/projects/${code}`, { replace: true })
+        })
+    } else {
+      supabase.from('projects').select('id').eq('code', projectParam.toUpperCase()).single()
+        .then(({ data }) => setProjectId((data as { id: string } | null)?.id ?? null))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectParam])
 
   useEffect(() => {
-    if (!session) {
-      setPage('home')
-      setDetailId(null)
-    }
+    if (!session && loc.pathname !== '/') nav('/', { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
   // Open items assigned to me -> count pill on "My work"
@@ -122,11 +179,6 @@ export default function App() {
       .then(({ data }) => setIsCommittee((data ?? []).length > 0))
   }, [session, profile])
 
-  useEffect(() => {
-    if (loading || !session) return
-    setPage(see.home ? 'home' : firstVisible)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, session])
 
   if (loading) {
     return (
@@ -176,7 +228,7 @@ export default function App() {
                   <button
                     key={s.id}
                     className={`nav-item sub${(adminSection ?? adminSections[0]?.id) === s.id ? ' active' : ''}`}
-                    onClick={() => { setDetailId(null); setAdminSection(s.id) }}
+                        onClick={() => nav(`/admin/${s.id}`)}
                     title={s.label}
                   >
                     <span className="nav-label">{s.label}</span>
@@ -210,22 +262,29 @@ export default function App() {
       </aside>
       <main className="main">
         <Suspense fallback={<p className="page-sub">Loading…</p>}>
-        {detailId ? (
-          <RequestDetail requestId={detailId} onBack={() => setDetailId(null)} />
-        ) : projectId ? (
-          <ProjectDetail projectId={projectId} onBack={() => setProjectId(null)} />
+        {detailParam && detailId ? (
+          <RequestDetail requestId={detailId} onBack={goBack} />
+        ) : projectParam && projectId ? (
+          <ProjectDetail projectId={projectId} onBack={goBack} />
         ) : (
           <>
-            {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={setDetailId} onOpenProject={setProjectId} />}
+            {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={openRequest} onOpenProject={openProject} />}
             {activePage === 'portal' && see.portal && <Portal />}
-            {activePage === 'requests' && see.requests && <MyRequests onOpen={setDetailId} />}
-            {activePage === 'work' && see.work && <Work onOpen={setDetailId} initialView={workView} key={workView ?? 'default'} />}
-            {activePage === 'pmo' && see.pmo && <Projects onOpen={setProjectId} />}
+            {activePage === 'requests' && see.requests && <MyRequests onOpen={openRequest} />}
+            {activePage === 'work' && see.work && (
+              <Work
+                onOpen={openRequest}
+                initialView={workView}
+                key={workView ?? 'default'}
+                onViewChange={(v) => nav(`/work?view=${v}`, { replace: true })}
+              />
+            )}
+            {activePage === 'pmo' && see.pmo && <Projects onOpen={openProject} />}
             {activePage === 'pmoadmin' && see.pmoadmin && <PmoAdmin />}
             {activePage === 'letters' && see.letters && <Letters />}
-            {activePage === 'insights' && see.insights && <Insights onOpen={setDetailId} />}
+            {activePage === 'insights' && see.insights && <Insights onOpen={openRequest} />}
             {activePage === 'assets' && see.assets && (
-              <Assets onOpenRequest={setDetailId} initialSection={assetsTab} />
+              <Assets onOpenRequest={openRequest} initialSection={assetsTab} />
             )}
             {activePage === 'admin' && see.admin && (
               <AdminPage section={adminSection ?? adminSections[0]?.id ?? 'functions'} />
