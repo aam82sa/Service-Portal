@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ABC Services Hub — Work (Queue redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens copied verbatim from src/styles/app.css :root ---- */
+:root{
+  --ink:#10192E; --ink-2:#1A2540; --ink-3:#243356;
+  --surface:#F4F5F8; --card:#FFFFFF; --line:#E4E7EE;
+  --text:#1B2437; --muted:#6B7280;
+  --accent:#D97757; --accent-soft:#FBEFE9;
+  --green:#2E9E6B; --green-soft:#E7F5EE;
+  --amber:#DE9B2D; --amber-soft:#FBF2DF;
+  --red:#D64545; --red-soft:#FBEAEA;
+  --it:#3E6DD8; --it-soft:#EAF0FC;
+  --admin:#8A5FC9; --admin-soft:#F2EDFA;
+  --log:#2E9E6B; --log-soft:#E7F5EE;
+  --radius:14px;
+  --font-head:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+  /* proposed additions for the a11y branch */
+  --amber-ink:#A9741A;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);background:var(--surface);color:var(--text);font-size:14px}
+h1,h2,h3{font-family:var(--font-head);color:var(--ink);margin:0}
+.mono{font-family:var(--font-mono)}
+.shell{display:flex;min-height:100vh}
+
+/* ---- sidebar (condensed, matches app.css language) ---- */
+.sidebar{width:200px;background:var(--ink);color:#B9C2D6;padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;color:#fff;font-family:var(--font-head);font-weight:600;padding:0 8px 18px}
+.brand-badge{font-family:var(--font-mono);font-size:11px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 6px}
+.nav-group{font-size:11px;color:#5E6B85;margin:14px 8px 4px;font-weight:500}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:12.5px;color:#B9C2D6;background:none;border:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:left}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item.active::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;background:var(--accent);border-radius:2px}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-family:var(--font-mono);font-size:9.5px;border-radius:99px;padding:1px 6px}
+.sidebar-foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--ink-3)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.foot-name{color:#fff;font-size:12px;font-weight:500}
+.foot-mail{font-family:var(--font-mono);font-size:9.5px;color:#5E6B85}
+
+.main{flex:1;padding:16px 22px;min-width:0}
+.page-head{font-size:19px;margin-bottom:2px}
+.page-sub{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+
+/* ---- segmented view switcher (unifies My Work / Queue / Unrouted / Approvals) ---- */
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px}
+.seg button{font-family:var(--font-body);font-size:12.5px;font-weight:500;border:none;background:none;color:var(--muted);padding:6px 14px;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.seg button:hover{color:var(--ink)}
+.seg button.active{background:var(--ink);color:#fff}
+.seg .cnt{font-family:var(--font-mono);font-size:10px;background:var(--surface);color:var(--muted);border-radius:99px;padding:0 6px}
+.seg button.active .cnt{background:var(--ink-3);color:#fff}
+
+.work{display:grid;grid-template-columns:210px 1fr;gap:16px;align-items:start}
+
+/* ---- quick-filter rail ---- */
+.rail{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;position:sticky;top:16px}
+.rail-lbl{font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin:14px 4px 6px}
+.rail-lbl:first-child{margin-top:0}
+.facet{display:flex;align-items:center;gap:8px;width:100%;border:none;background:none;font-family:var(--font-body);font-size:12.5px;color:var(--text);padding:6px 8px;border-radius:8px;cursor:pointer;text-align:left}
+.facet:hover{background:var(--surface)}
+.facet.on{background:var(--ink);color:#fff}
+.facet .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.facet .fc{margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.facet.on .fc{color:#C7D0E4}
+.view-row{display:flex;align-items:center;gap:6px}
+.view-row .facet{flex:1}
+.view-flag{color:var(--accent);font-size:11px}
+
+/* ---- list panel ---- */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.search{flex:1;max-width:320px;position:relative}
+.search input{width:100%;font-family:var(--font-body);font-size:12.5px;padding:7px 10px 7px 30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)}
+.search input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.search svg{position:absolute;left:9px;top:8px;color:var(--muted)}
+.tool-spacer{flex:1}
+.btn{font-family:var(--font-body);font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#c9694b}
+.btn.ghost{border-color:transparent}
+.density{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.density button{border:none;background:var(--card);color:var(--muted);padding:6px 9px;cursor:pointer;font-size:11px;font-family:var(--font-body)}
+.density button.on{background:var(--ink);color:#fff}
+
+/* ---- chips (semantic, via Chip primitive) ---- */
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.t-red{background:var(--red-soft);color:var(--red)}
+.t-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.t-green{background:var(--green-soft);color:var(--green)}
+.t-accent{background:var(--accent-soft);color:var(--accent)}
+.t-it{background:var(--it-soft);color:var(--it)}
+.t-muted{background:var(--surface);color:var(--muted)}
+
+/* ---- column header + rows ---- */
+.col-head,.qrow{display:grid;grid-template-columns:30px 78px 1fr 150px 132px 118px 40px;align-items:center;gap:12px}
+.col-head{padding:8px 16px;border-bottom:1px solid var(--line);background:var(--surface);font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+.col-head button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:3px}
+.qrow{padding:11px 16px;border-top:1px solid #EDEFF4;width:100%;background:none;border-left:none;border-right:none;border-bottom:none;font-family:var(--font-body);text-align:left;cursor:pointer;position:relative}
+.qrow:hover{background:var(--surface)}
+.qrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.qrow.sel{background:var(--accent-soft)}
+.compact .qrow{padding:6px 16px}
+.rail-bar{position:absolute;left:0;top:6px;bottom:6px;width:4px;border-radius:2px}
+.r-ref{font-family:var(--font-mono);font-size:12px;color:var(--ink)}
+.r-title{font-weight:500;color:var(--ink);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-meta{color:var(--muted);font-size:11.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.compact .r-meta{display:none}
+.assignee{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--text)}
+.assignee .avatar{width:22px;height:22px;font-size:9px;background:var(--ink-2)}
+.assignee.none{color:var(--muted);font-style:italic}
+.sla{display:inline-flex;align-items:center;gap:6px}
+.sla .mono{font-size:10.5px}
+.ck{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.overflow{all:unset;cursor:pointer;color:var(--muted);width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center}
+.overflow:hover{background:var(--line);color:var(--ink)}
+.next-act{display:flex;justify-content:flex-end}
+
+/* ---- bulk action bar ---- */
+.bulkbar{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--ink);color:#fff;border-bottom:1px solid var(--ink-3)}
+.bulkbar .n{font-weight:600;font-family:var(--font-head)}
+.bulkbar .btn{background:var(--ink-2);border-color:var(--ink-3);color:#fff}
+.bulkbar .btn:hover{background:var(--ink-3)}
+.bulkbar .spacer{flex:1}
+.bulkbar .clear{all:unset;cursor:pointer;color:#B9C2D6;font-size:12px}
+
+.kbd{font-family:var(--font-mono);font-size:10px;background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px;color:var(--muted)}
+.hint{display:flex;gap:14px;align-items:center;color:var(--muted);font-size:11.5px;margin-top:10px;padding:0 2px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-badge">ABC</span><span>Services Hub</span></div>
+    <button class="nav-item"><span>Overview</span></button>
+    <button class="nav-item"><span>New request</span></button>
+    <button class="nav-item"><span>My requests</span></button>
+    <div class="nav-group">Workspace</div>
+    <button class="nav-item active"><span>Work</span><span class="nav-badge">7</span></button>
+    <button class="nav-item"><span>Projects</span></button>
+    <button class="nav-item"><span>Correspondence</span></button>
+    <button class="nav-item"><span>Insights</span></button>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="avatar">SA</span>
+        <div><div class="foot-name">Sara Al-Amri</div><div class="foot-mail">sara.alamri@abc.sa</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- main -->
+  <main class="main">
+    <h2 class="page-head">Work</h2>
+    <p class="page-sub">Everything that needs you — assigned items, your team's queue, unrouted requests, and approvals — in one place.</p>
+
+    <!-- unified view switcher (replaces the My Work / Queue / Approvals nav split) -->
+    <div class="seg">
+      <button><span>My work</span><span class="cnt">7</span></button>
+      <button class="active"><span>Team queue</span><span class="cnt">24</span></button>
+      <button><span>Unrouted</span><span class="cnt">3</span></button>
+      <button><span>Approvals</span><span class="cnt">2</span></button>
+    </div>
+
+    <div class="work">
+      <!-- quick-filter rail -->
+      <aside class="rail">
+        <div class="rail-lbl">Saved views</div>
+        <div class="view-row"><button class="facet on"><span class="view-flag">&#9873;</span>Breached &amp; at-risk<span class="fc">6</span></button></div>
+        <div class="view-row"><button class="facet">My team · unassigned<span class="fc">5</span></button></div>
+        <div class="view-row"><button class="facet">P1/P2 open<span class="fc">4</span></button></div>
+
+        <div class="rail-lbl">SLA state</div>
+        <button class="facet"><span class="dot" style="background:var(--red)"></span>Breached<span class="fc">2</span></button>
+        <button class="facet"><span class="dot" style="background:var(--amber)"></span>At risk<span class="fc">4</span></button>
+        <button class="facet"><span class="dot" style="background:var(--muted)"></span>Paused<span class="fc">1</span></button>
+        <button class="facet"><span class="dot" style="background:var(--red)"></span>Escalated<span class="fc">1</span></button>
+
+        <div class="rail-lbl">Assignee</div>
+        <button class="facet">Assigned to me<span class="fc">7</span></button>
+        <button class="facet">Unassigned<span class="fc">5</span></button>
+
+        <div class="rail-lbl">Priority</div>
+        <button class="facet"><span class="dot" style="background:var(--red)"></span>P1 Critical<span class="fc">1</span></button>
+        <button class="facet"><span class="dot" style="background:var(--amber)"></span>P2 High<span class="fc">3</span></button>
+        <button class="facet"><span class="dot" style="background:var(--line)"></span>P3 Normal<span class="fc">18</span></button>
+      </aside>
+
+      <!-- list panel -->
+      <section class="panel">
+        <!-- toolbar -->
+        <div class="toolbar">
+          <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input placeholder="Search ref, title, requester…" />
+          </div>
+          <div class="tool-spacer"></div>
+          <button class="btn ghost">Sort: SLA due</button>
+          <div class="density"><button class="on">Comfortable</button><button>Compact</button></div>
+          <button class="btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Save view</button>
+        </div>
+
+        <!-- bulk action bar (visible because 2 rows selected) -->
+        <div class="bulkbar">
+          <span class="n">2 selected</span>
+          <button class="btn">Assign to…</button>
+          <button class="btn">Set priority</button>
+          <button class="btn">Move to team…</button>
+          <button class="btn">Transition</button>
+          <span class="spacer"></span>
+          <button class="clear">Clear selection</button>
+        </div>
+
+        <!-- column header (sortable) -->
+        <div class="col-head">
+          <span><input class="ck" type="checkbox" aria-label="Select all"/></span>
+          <span>Priority · Ref</span>
+          <span><button>Request &#8595;</button></span>
+          <span>Assignee</span>
+          <span><button>SLA &#8595;</button></span>
+          <span>Status</span>
+          <span></span>
+        </div>
+
+        <div class="rows" id="rows"><!-- rows injected --></div>
+
+        <div class="hint">
+          <span><span class="kbd">J</span> <span class="kbd">K</span> move</span>
+          <span><span class="kbd">Enter</span> open</span>
+          <span><span class="kbd">X</span> select</span>
+          <span><span class="kbd">A</span> assign to me</span>
+          <span><span class="kbd">/</span> search</span>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+// SLA ring identical in spirit to SlaRing in Queue.tsx (color by meaning, mono remainder)
+function slaRing(state, label){
+  var color = state==='breached'?'var(--red)':state==='paused'?'var(--muted)':state==='warning'?'var(--amber)':'var(--green)';
+  var frac  = state==='breached'?0:state==='paused'?0.5:state==='warning'?0.15:0.7;
+  var r=9,c=2*Math.PI*r, dash = state==='paused' ? '2 3' : (c*frac)+' '+c;
+  return '<span class="sla"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">'+
+    '<circle cx="12" cy="12" r="9" fill="none" stroke="var(--line)" stroke-width="3"/>'+
+    '<circle cx="12" cy="12" r="9" fill="none" stroke="'+color+'" stroke-width="3" stroke-linecap="round" stroke-dasharray="'+dash+'" transform="rotate(-90 12 12)"/>'+
+    '</svg><span class="mono" style="color:'+color+'">'+label+'</span></span>';
+}
+var DEPT={IT:{rail:'var(--it)',label:'IT Services'},ADMIN:{rail:'var(--admin)',label:'Administration'},PROC:{rail:'var(--green)',label:'Procurement'}};
+var STATUS={new:'t-it',triaged:'t-it',in_progress:'t-amber',pending_approval:'t-accent',pending_requester:'t-amber',escalated:'t-red',resolved:'t-green'};
+var PRIO={P1:'t-red',P2:'t-amber',P3:'t-muted',P4:'t-muted'};
+function initials(n){return n.split(' ').map(function(w){return w[0]}).slice(0,2).join('').toUpperCase();}
+
+var DATA=[
+ {ref:'REQ-2048',title:'VPN access failing for Finance team',meta:'Nora Al-Qahtani · Network · unassigned',dept:'IT',pr:'P1',status:'escalated',assignee:null,sla:'breached',slaLabel:'-3h',sel:true},
+ {ref:'REQ-2041',title:'New laptop for onboarding — Software Eng.',meta:'Faisal Al-Harbi · Hardware · Omar Nasser',dept:'IT',pr:'P2',status:'in_progress',assignee:'Omar Nasser',sla:'warning',slaLabel:'5h',sel:true},
+ {ref:'REQ-2039',title:'Business travel authorization — Dubai',meta:'Layla Saad · Travel & transport · unassigned',dept:'ADMIN',pr:'P2',status:'pending_approval',assignee:null,sla:'warning',slaLabel:'7h'},
+ {ref:'REQ-2033',title:'Adobe Creative Cloud license renewal',meta:'Yousef Idris · Software · Sara Al-Amri',dept:'IT',pr:'P3',status:'triaged',assignee:'Sara Al-Amri',sla:'ok',slaLabel:'2d'},
+ {ref:'REQ-2031',title:'Gate pass for external contractor',meta:'Huda Al-Otaibi · Site security · unassigned',dept:'ADMIN',pr:'P3',status:'new',assignee:null,sla:'ok',slaLabel:'1d'},
+ {ref:'REQ-2027',title:'Purchase — 20 monitoring displays',meta:'Tariq Bin Salem · Procurement · Mona Zahran',dept:'PROC',pr:'P3',status:'pending_requester',assignee:'Mona Zahran',sla:'paused',slaLabel:'paused'},
+ {ref:'REQ-2019',title:'Office move — 3rd floor east wing',meta:'Reem Al-Dossari · Facilities · Omar Nasser',dept:'ADMIN',pr:'P3',status:'in_progress',assignee:'Omar Nasser',sla:'ok',slaLabel:'3d'}
+];
+var NEXT={new:'Triage',triaged:'Start',in_progress:'Resolve',pending_approval:'Review',pending_requester:'Nudge',escalated:'Resolve'};
+
+document.getElementById('rows').innerHTML = DATA.map(function(r){
+  var d=DEPT[r.dept];
+  var assignee = r.assignee
+    ? '<span class="assignee"><span class="avatar">'+initials(r.assignee)+'</span>'+r.assignee+'</span>'
+    : '<span class="assignee none">Assign to…</span>';
+  return '<button class="qrow'+(r.sel?' sel':'')+'" role="row" tabindex="0">'+
+    '<span class="rail-bar" style="background:'+d.rail+'"></span>'+
+    '<span><input class="ck" type="checkbox" '+(r.sel?'checked':'')+' aria-label="Select '+r.ref+'"/></span>'+
+    '<span><span class="chip '+PRIO[r.pr]+' mono" style="margin-bottom:3px">'+r.pr+'</span><br><span class="r-ref">'+r.ref+'</span></span>'+
+    '<span style="min-width:0"><div class="r-title">'+r.title+'</div><div class="r-meta">'+r.meta+'</div></span>'+
+    '<span>'+assignee+'</span>'+
+    '<span>'+slaRing(r.sla,r.slaLabel)+'</span>'+
+    '<span><span class="chip '+STATUS[r.status]+'">'+r.status.replace('_',' ')+'</span></span>'+
+    '<span class="next-act"><span class="overflow" title="More actions">&#8942;</span></span>'+
+  '</button>';
+}).join('');
+
+// minimal j/k roving focus to demonstrate keyboard nav (a11y branch)
+var rows=[].slice.call(document.querySelectorAll('.qrow'));var idx=0;
+document.addEventListener('keydown',function(e){
+  if(e.key==='j'){idx=Math.min(idx+1,rows.length-1);rows[idx].focus();}
+  if(e.key==='k'){idx=Math.max(idx-1,0);rows[idx].focus();}
+});
+</script>
+</body>
+</html>

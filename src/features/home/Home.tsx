@@ -191,7 +191,7 @@ export function Home({ onNavigate, onOpenRequest, onOpenProject }: {
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {heroChip('open', open.length, 'var(--amber)', () => onNavigate('requests'))}
-            {isApprover && heroChip('to approve', approvalsCount, 'var(--accent)', () => onNavigate('approvals'))}
+            {isApprover && heroChip('to approve', approvalsCount, 'var(--accent)', () => onNavigate('work', { workView: 'approvals' }))}
             {heroChip('closed this month', closedThisMonth, 'var(--green)', () => onNavigate('requests'))}
           </div>
         </div>
@@ -295,7 +295,7 @@ export function Home({ onNavigate, onOpenRequest, onOpenProject }: {
             {approvalsCount > 1 ? ` — plus ${approvalsCount - 1} more` : ''}
           </span>
           <button
-            onClick={() => onNavigate('approvals')}
+            onClick={() => onNavigate('work', { workView: 'approvals' })}
             style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)' }}
           >
             Review now
