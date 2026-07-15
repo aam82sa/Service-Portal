@@ -78,6 +78,7 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
   const [req, setReq] = useState<Detail | null>(null)
   const [events, setEvents] = useState<Ev[]>([])
   const [comment, setComment] = useState('')
+  const [internalNote, setInternalNote] = useState(false)
   const [overrideTo, setOverrideTo] = useState('')
   const [conversion, setConversion] = useState<ConversionState | null>(null)
   const [children, setChildren] = useState<ChildRow[]>([])
@@ -149,6 +150,7 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
     const { error: e } = await supabase.rpc('add_comment', {
       p_request: requestId,
       p_body: comment.trim(),
+      p_internal: internalNote,
     })
     if (e) setError(e.message)
     else {
@@ -349,24 +351,44 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
             <div style={{ flex: 1 }}>
               <span style={{ fontWeight: 500 }}>{e.actor?.display_name ?? 'Staff'}</span>{' '}
               <span>{eventText(e)}</span>
+              {e.event_type === 'comment' && (e.detail as { internal?: boolean }).internal === true && (
+                <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)', marginInlineStart: 6, fontSize: 10 }}>
+                  internal
+                </span>
+              )}
               <div className="row-desc" style={{ fontSize: 11 }}>
                 {new Date(e.created_at).toLocaleString()}
               </div>
             </div>
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <input
+        <div style={{ marginTop: 12 }}>
+          <textarea
             className="input"
-            style={{ flex: 1 }}
-            placeholder="Add a comment"
+            rows={2}
+            style={{ width: '100%', resize: 'vertical', background: internalNote ? 'var(--amber-soft)' : undefined }}
+            placeholder={internalNote ? 'Internal note — the requester will not see this' : 'Add a comment'}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
           />
-          <button className="btn primary" onClick={send} disabled={!comment.trim()}>
-            Comment
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+            {isDeptStaff && (
+              <div className="density" role="radiogroup" aria-label="Comment visibility">
+                <button className={internalNote ? '' : 'on'} onClick={() => setInternalNote(false)}>
+                  Public reply
+                </button>
+                <button className={internalNote ? 'on' : ''} onClick={() => setInternalNote(true)}>
+                  Internal note
+                </button>
+              </div>
+            )}
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>Ctrl+Enter to send</span>
+            <button className="btn primary" onClick={send} disabled={!comment.trim()}>
+              {internalNote ? 'Add note' : 'Comment'}
+            </button>
+          </div>
         </div>
       </div>
       {error && <p className="error-note">{error}</p>}
