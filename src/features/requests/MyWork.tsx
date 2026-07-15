@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import { DEPT_COLOR, type DeptCode } from '../../lib/types'
-import { SlaRing } from './Queue'
-import { StatusChip } from '../../components/ui'
+import type { DeptCode } from '../../lib/types'
+import { RequestRow, RequestRowHead } from '../../components/RequestRow'
 
 interface WorkRow {
   id: string
@@ -16,6 +15,7 @@ interface WorkRow {
   sla_resolution_due: string | null
   sla_paused_at: string | null
   escalated_at: string | null
+  assignee: { display_name: string } | null
 }
 
 function Section({
@@ -35,23 +35,16 @@ function Section({
         {title}
       </div>
       <div className="card">
-        {rows.map((r) => {
-          const c = DEPT_COLOR[r.dept]
-          return (
-            <div
-              className="row"
-              key={r.id}
-              style={{ cursor: 'pointer' }}
-              onClick={() => onOpen(r.id)}
-            >
-              <span style={{ width: 4, alignSelf: 'stretch', background: c.rail, borderRadius: 2 }} />
-              <span className="mono" style={{ fontSize: 12, width: 84 }}>{r.ref}</span>
-              <span className="row-title" style={{ flex: 1 }}>{r.title}</span>
-              <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} pausedAt={r.sla_paused_at} />
-              <StatusChip status={r.status} escalated={!!r.escalated_at} />
-            </div>
-          )
-        })}
+        <RequestRowHead />
+        {rows.map((r) => (
+          <RequestRow
+            key={r.id}
+            row={r}
+            meta={new Date(r.created_at).toLocaleDateString()}
+            assignee={r.assignee?.display_name ?? null}
+            onOpen={() => onOpen(r.id)}
+          />
+        ))}
         {rows.length === 0 && <div className="row row-desc">{empty}</div>}
       </div>
     </>
@@ -66,21 +59,21 @@ export function MyWork({ onOpen }: { onOpen: (id: string) => void }) {
 
   useEffect(() => {
     const uid = session!.user.id
-    const cols = 'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at'
+    const cols = 'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at, assignee:profiles!requests_assignee_id_fkey(display_name)'
     supabase
       .from('requests').select(cols)
       .eq('assignee_id', uid).not('status', 'in', '(closed,cancelled)').order('created_at')
-      .then(({ data }) => setAssigned((data as WorkRow[]) ?? []))
+      .then(({ data }) => setAssigned((data as unknown as WorkRow[]) ?? []))
     if (hasRole('approver')) {
       supabase
         .from('requests').select(cols)
         .eq('status', 'pending_approval').order('created_at')
-        .then(({ data }) => setApprovalRefs((data as WorkRow[]) ?? []))
+        .then(({ data }) => setApprovalRefs((data as unknown as WorkRow[]) ?? []))
     }
     supabase
       .from('requests').select(cols)
       .eq('requester_id', uid).not('status', 'in', '(closed,cancelled)').order('created_at')
-      .then(({ data }) => setOwn((data as WorkRow[]) ?? []))
+      .then(({ data }) => setOwn((data as unknown as WorkRow[]) ?? []))
   }, [session, hasRole])
 
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
