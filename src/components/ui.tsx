@@ -12,7 +12,7 @@ const TONE: Record<Tone, { bg: string; fg: string }> = {
   muted: { bg: 'var(--surface)', fg: 'var(--muted)' },
   accent: { bg: 'var(--accent-soft)', fg: 'var(--accent)' },
   green: { bg: 'var(--green-soft)', fg: 'var(--green)' },
-  amber: { bg: 'var(--amber-soft)', fg: 'var(--amber)' },
+  amber: { bg: 'var(--amber-soft)', fg: 'var(--amber-ink)' },
   red: { bg: 'var(--red-soft)', fg: 'var(--red)' },
   it: { bg: 'var(--it-soft)', fg: 'var(--it)' },
   admin: { bg: 'var(--admin-soft)', fg: 'var(--admin)' },

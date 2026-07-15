@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { DeptCode } from '../../lib/types'
@@ -106,6 +106,8 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
   const [viewName, setViewName] = useState('')
   const [shareTeam, setShareTeam] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const listRef = useRef<HTMLElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const [bulkPrio, setBulkPrio] = useState('')
   const [bulkTeam, setBulkTeam] = useState('')
   const [bulkStatus, setBulkStatus] = useState('')
@@ -283,6 +285,39 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
   const selDepts = new Set(rows.filter((r) => selected.has(r.id)).map((r) => r.dept))
   const canBulkPush = [...selDepts].every((d) => hasRole('dept_head', d) || hasRole('dept_admin', d) || hasRole('team_lead', d)) || hasRole('system_admin')
 
+  // keyboard-only triage: j/k (or arrows) rove across rows, Enter opens the
+  // focused row (native button), X selects, A claims, / jumps to search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === '/') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        return
+      }
+      const mains = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.qrow .r-main') ?? [])]
+      if (mains.length === 0) return
+      const idx = mains.findIndex((m) => m === document.activeElement)
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        mains[Math.min(idx + 1, mains.length - 1)]?.focus()
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        mains[Math.max(idx - 1, 0)]?.focus()
+      } else if ((e.key === 'x' || e.key === 'X') && idx >= 0) {
+        e.preventDefault()
+        toggle(visible[idx].id)
+      } else if ((e.key === 'a' || e.key === 'A') && idx >= 0) {
+        e.preventDefault()
+        const r = visible[idx]
+        if (!r.assignee_id) update(r.id, { assignee_id: uid })
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
+
   const counts = {
     mine: rows.filter((r) => r.assignee_id === uid).length,
     queue: rows.length,
@@ -390,15 +425,18 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
           ))}
         </aside>
 
-        <section className={`panel${compact ? ' compact' : ''}`}>
+        <section className={`panel${compact ? ' compact' : ''}`} ref={listRef}>
           <div className="toolbar">
             <div className="search">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
-              <input placeholder="Search ref, title, requester…" value={q} onChange={(e) => setQ(e.target.value)}
+              <input ref={searchRef} placeholder="Search ref, title, requester…" value={q} onChange={(e) => setQ(e.target.value)}
                 aria-label="Search requests" />
             </div>
+            <span role="status" aria-live="polite" style={{ fontSize: 11, color: 'var(--muted)' }}>
+              {visible.length} shown
+            </span>
             <div className="tool-spacer" />
             <select className="input" style={{ width: 130, padding: '5px 8px', fontSize: 12 }}
               value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
@@ -553,6 +591,13 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
             </div>
           )}
           {!loaded && !error && <SkeletonRows n={6} />}
+          <div className="hint" aria-hidden="true" style={{ padding: '8px 14px 10px' }}>
+            <span><span className="kbd">J</span> <span className="kbd">K</span> move</span>
+            <span><span className="kbd">Enter</span> open</span>
+            <span><span className="kbd">X</span> select</span>
+            <span><span className="kbd">A</span> assign to me</span>
+            <span><span className="kbd">/</span> search</span>
+          </div>
         </section>
       </div>
       )}
