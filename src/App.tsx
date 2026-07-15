@@ -5,9 +5,7 @@ import { SignIn } from './features/auth/SignIn'
 import { Home } from './features/home/Home'
 import { Portal } from './features/catalog/Portal'
 import { MyRequests } from './features/requests/MyRequests'
-import { Queue } from './features/requests/Queue'
-import { Approvals } from './features/requests/Approvals'
-import { MyWork } from './features/requests/MyWork'
+import { Work, type WorkView } from './features/requests/Work'
 import { RequestDetail } from './features/requests/RequestDetail'
 import { Icon, type IconName } from './components/icons'
 import { getAdminSections, type AdminSection } from './features/admin/sections'
@@ -22,17 +20,15 @@ const ProjectDetail = lazy(() => import('./features/pmo/ProjectDetail').then((m)
 const PmoAdmin = lazy(() => import('./features/pmo/PmoAdmin').then((m) => ({ default: m.PmoAdmin })))
 const Letters = lazy(() => import('./features/letters/Letters').then((m) => ({ default: m.Letters })))
 
-type Page = 'home' | 'portal' | 'requests' | 'mywork' | 'queue' | 'approvals' | 'pmo' | 'letters' | 'insights' | 'assets' | 'admin' | 'pmoadmin'
-export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people' }
+type Page = 'home' | 'portal' | 'requests' | 'work' | 'pmo' | 'letters' | 'insights' | 'assets' | 'admin' | 'pmoadmin'
+export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people'; workView?: WorkView }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
 const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
   { id: 'home', label: 'Overview', ico: 'home' },
   { id: 'portal', label: 'New request', ico: 'plus' },
   { id: 'requests', label: 'My requests', ico: 'list' },
-  { id: 'mywork', label: 'My work', ico: 'briefcase', group: 'Workspace' },
-  { id: 'queue', label: 'Department queue', ico: 'inbox', group: 'Workspace' },
-  { id: 'approvals', label: 'Approvals', ico: 'check', group: 'Workspace' },
+  { id: 'work', label: 'Work', ico: 'briefcase', group: 'Workspace' },
   { id: 'pmo', label: 'Projects', ico: 'folder', group: 'Workspace' },
   { id: 'letters', label: 'Correspondence', ico: 'mail', group: 'Workspace' },
   { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
@@ -46,6 +42,7 @@ export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [adminSection, setAdminSection] = useState<AdminSection | null>(null)
   const [assetsTab, setAssetsTab] = useState<'hardware' | 'licenses' | 'people'>('hardware')
+  const [workView, setWorkView] = useState<WorkView | undefined>(undefined)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-folded') === '1')
@@ -60,9 +57,7 @@ export default function App() {
     home: canSee('home') ?? true,
     portal: canSee('portal') ?? !isSys,
     requests: canSee('requests') ?? !isSys,
-    mywork: canSee('mywork') ?? (isStaff || isApprover),
-    queue: canSee('queue') ?? isStaff,
-    approvals: canSee('approvals') ?? isApprover,
+    work: canSee('mywork') ?? canSee('queue') ?? canSee('approvals') ?? (isStaff || isApprover),
     pmo:
       canSee('pmo') ??
       (hasRole('project_manager') || hasRole('pmo_admin') || hasRole('executive') ||
@@ -85,6 +80,7 @@ export default function App() {
     setProjectId(null)
     if (opts?.admin) setAdminSection(opts.admin)
     if (opts?.assetsTab) setAssetsTab(opts.assetsTab)
+    setWorkView(opts?.workView)
     setPage(p)
   }
 
@@ -170,7 +166,7 @@ export default function App() {
               >
                 <Icon name={n.ico} size={collapsed ? 17 : 16} />
                 <span className="nav-label">{n.label}</span>
-                {n.id === 'mywork' && workBadge > 0 && <span className="nav-badge">{workBadge}</span>}
+                {n.id === 'work' && workBadge > 0 && <span className="nav-badge">{workBadge}</span>}
               </button>
               {n.id === 'admin' && activePage === 'admin' && !collapsed &&
                 adminSections.map((s) => (
@@ -212,9 +208,7 @@ export default function App() {
             {activePage === 'home' && see.home && <Home onNavigate={go} onOpenRequest={setDetailId} onOpenProject={setProjectId} />}
             {activePage === 'portal' && see.portal && <Portal />}
             {activePage === 'requests' && see.requests && <MyRequests onOpen={setDetailId} />}
-            {activePage === 'mywork' && see.mywork && <MyWork onOpen={setDetailId} />}
-            {activePage === 'queue' && see.queue && <Queue onOpen={setDetailId} />}
-            {activePage === 'approvals' && see.approvals && <Approvals />}
+            {activePage === 'work' && see.work && <Work onOpen={setDetailId} initialView={workView} key={workView ?? 'default'} />}
             {activePage === 'pmo' && see.pmo && <Projects onOpen={setProjectId} />}
             {activePage === 'pmoadmin' && see.pmoadmin && <PmoAdmin />}
             {activePage === 'letters' && see.letters && <Letters />}
