@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import type { DeptCode } from '../../lib/types'
 import { PersonPicker } from '../../components/PersonPicker'
-import { PriorityChip, StatusChip } from '../../components/ui'
+import { RequestRow, RequestRowHead } from '../../components/RequestRow'
+import { SkeletonRows } from '../../components/SkeletonRows'
 
 interface QueueRow {
   id: string
@@ -62,39 +63,7 @@ const NEXT_ACTIONS: Record<string, { label: string; to: string; primary?: boolea
   resolved: [{ label: 'Close', to: 'closed', primary: true }],
 }
 
-export function SlaRing({ createdAt, due, pausedAt }: {
-  createdAt: string
-  due: string | null
-  pausedAt?: string | null
-}) {
-  if (!due) return null
-  // paused (pending requester): the clock freezes at the pause instant
-  const ref = pausedAt ? new Date(pausedAt).getTime() : Date.now()
-  const total = new Date(due).getTime() - new Date(createdAt).getTime()
-  const left = new Date(due).getTime() - ref
-  const frac = Math.max(0, Math.min(1, left / total))
-  const color = pausedAt ? 'var(--muted)' : left <= 0 ? 'var(--red)' : frac < 0.2 ? 'var(--amber)' : 'var(--green)'
-  const r = 9
-  const circ = 2 * Math.PI * r
-  const hoursLeft = Math.round(left / 3600000)
-  return (
-    <span
-      title={pausedAt ? 'SLA paused — waiting on the requester' : left <= 0 ? 'SLA breached' : `${hoursLeft}h to SLA target`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r={r} fill="none" stroke="var(--line)" strokeWidth="3" />
-        <circle
-          cx="12" cy="12" r={r} fill="none" stroke={color} strokeWidth="3"
-          strokeDasharray={pausedAt ? '2 3' : `${circ * frac} ${circ}`}
-          strokeLinecap="round" transform="rotate(-90 12 12)"
-        />
-      </svg>
-      <span className="mono" style={{ fontSize: 10.5, color }}>
-        {pausedAt ? 'paused' : left <= 0 ? 'breached' : `${hoursLeft}h`}
-      </span>
-    </span>
-  )
-}
+export { SlaRing } from '../../components/SlaRing'
 
 export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
   const { session, hasRole } = useAuth()
@@ -357,83 +326,78 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
         )}
       </div>
 
-      <div className="card">
+      <div className="card" style={{ overflow: 'visible' }}>
+        <RequestRowHead />
         {visible.map((r) => {
-          const c = DEPT_COLOR[r.dept]
           const actions = NEXT_ACTIONS[r.status] ?? []
           const mine = r.assignee_id === uid
           const scope = pushScope(r)
           const isHead = scope === 'dept'
-          return (
-            <div className="row" key={r.id}>
-              <span
-                style={{ width: 4, alignSelf: 'stretch', background: c.rail, borderRadius: 2 }}
-              />
-              <span className="mono" style={{ fontSize: 12, color: 'var(--ink)', width: 84 }}>
-                {r.ref}
-              </span>
-              <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => onOpen(r.id)}>
-                <div className="row-title">{r.title}</div>
-                <div className="row-desc">
-                  {r.requester?.display_name ?? 'Unknown'} ·{' '}
-                  {r.team_id ? teamName.get(r.team_id) ?? 'team' : 'unrouted'} ·{' '}
-                  {r.assignee ? `assigned to ${r.assignee.display_name}` : 'unassigned'}
-                </div>
-              </div>
-              <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} pausedAt={r.sla_paused_at} />
-              <PriorityChip priority={r.priority} />
-              <StatusChip status={r.status} escalated={!!r.escalated_at} />
-              {scope && (
-                <PersonPicker
-                  small width={150}
-                  people={assignOptions(r, scope)}
-                  value={r.assignee_id}
-                  placeholder="Assign to…"
-                  onPick={(p) => update(r.id, { assignee_id: p.id })}
-                />
-              )}
-              {isHead && (
-                <select
-                  className="input" style={{ width: 120, padding: '4px 8px', fontSize: 12 }}
-                  value={r.team_id ?? ''}
-                  onChange={(e) => update(r.id, { team_id: e.target.value || null })}
-                  title="Move to another team"
-                >
-                  <option value="">unrouted</option>
-                  {teams.filter((t) => t.dept === r.dept).map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              )}
+          const canAct = mine || !r.assignee_id
+          const menu = (
+            <>
+              {canAct && actions.length > 0 && <div className="menu-lbl">Move</div>}
+              {canAct && actions.map((a) => (
+                <button key={a.to} className="menu-item" onClick={() => update(r.id, { status: a.to })}>
+                  {a.label}
+                </button>
+              ))}
               {!scope && !r.assignee_id && (
-                <button className="btn" onClick={() => update(r.id, { assignee_id: uid })}>
+                <button className="menu-item" onClick={() => update(r.id, { assignee_id: uid })}>
                   Assign to me
                 </button>
               )}
               {!scope && mine && (
-                <button className="btn" onClick={() => update(r.id, { assignee_id: null })}>
+                <button className="menu-item" onClick={() => update(r.id, { assignee_id: null })}>
                   Hand back
                 </button>
               )}
-              {(mine || !r.assignee_id) &&
-                actions.map((a) => (
-                  <button
-                    key={a.to}
-                    className={`btn${a.primary ? ' primary' : ''}`}
-                    onClick={() => update(r.id, { status: a.to })}
+              {scope && (
+                <div style={{ padding: '2px 8px 6px' }}>
+                  <div className="menu-lbl" style={{ padding: '4px 0 4px' }}>Assign to</div>
+                  <PersonPicker
+                    small width={180}
+                    people={assignOptions(r, scope)}
+                    value={r.assignee_id}
+                    placeholder="Assign to\u2026"
+                    onPick={(p) => update(r.id, { assignee_id: p.id })}
+                  />
+                </div>
+              )}
+              {isHead && (
+                <div style={{ padding: '2px 8px 6px' }}>
+                  <div className="menu-lbl" style={{ padding: '4px 0 4px' }}>Team</div>
+                  <select
+                    className="input" style={{ width: 180, padding: '4px 8px', fontSize: 12 }}
+                    value={r.team_id ?? ''}
+                    onChange={(e) => update(r.id, { team_id: e.target.value || null })}
                   >
-                    {a.label}
-                  </button>
-                ))}
-            </div>
+                    <option value="">unrouted</option>
+                    {teams.filter((t) => t.dept === r.dept).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )
+          return (
+            <RequestRow
+              key={r.id}
+              row={r}
+              meta={`${r.requester?.display_name ?? 'Unknown'} \u00b7 ${r.team_id ? teamName.get(r.team_id) ?? 'team' : 'unrouted'}`}
+              assignee={r.assignee?.display_name ?? null}
+              onOpen={() => onOpen(r.id)}
+              menu={menu}
+            />
           )
         })}
         {loaded && visible.length === 0 && !error && (
           <div className="row row-desc">
-            {filter === 'unrouted' ? 'Nothing unrouted — routing rules are covering everything.' : 'The queue is clear.'}
+            {filter === 'unrouted' ? 'Nothing unrouted \u2014 routing rules are covering everything.' : 'The queue is clear.'}
           </div>
         )}
-        {!loaded && !error && <div className="row row-desc">Loading queue…</div>}
+        {!loaded && !error && <SkeletonRows n={6} />}
       </div>
       {error && <p className="error-note">{error}</p>}
     </>
