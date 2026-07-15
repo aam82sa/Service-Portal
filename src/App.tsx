@@ -8,6 +8,8 @@ import { MyRequests } from './features/requests/MyRequests'
 import { Work, type WorkView } from './features/requests/Work'
 import { RequestDetail } from './features/requests/RequestDetail'
 import { Icon, type IconName } from './components/icons'
+import { useTranslation } from 'react-i18next'
+import { applyLang, type Lang } from './i18n'
 import { getAdminSections, type AdminSection } from './features/admin/sections'
 
 // Heavy features load on demand: assets pulls xlsx+qrcode, admin pulls the
@@ -24,21 +26,22 @@ type Page = 'home' | 'portal' | 'requests' | 'work' | 'pmo' | 'letters' | 'insig
 export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people'; workView?: WorkView }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
-const NAV: { id: Page; label: string; ico: IconName; group?: string }[] = [
-  { id: 'home', label: 'Overview', ico: 'home' },
-  { id: 'portal', label: 'New request', ico: 'plus' },
-  { id: 'requests', label: 'My requests', ico: 'list' },
-  { id: 'work', label: 'Work', ico: 'briefcase', group: 'Workspace' },
-  { id: 'pmo', label: 'Projects', ico: 'folder', group: 'Workspace' },
-  { id: 'letters', label: 'Correspondence', ico: 'mail', group: 'Workspace' },
-  { id: 'insights', label: 'Insights', ico: 'chart', group: 'Workspace' },
-  { id: 'assets', label: 'IT assets', ico: 'device', group: 'Workspace' },
-  { id: 'pmoadmin', label: 'PMO Admin', ico: 'shield', group: 'Administration' },
-  { id: 'admin', label: 'Admin console', ico: 'sliders', group: 'Administration' },
+const NAV: { id: Page; tkey: string; ico: IconName; group?: 'workspace' | 'administration' }[] = [
+  { id: 'home', tkey: 'nav.overview', ico: 'home' },
+  { id: 'portal', tkey: 'nav.newRequest', ico: 'plus' },
+  { id: 'requests', tkey: 'nav.myRequests', ico: 'list' },
+  { id: 'work', tkey: 'nav.work', ico: 'briefcase', group: 'workspace' },
+  { id: 'pmo', tkey: 'nav.projects', ico: 'folder', group: 'workspace' },
+  { id: 'letters', tkey: 'nav.correspondence', ico: 'mail', group: 'workspace' },
+  { id: 'insights', tkey: 'nav.insights', ico: 'chart', group: 'workspace' },
+  { id: 'assets', tkey: 'nav.assets', ico: 'device', group: 'workspace' },
+  { id: 'pmoadmin', tkey: 'nav.pmoAdmin', ico: 'shield', group: 'administration' },
+  { id: 'admin', tkey: 'nav.admin', ico: 'sliders', group: 'administration' },
 ]
 
 export default function App() {
   const { session, profile, loading, isAdmin, hasRole, canSee, signOut } = useAuth()
+  const { t, i18n } = useTranslation()
   const [page, setPage] = useState<Page>('home')
   const [adminSection, setAdminSection] = useState<AdminSection | null>(null)
   const [assetsTab, setAssetsTab] = useState<'hardware' | 'licenses' | 'people'>('hardware')
@@ -157,15 +160,15 @@ export default function App() {
           lastGroup = n.group ?? lastGroup
           return (
             <div key={n.id}>
-              {isNewGroup && <div className="nav-group">{n.group}</div>}
+              {isNewGroup && <div className="nav-group">{t(`nav.${n.group}`)}</div>}
               {isNewGroup && <div className="nav-divider" />}
               <button
                 className={`nav-item${activePage === n.id ? ' active' : ''}`}
                 onClick={() => go(n.id)}
-                title={n.label}
+                title={t(n.tkey)}
               >
                 <Icon name={n.ico} size={collapsed ? 17 : 16} />
-                <span className="nav-label">{n.label}</span>
+                <span className="nav-label">{t(n.tkey)}</span>
                 {n.id === 'work' && workBadge > 0 && <span className="nav-badge">{workBadge}</span>}
               </button>
               {n.id === 'admin' && activePage === 'admin' && !collapsed &&
@@ -192,8 +195,16 @@ export default function App() {
               <div className="foot-mail">{profile?.upn}</div>
             </div>
           </div>
-          <button className="nav-item foot-signout" onClick={signOut} style={{ padding: '6px 0', marginTop: 8 }}>
-            <span className="nav-label">Sign out</span>
+          <button
+            className="nav-item foot-signout"
+            onClick={() => applyLang((i18n.language === 'ar' ? 'en' : 'ar') as Lang)}
+            style={{ padding: '6px 0', marginTop: 8 }}
+            title={t('common.language')}
+          >
+            <span className="nav-label">{i18n.language === 'ar' ? 'English' : 'العربية'}</span>
+          </button>
+          <button className="nav-item foot-signout" onClick={signOut} style={{ padding: '6px 0', marginTop: 4 }}>
+            <span className="nav-label">{t('nav.signOut')}</span>
           </button>
         </div>
       </aside>

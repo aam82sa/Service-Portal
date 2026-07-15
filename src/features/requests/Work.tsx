@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { DeptCode } from '../../lib/types'
@@ -85,6 +86,7 @@ const PRIO_FACETS = [
 
 export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; initialView?: WorkView }) {
   const { session, hasRole } = useAuth()
+  const { t } = useTranslation()
   const uid = session!.user.id
   const [rows, setRows] = useState<WorkRow[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -329,31 +331,28 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
 
   return (
     <>
-      <h2 className="page-head">Work</h2>
-      <p className="page-sub">
-        Everything that needs you — assigned items, your team's queue, unrouted requests, and
-        approvals — in one place.
-      </p>
+      <h2 className="page-head">{t('work.title')}</h2>
+      <p className="page-sub">{t('work.subtitle')}</p>
 
       <div className="seg" role="tablist" aria-label="Work views">
         <button className={view === 'mine' ? 'active' : ''} role="tab" aria-selected={view === 'mine'}
           onClick={() => setView('mine')}>
-          <span>My work</span><span className="cnt">{counts.mine}</span>
+          <span>{t('work.myWork')}</span><span className="cnt">{counts.mine}</span>
         </button>
         <button className={view === 'queue' ? 'active' : ''} role="tab" aria-selected={view === 'queue'}
           onClick={() => setView('queue')}>
-          <span>Team queue</span><span className="cnt">{counts.queue}</span>
+          <span>{t('work.teamQueue')}</span><span className="cnt">{counts.queue}</span>
         </button>
         {isManager && (
           <button className={view === 'unrouted' ? 'active' : ''} role="tab" aria-selected={view === 'unrouted'}
             onClick={() => setView('unrouted')}>
-            <span>Unrouted</span><span className="cnt">{counts.unrouted}</span>
+            <span>{t('work.unrouted')}</span><span className="cnt">{counts.unrouted}</span>
           </button>
         )}
         {isApprover && (
           <button className={view === 'approvals' ? 'active' : ''} role="tab" aria-selected={view === 'approvals'}
             onClick={() => setView('approvals')}>
-            <span>Approvals</span><span className="cnt">{counts.approvals}</span>
+            <span>{t('work.approvals')}</span><span className="cnt">{counts.approvals}</span>
           </button>
         )}
       </div>
@@ -363,7 +362,7 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
       ) : (
       <div className="work">
         <aside className="rail">
-          {views.length > 0 && <div className="rail-lbl">Saved views</div>}
+          {views.length > 0 && <div className="rail-lbl">{t('work.savedViews')}</div>}
           {views.map((v) => (
             <div className="view-row" key={v.id}>
               <button className={`facet${activeView === v.id ? ' on' : ''}`} onClick={() => applyView(v)}
@@ -379,7 +378,7 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
 
           {view === 'queue' && tabTeams.length > 0 && (
             <>
-              <div className="rail-lbl">Team</div>
+              <div className="rail-lbl">{t('work.team')}</div>
               {tabTeams.map((t) => (
                 <button key={t.id} className={`facet${fTeam === t.id ? ' on' : ''}`}
                   onClick={facet(fTeam === t.id, () => setFTeam(t.id), () => setFTeam(''))}>
@@ -392,7 +391,7 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
             </>
           )}
 
-          <div className="rail-lbl">SLA state</div>
+          <div className="rail-lbl">{t('work.slaState')}</div>
           {SLA_FACETS.map((f) => (
             <button key={f.key} className={`facet${fSla === f.key ? ' on' : ''}`}
               onClick={facet(fSla === f.key, () => setFSla(f.key), () => setFSla(''))}>
@@ -403,19 +402,19 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
 
           {view !== 'mine' && (
             <>
-              <div className="rail-lbl">Assignee</div>
+              <div className="rail-lbl">{t('work.assignee')}</div>
               <button className={`facet${fAssignee === 'me' ? ' on' : ''}`}
                 onClick={facet(fAssignee === 'me', () => setFAssignee('me'), () => setFAssignee(''))}>
-                Assigned to me<span className="fc">{facetCount((r) => r.assignee_id === uid)}</span>
+                {t('work.assignedToMe')}<span className="fc">{facetCount((r) => r.assignee_id === uid)}</span>
               </button>
               <button className={`facet${fAssignee === 'unassigned' ? ' on' : ''}`}
                 onClick={facet(fAssignee === 'unassigned', () => setFAssignee('unassigned'), () => setFAssignee(''))}>
-                Unassigned<span className="fc">{facetCount((r) => r.assignee_id === null)}</span>
+                {t('work.unassigned')}<span className="fc">{facetCount((r) => r.assignee_id === null)}</span>
               </button>
             </>
           )}
 
-          <div className="rail-lbl">Priority</div>
+          <div className="rail-lbl">{t('work.priority')}</div>
           {PRIO_FACETS.map((f) => (
             <button key={f.key} className={`facet${fPriority === f.key ? ' on' : ''}`}
               onClick={facet(fPriority === f.key, () => setFPriority(f.key), () => setFPriority(''))}>
@@ -431,55 +430,55 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
-              <input ref={searchRef} placeholder="Search ref, title, requester…" value={q} onChange={(e) => setQ(e.target.value)}
+              <input ref={searchRef} placeholder={t('work.search')} value={q} onChange={(e) => setQ(e.target.value)}
                 aria-label="Search requests" />
             </div>
             <span role="status" aria-live="polite" style={{ fontSize: 11, color: 'var(--muted)' }}>
-              {visible.length} shown
+              {t('work.shown', { count: visible.length })}
             </span>
             <div className="tool-spacer" />
             <select className="input" style={{ width: 130, padding: '5px 8px', fontSize: 12 }}
               value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
-              <option value="sla">Sort: SLA due</option>
-              <option value="newest">Sort: Newest</option>
-              <option value="priority">Sort: Priority</option>
+              <option value="sla">{t('work.sortSla')}</option>
+              <option value="newest">{t('work.sortNewest')}</option>
+              <option value="priority">{t('work.sortPriority')}</option>
             </select>
             <div className="density">
-              <button className={compact ? '' : 'on'} onClick={() => setCompact(false)}>Comfortable</button>
-              <button className={compact ? 'on' : ''} onClick={() => setCompact(true)}>Compact</button>
+              <button className={compact ? '' : 'on'} onClick={() => setCompact(false)}>{t('work.comfortable')}</button>
+              <button className={compact ? 'on' : ''} onClick={() => setCompact(true)}>{t('work.compact')}</button>
             </div>
             {anyFilter && (
               <>
                 <input className="input" style={{ width: 140, padding: '5px 8px', fontSize: 12 }}
-                  placeholder="Save view as…" value={viewName}
+                  placeholder={t('work.saveViewAs')} value={viewName}
                   onChange={(e) => setViewName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') saveView() }} />
                 {myLeadTeamIds.size > 0 && (
                   <select className="input" style={{ width: 140, padding: '5px 8px', fontSize: 12 }}
                     value={shareTeam} onChange={(e) => setShareTeam(e.target.value)} aria-label="Share view with a team">
-                    <option value="">personal</option>
+                    <option value="">{t('work.personal')}</option>
                     {teams.filter((t) => myLeadTeamIds.has(t.id)).map((t) => (
                       <option key={t.id} value={t.id}>share: {t.name}</option>
                     ))}
                   </select>
                 )}
-                <button className="btn" disabled={!viewName.trim()} onClick={saveView}>Save view</button>
+                <button className="btn" disabled={!viewName.trim()} onClick={saveView}>{t('work.saveView')}</button>
               </>
             )}
           </div>
 
           {selected.size > 0 && (
             <div className="bulkbar">
-              <span className="n">{selected.size} selected</span>
+              <span className="n">{t('work.selected', { count: selected.size })}</span>
               {canBulkPush && (
-                <PersonPicker small width={160} people={assignOptions(selDepts)} placeholder="Assign to…"
+                <PersonPicker small width={160} people={assignOptions(selDepts)} placeholder={t('work.assignTo')}
                   onPick={(p) => bulk({ assignee_id: p.id })} dropUp={false} />
               )}
               {canBulkPush && (
                 <select className="input" style={{ width: 110, padding: '5px 8px', fontSize: 12 }}
                   value={bulkPrio} onChange={(e) => { setBulkPrio(e.target.value); if (e.target.value) bulk({ priority: e.target.value }) }}
                   aria-label="Set priority">
-                  <option value="">Priority…</option>
+                  <option value="">{t('work.setPriority')}</option>
                   {['P1', 'P2', 'P3', 'P4'].map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               )}
@@ -487,7 +486,7 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
                 <select className="input" style={{ width: 140, padding: '5px 8px', fontSize: 12 }}
                   value={bulkTeam} onChange={(e) => { setBulkTeam(e.target.value); if (e.target.value) bulk({ team_id: e.target.value }) }}
                   aria-label="Move to team">
-                  <option value="">Move to team…</option>
+                  <option value="">{t('work.moveToTeam')}</option>
                   {teams.filter((t) => selDepts.has(t.dept)).map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
@@ -496,13 +495,13 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
               <select className="input" style={{ width: 140, padding: '5px 8px', fontSize: 12 }}
                 value={bulkStatus} onChange={(e) => { setBulkStatus(e.target.value); if (e.target.value) bulk({ status: e.target.value }) }}
                 aria-label="Transition">
-                <option value="">Transition…</option>
+                <option value="">{t('work.transition')}</option>
                 {['triaged', 'in_progress', 'resolved', 'closed'].map((s) => (
                   <option key={s} value={s}>{s.replace('_', ' ')}</option>
                 ))}
               </select>
               <span className="spacer" />
-              <button className="clear" onClick={() => setSelected(new Set())}>Clear selection</button>
+              <button className="clear" onClick={() => setSelected(new Set())}>{t('work.clearSelection')}</button>
             </div>
           )}
 
@@ -511,15 +510,15 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
               <input type="checkbox" className="ck" checked={allSelected} aria-label="Select all"
                 onChange={() => setSelected(allSelected ? new Set() : new Set(visible.map((r) => r.id)))} />
             </span>
-            <span>Priority · Ref</span>
-            <span>Request</span>
-            <span>Assignee</span>
+            <span>{t('work.colRef')}</span>
+            <span>{t('work.colRequest')}</span>
+            <span>{t('work.colAssignee')}</span>
             <span>
               <button onClick={() => setSort(sort === 'sla' ? 'newest' : 'sla')}>
                 SLA {sort === 'sla' ? '↓' : ''}
               </button>
             </span>
-            <span>Status</span>
+            <span>{t('work.colStatus')}</span>
             <span />
           </div>
 
@@ -530,17 +529,17 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
             const canAct = mine || !r.assignee_id
             const menu = (
               <>
-                {canAct && actions.length > 0 && <div className="menu-lbl">Move</div>}
+                {canAct && actions.length > 0 && <div className="menu-lbl">{t('work.move')}</div>}
                 {canAct && actions.map((a) => (
                   <button key={a.to} className="menu-item" onClick={() => update(r.id, { status: a.to })}>
                     {a.label}
                   </button>
                 ))}
                 {!scope && !r.assignee_id && (
-                  <button className="menu-item" onClick={() => update(r.id, { assignee_id: uid })}>Assign to me</button>
+                  <button className="menu-item" onClick={() => update(r.id, { assignee_id: uid })}>{t('work.assignToMe')}</button>
                 )}
                 {!scope && mine && (
-                  <button className="menu-item" onClick={() => update(r.id, { assignee_id: null })}>Hand back</button>
+                  <button className="menu-item" onClick={() => update(r.id, { assignee_id: null })}>{t('work.handBack')}</button>
                 )}
                 {scope && (
                   <div style={{ padding: '2px 8px 6px' }}>
@@ -587,7 +586,7 @@ export function Work({ onOpen, initialView }: { onOpen: (id: string) => void; in
           })}
           {loaded && visible.length === 0 && !error && (
             <div className="row row-desc">
-              {view === 'unrouted' ? 'Nothing unrouted — routing rules are covering everything.' : 'Nothing here — the queue is clear.'}
+              {view === 'unrouted' ? t('work.unroutedClear') : t('work.queueClear')}
             </div>
           )}
           {!loaded && !error && <SkeletonRows n={6} />}
