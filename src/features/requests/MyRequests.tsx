@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { PriorityChip, StatusChip } from '../../components/ui'
 
 interface RequestRow {
   id: string
@@ -50,7 +51,6 @@ export function MyRequests({ onOpen }: { onOpen: (id: string) => void }) {
       <p className="page-sub">Everything you have submitted, newest first.</p>
       <div className="card">
         {rows.map((r) => {
-          const chip = STATUS_CHIP[r.status] ?? STATUS_CHIP.closed
           const c = DEPT_COLOR[r.dept]
           return (
             <div
@@ -71,12 +71,8 @@ export function MyRequests({ onOpen }: { onOpen: (id: string) => void }) {
                   {new Date(r.created_at).toLocaleString()} · {c.label}
                 </div>
               </div>
-              <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
-                {r.priority}
-              </span>
-              <span className="chip" style={{ background: chip.bg, color: chip.fg }}>
-                {r.status.replace('_', ' ')}
-              </span>
+              <PriorityChip priority={r.priority} />
+              <StatusChip status={r.status} />
             </div>
           )
         })}

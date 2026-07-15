@@ -37,6 +37,51 @@ export function Chip({ tone = 'muted', mono, children, style, onClick }: {
   )
 }
 
+/**
+ * Canonical semantic color for request status/priority — the SAME mapping on
+ * every screen. Department identity lives on the 4px rail only, never on
+ * status or priority chips.
+ */
+export const STATUS_TONE: Record<string, Tone> = {
+  new: 'it',
+  triaged: 'it',
+  in_progress: 'amber',
+  pending_approval: 'accent',
+  pending_requester: 'amber',
+  escalated: 'red',
+  resolved: 'green',
+  closed: 'muted',
+  cancelled: 'muted',
+}
+
+export const PRIORITY_TONE: Record<string, Tone> = {
+  P1: 'red',
+  P2: 'amber',
+  P3: 'muted',
+  P4: 'muted',
+}
+
+export function StatusChip({ status, escalated, style }: {
+  status: string
+  /** SLA escalation folds into the status chip: red tone + suffix */
+  escalated?: boolean
+  style?: CSSProperties
+}) {
+  return (
+    <Chip tone={escalated ? 'red' : STATUS_TONE[status] ?? 'muted'} style={style}>
+      {status.replace(/_/g, ' ')}{escalated ? ' \u00b7 escalated' : ''}
+    </Chip>
+  )
+}
+
+export function PriorityChip({ priority, style }: { priority: string; style?: CSSProperties }) {
+  return (
+    <Chip tone={PRIORITY_TONE[priority] ?? 'muted'} mono style={style}>
+      {priority}
+    </Chip>
+  )
+}
+
 export function Toggle({ on, onChange, disabled, label }: {
   on: boolean
   onChange: () => void

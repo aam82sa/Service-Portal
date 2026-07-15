@@ -8,6 +8,7 @@ import { Chain, type ApprovalStep } from './Approvals'
 import { LifecycleBar } from '../../components/LifecycleBar'
 import { useLifecycle } from './useLifecycle'
 import type { FormField } from '../catalog/RequestForm'
+import { PriorityChip, StatusChip } from '../../components/ui'
 
 interface Detail {
   id: string
@@ -203,12 +204,8 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
             </div>
           </div>
           <SlaRing createdAt={req.created_at} due={req.sla_resolution_due} pausedAt={req.sla_paused_at} />
-          <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
-            {req.priority}
-          </span>
-          <span className="chip" style={{ background: c.soft, color: c.rail }}>
-            {req.status.replace('_', ' ')}
-          </span>
+          <PriorityChip priority={req.priority} />
+          <StatusChip status={req.status} />
         </div>
 
         {fields.length > 0 && (
