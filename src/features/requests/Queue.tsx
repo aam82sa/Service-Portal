@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
 import { PersonPicker } from '../../components/PersonPicker'
+import { PriorityChip, StatusChip } from '../../components/ui'
 
 interface QueueRow {
   id: string
@@ -380,18 +381,8 @@ export function Queue({ onOpen }: { onOpen: (id: string) => void }) {
                 </div>
               </div>
               <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} pausedAt={r.sla_paused_at} />
-              <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
-                {r.priority}
-              </span>
-              <span className="chip" style={{ background: c.soft, color: c.rail }}>
-                {r.status.replace('_', ' ')}
-              </span>
-              {r.escalated_at && (
-                <span className="chip" title="SLA breached — escalated per the escalation rules"
-                  style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>
-                  escalated
-                </span>
-              )}
+              <PriorityChip priority={r.priority} />
+              <StatusChip status={r.status} escalated={!!r.escalated_at} />
               {scope && (
                 <PersonPicker
                   small width={150}

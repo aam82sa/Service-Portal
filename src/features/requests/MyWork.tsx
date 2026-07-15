@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
 import { SlaRing } from './Queue'
+import { StatusChip } from '../../components/ui'
 
 interface WorkRow {
   id: string
@@ -47,14 +48,7 @@ function Section({
               <span className="mono" style={{ fontSize: 12, width: 84 }}>{r.ref}</span>
               <span className="row-title" style={{ flex: 1 }}>{r.title}</span>
               <SlaRing createdAt={r.created_at} due={r.sla_resolution_due} pausedAt={r.sla_paused_at} />
-              <span className="chip" style={{ background: c.soft, color: c.rail }}>
-                {r.status.replace('_', ' ')}
-              </span>
-              {r.escalated_at && (
-                <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>
-                  escalated
-                </span>
-              )}
+              <StatusChip status={r.status} escalated={!!r.escalated_at} />
             </div>
           )
         })}
