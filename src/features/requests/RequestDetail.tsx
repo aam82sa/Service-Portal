@@ -93,7 +93,7 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
     supabase
       .from('requests')
       .select(
-        '*, service:services(code, name, form_schema), requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), approvals(id, request_id, step_order, approver_hint, decision, comment)'
+        '*, service:services(code, name, form_schema), requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), approvals(id, request_id, step_order, approver_hint, decision, comment, assigned:profiles!approvals_assigned_approver_id_fkey(display_name))'
       )
       .eq('id', requestId)
       .single()

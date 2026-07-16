@@ -9,6 +9,7 @@ export interface ApprovalStep {
   approver_hint: string | null
   decision: 'pending' | 'approved' | 'rejected' | 'info_requested'
   comment: string | null
+  assigned?: { display_name: string } | null
 }
 
 interface PendingRequest {
@@ -43,7 +44,7 @@ export function Chain({ steps }: { steps: ApprovalStep[] }) {
                   background: done ? 'var(--green)' : rejected ? 'var(--red)' : 'var(--amber)',
                 }}
               />
-              {s.step_order}. {s.approver_hint ?? 'Approver'}
+              {s.step_order}. {s.assigned?.display_name ?? s.approver_hint ?? 'Approver'}
               {done ? ' — approved' : rejected ? ' — rejected' : ''}
             </span>
           </span>
@@ -63,7 +64,7 @@ export function Approvals() {
     supabase
       .from('requests')
       .select(
-        'id, ref, title, dept, amount, requester:profiles!requests_requester_id_fkey(display_name), steps:approvals(id, request_id, step_order, approver_hint, decision, comment)'
+        'id, ref, title, dept, amount, requester:profiles!requests_requester_id_fkey(display_name), steps:approvals(id, request_id, step_order, approver_hint, decision, comment, assigned:profiles!approvals_assigned_approver_id_fkey(display_name))'
       )
       .eq('status', 'pending_approval')
       .order('created_at')
