@@ -23,16 +23,11 @@ const DEV_USERS = [
   { email: 'biz4@dev.abccorp.com', label: 'Faisal Business — requester' },
 ]
 
-const passwordFor = () => 'AbcHub!2026'
-
 export function SignIn() {
   const { signInDev, signInSso } = useAuth()
-  const [email, setEmailRaw] = useState(DEV_USERS[0].email)
-  const [password, setPassword] = useState(passwordFor())
-  const setEmail = (e: string) => {
-    setEmailRaw(e)
-    setPassword(passwordFor())
-  }
+  const [email, setEmail] = useState(DEV_USERS[0].email)
+  // never ship a working password in the bundle — dev testers type theirs
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -85,8 +80,8 @@ export function SignIn() {
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
             <p style={{ color: 'var(--muted)', fontSize: 11.5, marginTop: 14 }}>
-              Dev mode uses seeded test accounts. Entra ID SSO replaces this screen when
-              VITE_AUTH_MODE=sso.
+              Dev mode uses the seeded test matrix (see e2e/README). Production builds
+              default to Entra ID SSO; VITE_AUTH_MODE=dev is for local stacks only.
             </p>
           </>
         ) : (
