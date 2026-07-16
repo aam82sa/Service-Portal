@@ -29,6 +29,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "@vitest/coverage-v8": "^4.1.10",
+    "pdf-lib": "^1.17.1",
     "supabase": "^2.109.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.8",
