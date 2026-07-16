@@ -19,10 +19,11 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { pickTemplate, renderTemplate, requestVars, type TemplateRow } from './render.ts'
-import type { MailProvider } from './providers/types.ts'
+import type { MailAttachment, MailProvider } from './providers/types.ts'
 import { smtpProvider } from './providers/smtp.ts'
 import { graphProvider, graphToken } from './providers/graph.ts'
 import { eventKey } from './outbox.ts'
+import { deliveryMode, planRecipients, reportVars } from './reportDelivery.ts'
 
 const env = (k: string) => Deno.env.get(k)
 
@@ -167,13 +168,129 @@ async function drainOutbox(db: ReturnType<typeof admin>): Promise<{ claimed: num
   return { claimed: rows.length, sent, failed }
 }
 
+// ---- report email-once (mode:'report') ----
+const REPORT_CONTENT_TYPE: Record<string, string> = {
+  pdf: 'application/pdf',
+  csv: 'text/csv; charset=utf-8',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+}
+function slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'report'
+}
+function reportPeriodLabel(config: unknown): string {
+  const p = (config as { period?: { from?: string; to?: string } } | null)?.period
+  if (!p || (!p.from && !p.to)) return 'all time'
+  return `${p.from ?? '…'} – ${p.to ?? '…'}`
+}
+
+interface ReportDef { name: string | null; contains_personal_data: boolean; config: unknown }
+interface ReportRunRow {
+  id: string
+  status: string
+  artifact_path: string | null
+  format: string
+  run_as_owner: string
+  requested_by: string | null
+  definition: ReportDef | ReportDef[] | null
+}
+
+/**
+ * Email a finished report once. Internal recipients (active profiles) always
+ * receive it; external addresses only when the requester holds the
+ * report_external_delivery capability and the address is on the admin
+ * allowlist. The artifact is attached when ≤ 8 MB, else a signed deep-link is
+ * included. Every send is written to report_deliveries.
+ */
+async function deliverReport(
+  db: ReturnType<typeof admin>,
+  body: Record<string, unknown>,
+  requesterId: string | null,
+): Promise<Response> {
+  const runId = String(body.run_id ?? '')
+  if (!runId) return json({ error: 'run_id is required' }, 400)
+  const recips = (body.recipients ?? {}) as { profile_ids?: string[]; external?: string[] }
+
+  const { data: runData, error: runErr } = await db
+    .from('report_runs')
+    .select('id, status, artifact_path, format, run_as_owner, requested_by, definition:report_definitions(name, contains_personal_data, config)')
+    .eq('id', runId)
+    .single()
+  if (runErr || !runData) return json({ error: 'run not found' }, 404)
+  const run = runData as unknown as ReportRunRow
+  if (run.status !== 'succeeded' || !run.artifact_path) return json({ error: 'report run is not ready' }, 409)
+
+  const def = (Array.isArray(run.definition) ? run.definition[0] : run.definition) ?? null
+  const requester = requesterId ?? run.requested_by
+
+  // internal recipients → active profile UPNs
+  const ids = Array.isArray(recips.profile_ids) ? recips.profile_ids : []
+  let internal: string[] = []
+  if (ids.length) {
+    const { data: profs } = await db.from('profiles').select('upn, is_active').in('id', ids)
+    internal = ((profs ?? []) as { upn: string | null; is_active: boolean }[])
+      .filter((p) => p.is_active && p.upn).map((p) => p.upn as string)
+  }
+
+  // external gate: requester capability + admin allowlist
+  const external = Array.isArray(recips.external) ? recips.external.map(String) : []
+  let hasCapability = false
+  let allowlist: string[] = []
+  if (external.length) {
+    if (requester) {
+      const { data: cap } = await db.rpc('report_can_deliver_external', { p_profile: requester })
+      hasCapability = Boolean(cap)
+    }
+    const { data: al } = await db.from('report_delivery_allowlist').select('email')
+    allowlist = ((al ?? []) as { email: string }[]).map((r) => r.email)
+  }
+
+  const plan = planRecipients({ internal, external, allowlist, hasCapability })
+  if (plan.accepted.length === 0) {
+    return json({ ok: false, sent: 0, refused: plan.refused, skipped: 'no eligible recipients' })
+  }
+
+  const { data: templates } = await db.from('notification_templates')
+    .select('key, dept, subject, body_html, is_active').eq('key', 'report_delivery')
+  const template = pickTemplate((templates ?? []) as TemplateRow[], 'report_delivery', null)
+  if (!template) return json({ error: 'report_delivery template is missing' }, 500)
+
+  const { data: blob, error: dlErr } = await db.storage.from('reports').download(run.artifact_path)
+  if (dlErr || !blob) return json({ error: `artifact download failed: ${dlErr?.message}` }, 500)
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  const mode = deliveryMode(bytes.byteLength)
+
+  const { data: signed } = await db.storage.from('reports').createSignedUrl(run.artifact_path, 60 * 60 * 24)
+  const link = signed?.signedUrl ?? null
+
+  const rendered = renderTemplate(template, reportVars({
+    report_name: def?.name ?? 'Report',
+    period: reportPeriodLabel(def?.config),
+    run_ref: runId.slice(0, 8),
+    download_link: link,
+  }))
+
+  const format = run.format || 'pdf'
+  const attachments: MailAttachment[] | undefined = mode === 'attach'
+    ? [{ filename: `${slugify(def?.name ?? 'report')}.${format}`, content: bytes, contentType: REPORT_CONTENT_TYPE[format] ?? 'application/octet-stream' }]
+    : undefined
+
+  const result = await provider().send({ to: plan.accepted, subject: rendered.subject, html: rendered.html, attachments })
+
+  await db.from('report_deliveries').insert({
+    run_id: runId,
+    channel: 'email',
+    to: plan.accepted,
+    contains_personal_data: Boolean(def?.contains_personal_data),
+    external: plan.external.length > 0,
+    status: result.ok ? 'sent' : 'failed',
+    provider_detail: { mode, provider: result.provider, detail: result.detail ?? null, refused: plan.refused },
+  })
+
+  return json({ ok: result.ok, sent: plan.accepted.length, mode, external: plan.external, refused: plan.refused }, result.ok ? 200 : 502)
+}
+
 Deno.serve(async (httpReq) => {
   if (httpReq.method !== 'POST') return json({ error: 'POST only' }, 405)
-
-  const secret = env('HOOK_SECRET')
-  if (!secret || httpReq.headers.get('x-hook-secret') !== secret) {
-    return json({ error: 'missing or invalid X-Hook-Secret' }, 401)
-  }
 
   let body: Record<string, unknown>
   try {
@@ -183,10 +300,35 @@ Deno.serve(async (httpReq) => {
   }
 
   const db = admin()
+  const secret = env('HOOK_SECRET')
+  const trusted = Boolean(secret && httpReq.headers.get('x-hook-secret') === secret)
 
   // feature flag gates everything except the auth diagnostic
   const { data: flag } = await db.from('feature_flags').select('is_enabled').eq('key', 'email_notifications').single()
   const enabled = Boolean(flag?.is_enabled)
+
+  // ---- report email-once: allowed for a trusted server call OR a signed-in
+  // caller (the requester); external delivery is gated per requester below ----
+  if (body.mode === 'report') {
+    if (!enabled) return json({ skipped: 'email_notifications flag is off' })
+    let requesterId: string | null = null
+    if (trusted) {
+      requesterId = body.requested_by ? String(body.requested_by) : null
+    } else {
+      const caller = createClient(env('SUPABASE_URL')!, env('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: httpReq.headers.get('Authorization') ?? '' } },
+      })
+      const { data: u } = await caller.auth.getUser()
+      if (!u?.user) return json({ error: 'not signed in' }, 401)
+      requesterId = u.user.id
+    }
+    return deliverReport(db, body, requesterId)
+  }
+
+  // ---- every other mode requires the shared secret ----
+  if (!trusted) {
+    return json({ error: 'missing or invalid X-Hook-Secret' }, 401)
+  }
 
   // ---- durable outbox drain (pg_cron nudge / trigger nudge) ----
   if (body.mode === 'drain') {

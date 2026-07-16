@@ -1,4 +1,23 @@
-import type { MailMessage, MailProvider, SendResult } from './types.ts'
+import type { MailAttachment, MailMessage, MailProvider, SendResult } from './types.ts'
+
+/** base64-encode raw bytes without blowing the stack on large buffers. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+function graphAttachment(a: MailAttachment) {
+  return {
+    '@odata.type': '#microsoft.graph.fileAttachment',
+    name: a.filename,
+    contentType: a.contentType,
+    contentBytes: toBase64(a.content),
+  }
+}
 
 /**
  * Microsoft Graph provider — client-credentials flow, sendMail as
@@ -46,6 +65,7 @@ export function graphProvider(env: (k: string) => string | undefined): MailProvi
             subject: msg.subject,
             body: { contentType: 'HTML', content: msg.html },
             toRecipients: msg.to.map((address) => ({ emailAddress: { address } })),
+            ...(msg.attachments?.length ? { attachments: msg.attachments.map(graphAttachment) } : {}),
           },
           saveToSentItems: false,
         }),
