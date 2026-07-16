@@ -22,15 +22,16 @@ const Projects = lazy(() => import('./features/pmo/Projects').then((m) => ({ def
 const ProjectDetail = lazy(() => import('./features/pmo/ProjectDetail').then((m) => ({ default: m.ProjectDetail })))
 const PmoAdmin = lazy(() => import('./features/pmo/PmoAdmin').then((m) => ({ default: m.PmoAdmin })))
 const Letters = lazy(() => import('./features/letters/Letters').then((m) => ({ default: m.Letters })))
+const Reports = lazy(() => import('./features/reports/Reports').then((m) => ({ default: m.Reports })))
 
-type Page = 'home' | 'portal' | 'requests' | 'work' | 'pmo' | 'letters' | 'insights' | 'assets' | 'admin' | 'pmoadmin'
+type Page = 'home' | 'portal' | 'requests' | 'work' | 'pmo' | 'letters' | 'insights' | 'reports' | 'assets' | 'admin' | 'pmoadmin'
 export type NavOpts = { admin?: AdminSection; assetsTab?: 'hardware' | 'licenses' | 'people'; workView?: WorkView }
 export type Navigate = (page: Page, opts?: NavOpts) => void
 
 /** URL home of each page — deep-linkable and bookmarkable */
 const PATH: Record<Page, string> = {
   home: '/', portal: '/new', requests: '/requests', work: '/work',
-  pmo: '/projects', letters: '/letters', insights: '/insights',
+  pmo: '/projects', letters: '/letters', insights: '/insights', reports: '/reports',
   assets: '/assets', admin: '/admin', pmoadmin: '/pmo-admin',
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -43,6 +44,7 @@ const NAV: { id: Page; tkey: string; ico: IconName; group?: 'workspace' | 'admin
   { id: 'pmo', tkey: 'nav.projects', ico: 'folder', group: 'workspace' },
   { id: 'letters', tkey: 'nav.correspondence', ico: 'mail', group: 'workspace' },
   { id: 'insights', tkey: 'nav.insights', ico: 'chart', group: 'workspace' },
+  { id: 'reports', tkey: 'nav.reports', ico: 'grid', group: 'workspace' },
   { id: 'assets', tkey: 'nav.assets', ico: 'device', group: 'workspace' },
   { id: 'pmoadmin', tkey: 'nav.pmoAdmin', ico: 'shield', group: 'administration' },
   { id: 'admin', tkey: 'nav.admin', ico: 'sliders', group: 'administration' },
@@ -86,6 +88,7 @@ export default function App() {
       canSee('letters') ??
       (isStaff || hasRole('dept_head') || isSys),
     insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || isSys),
+    reports: canSee('reports') ?? (isStaff || hasRole('team_lead') || hasRole('dept_head') || hasRole('executive') || isSys),
     assets:
       canSee('assets') ??
       (hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || isSys),
@@ -272,6 +275,7 @@ export default function App() {
             {activePage === 'pmoadmin' && see.pmoadmin && <PmoAdmin />}
             {activePage === 'letters' && see.letters && <Letters />}
             {activePage === 'insights' && see.insights && <Insights onOpen={openRequest} />}
+            {activePage === 'reports' && see.reports && <Reports />}
             {activePage === 'assets' && see.assets && (
               <Assets onOpenRequest={openRequest} initialSection={assetsTab} />
             )}
