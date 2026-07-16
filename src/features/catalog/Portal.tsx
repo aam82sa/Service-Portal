@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { searchCatalog } from '../../lib/catalogSearch'
+import { StatusChip } from '../../components/ui'
 import { RequestForm, type FormField } from './RequestForm'
 import { SEVERITY_STYLE } from '../admin/Announcements'
 
@@ -15,6 +19,14 @@ interface ServiceWithForm {
   parent_id: string | null
   request_type: 'incident' | 'request'
   default_priority: 'P1' | 'P2' | 'P3' | 'P4'
+}
+
+interface OpenReq {
+  id: string
+  ref: string
+  title: string
+  status: string
+  service_id: string
 }
 
 interface Banner {
@@ -120,8 +132,12 @@ const catMatches = (c: CatDef, s: ServiceWithForm) =>
   c.depts ? c.depts.includes(s.dept) : prefixOf(s.code) === c.prefix
 
 export function Portal() {
+  const { session } = useAuth()
+  const nav = useNavigate()
   const [services, setServices] = useState<ServiceWithForm[]>([])
   const [selected, setSelected] = useState<ServiceWithForm | null>(null)
+  const [q, setQ] = useState('')
+  const [myOpen, setMyOpen] = useState<OpenReq[]>([])
   const [banners, setBanners] = useState<Banner[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -145,6 +161,18 @@ export function Portal() {
           .then(({ data: anns }) => setBanners((anns as Banner[]) ?? []))
       })
   }, [])
+
+  // deflection: the requester's own open requests, checked against searches
+  useEffect(() => {
+    if (!session) return
+    supabase
+      .from('requests')
+      .select('id, ref, title, status, service_id')
+      .eq('requester_id', session.user.id)
+      .not('status', 'in', '(resolved,closed,cancelled)')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setMyOpen((data as OpenReq[]) ?? []))
+  }, [session])
 
   useEffect(() => {
     supabase
@@ -308,6 +336,41 @@ export function Portal() {
     body = rows(path === 'request' ? requests : blockServices, block.depts.length > 1)
   }
 
+  // catalog search takes over the body while a query is active
+  const hits = searchCatalog(services, q)
+  const needle = q.trim().toLowerCase()
+  const deflect = needle.length >= 2
+    ? myOpen.filter((r) =>
+        hits.some((h) => h.id === r.service_id) || r.title.toLowerCase().includes(needle),
+      ).slice(0, 4)
+    : []
+  if (needle.length >= 2) {
+    body = (
+      <>
+        {deflect.length > 0 && (
+          <div className="card" style={{ marginBottom: 12, border: '1px solid var(--amber-soft)' }}>
+            <div className="row" style={{ background: 'var(--amber-soft)', fontSize: 12, color: 'var(--amber-ink)', fontWeight: 600 }}>
+              You already have {deflect.length === 1 ? 'an open request' : 'open requests'} like this — check before filing a new one
+            </div>
+            {deflect.map((r) => (
+              <button key={r.id} className="pc-row" onClick={() => nav(`/requests/${r.id}`)}>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--accent)', width: 84 }}>{r.ref}</span>
+                <span className="pc-row-main">
+                  <span className="pc-row-name">{r.title}</span>
+                </span>
+                <StatusChip status={r.status} />
+                <span style={{ color: 'var(--muted)', display: 'inline-flex' }}><Icon name="chevron-right" size={15} /></span>
+              </button>
+            ))}
+          </div>
+        )}
+        {hits.length > 0
+          ? rows(hits, true)
+          : <div className="card"><div className="row-desc" style={{ padding: '12px 16px' }}>Nothing in the catalog matches "{q.trim()}" — try another word or browse below.</div></div>}
+      </>
+    )
+  }
+
   return (
     <>
       {banners.map((b) => {
@@ -326,7 +389,21 @@ export function Portal() {
         )
       })}
       <h2 className="page-head">Service portal</h2>
-      <p className="page-sub">Browse the catalog and submit a request.</p>
+      <p className="page-sub">Search the catalog, or browse by department.</p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
+        <div className="search" style={{ maxWidth: 420 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            placeholder="Search for a service — try \u201cpassword\u201d, \u201claptop\u201d, \u201ctravel\u201d\u2026"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Search the service catalog"
+          />
+        </div>
+        {q && <button className="btn" onClick={() => setQ('')}>Clear</button>}
+      </div>
       {block && (
         <div className="pc-crumb">
           {crumbs.map((c, i) => (
