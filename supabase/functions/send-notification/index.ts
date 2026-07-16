@@ -1,11 +1,13 @@
 /**
  * send-notification — outbound email dispatch for request/letter events.
  *
- * Trigger path: a Supabase Database Webhook on `request_events` INSERT posts
- * here with the shared-secret header `X-Hook-Secret` (secret: HOOK_SECRET).
- * The secret check replaces the previously-disabled JWT verification —
- * requests without it are rejected. `letter_events` posts are accepted as a
- * future route (no templates yet → no-op).
+ * Durable path: a request_events INSERT enqueues an email_outbox row in the
+ * same transaction (00066), then nudges {mode:'drain'} here; a pg_cron job
+ * nudges every minute as a safety net. drain claims due rows, sends each, and
+ * records the result with bounded retries + a dead-letter state, so a 5xx or
+ * SMTP failure is retried instead of silently dropped. All posts carry the
+ * shared-secret header `X-Hook-Secret` (secret: HOOK_SECRET); requests without
+ * it are rejected. `letter_events` posts are accepted as a future route.
  *
  * Provider selection: EMAIL_PROVIDER = 'smtp' | 'graph' (default smtp; point
  * SMTP_* at the Mailtrap sandbox for testing). Diagnostics: {mode:'test-auth'}
@@ -20,6 +22,7 @@ import { pickTemplate, renderTemplate, requestVars, type TemplateRow } from './r
 import type { MailProvider } from './providers/types.ts'
 import { smtpProvider } from './providers/smtp.ts'
 import { graphProvider, graphToken } from './providers/graph.ts'
+import { eventKey } from './outbox.ts'
 
 const env = (k: string) => Deno.env.get(k)
 
@@ -32,24 +35,6 @@ function provider(): MailProvider {
 
 function admin() {
   return createClient(env('SUPABASE_URL')!, env('SUPABASE_SERVICE_ROLE_KEY')!)
-}
-
-/** request_events row → notification_templates key (null = not a mail event). */
-function eventKey(eventType: string, detail: Record<string, unknown>): string | null {
-  switch (eventType) {
-    case 'created': return 'request_created'
-    case 'assigned': return 'assigned'
-    case 'status_changed':
-      if (detail.to === 'pending_approval') return 'pending_approval'
-      if (detail.to === 'resolved') return 'resolved'
-      return null
-    case 'approval_decided':
-      return detail.decision === 'approved' ? 'approved'
-        : detail.decision === 'rejected' ? 'rejected' : null
-    case 'sla_warning': return 'sla_warning'
-    case 'sla_breached': return 'sla_breached'
-    default: return null
-  }
 }
 
 interface RequestRow {
@@ -115,6 +100,73 @@ async function resolveRecipients(
   }
 }
 
+interface EventRecord { request_id: string; event_type: string; detail?: Record<string, unknown> }
+interface DeliveryResult { ok: boolean; skipped?: string; recipients?: string[]; error?: string; detail?: unknown }
+
+/**
+ * Deliver one request_events record: resolve template + recipients, render,
+ * send. A missing template or empty recipient set is a terminal success
+ * (ok: true, skipped) — there is nothing to retry. A provider failure is
+ * ok: false so the outbox reschedules it.
+ */
+async function deliverEvent(db: ReturnType<typeof admin>, record: EventRecord): Promise<DeliveryResult> {
+  const detail = record.detail ?? {}
+  const key = eventKey(record.event_type, detail)
+  if (!key) return { ok: true, skipped: `no mail event for ${record.event_type}` }
+
+  const { data: reqRow, error: reqErr } = await db
+    .from('requests')
+    .select('id, ref, title, dept, status, amount, sla_resolution_due, requester:profiles!requests_requester_id_fkey(display_name, upn), assignee:profiles!requests_assignee_id_fkey(display_name, upn), service:services(name)')
+    .eq('id', record.request_id)
+    .single()
+  if (reqErr || !reqRow) return { ok: false, error: `request not found: ${reqErr?.message}` }
+  const req = reqRow as unknown as RequestRow
+
+  const { data: templates } = await db
+    .from('notification_templates')
+    .select('key, dept, subject, body_html, is_active')
+    .eq('key', key)
+  const template = pickTemplate((templates ?? []) as TemplateRow[], key, req.dept)
+  if (!template) return { ok: true, skipped: `no active template for ${key}` }
+
+  const to = await resolveRecipients(db, key, req, detail)
+  if (to.length === 0) return { ok: true, skipped: 'no recipients resolved' }
+
+  const rendered = renderTemplate(template, requestVars({
+    ref: req.ref, title: req.title, status: req.status, amount: req.amount,
+    requester_name: req.requester?.display_name, service: req.service?.name,
+    sla_due: req.sla_resolution_due,
+  }))
+  const result = await provider().send({ to, subject: rendered.subject, html: rendered.html })
+  return { ok: result.ok, recipients: to, error: result.ok ? undefined : result.detail, detail: result }
+}
+
+interface OutboxRow { id: string; payload: EventRecord }
+
+/** Drain the durable outbox: claim due rows, send each, record the result. */
+async function drainOutbox(db: ReturnType<typeof admin>): Promise<{ claimed: number; sent: number; failed: number }> {
+  const { data, error } = await db.rpc('claim_email_batch', { p_limit: 20 })
+  if (error) throw new Error(`claim_email_batch: ${error.message}`)
+  const rows = (data ?? []) as OutboxRow[]
+  let sent = 0, failed = 0
+  for (const row of rows) {
+    let res: DeliveryResult
+    try {
+      res = await deliverEvent(db, row.payload)
+    } catch (e) {
+      res = { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+    await db.rpc('mark_email_result', {
+      p_id: row.id, p_ok: res.ok,
+      p_recipients: res.recipients ?? null,
+      p_error: res.ok ? null : (res.error ?? 'send failed'),
+      p_detail: res.detail ?? null,
+    })
+    if (res.ok) sent++; else failed++
+  }
+  return { claimed: rows.length, sent, failed }
+}
+
 Deno.serve(async (httpReq) => {
   if (httpReq.method !== 'POST') return json({ error: 'POST only' }, 405)
 
@@ -135,6 +187,16 @@ Deno.serve(async (httpReq) => {
   // feature flag gates everything except the auth diagnostic
   const { data: flag } = await db.from('feature_flags').select('is_enabled').eq('key', 'email_notifications').single()
   const enabled = Boolean(flag?.is_enabled)
+
+  // ---- durable outbox drain (pg_cron nudge / trigger nudge) ----
+  if (body.mode === 'drain') {
+    if (!enabled) return json({ skipped: 'email_notifications flag is off' })
+    try {
+      return json({ mode: 'drain', ...await drainOutbox(db) })
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : String(e) }, 502)
+    }
+  }
 
   // ---- diagnostics ----
   if (body.mode === 'test-auth') {
@@ -161,46 +223,10 @@ Deno.serve(async (httpReq) => {
   }
   if (body.table !== 'request_events') return json({ skipped: `ignoring table ${body.table}` })
 
-  const record = body.record as { request_id: string; event_type: string; detail?: Record<string, unknown> }
-  const detail = record.detail ?? {}
-  const key = eventKey(record.event_type, detail)
-  if (!key) return json({ skipped: `no mail event for ${record.event_type}` })
-
-  const { data: reqRow, error: reqErr } = await db
-    .from('requests')
-    .select('id, ref, title, dept, status, amount, sla_resolution_due, requester:profiles!requests_requester_id_fkey(display_name, upn), assignee:profiles!requests_assignee_id_fkey(display_name, upn), service:services(name)')
-    .eq('id', record.request_id)
-    .single()
-  if (reqErr || !reqRow) return json({ error: `request not found: ${reqErr?.message}` }, 404)
-  const req = reqRow as unknown as RequestRow
-
-  const { data: templates } = await db
-    .from('notification_templates')
-    .select('key, dept, subject, body_html, is_active')
-    .eq('key', key)
-  const template = pickTemplate((templates ?? []) as TemplateRow[], key, req.dept)
-  if (!template) {
-    console.log(`skip ${key} for ${req.ref}: no active template`)
-    return json({ skipped: `no active template for ${key}` })
-  }
-
-  const to = await resolveRecipients(db, key, req, detail)
-  if (to.length === 0) {
-    console.log(`skip ${key} for ${req.ref}: no recipients`)
-    return json({ skipped: 'no recipients resolved' })
-  }
-
-  const rendered = renderTemplate(template, requestVars({
-    ref: req.ref,
-    title: req.title,
-    status: req.status,
-    amount: req.amount,
-    requester_name: req.requester?.display_name,
-    service: req.service?.name,
-    sla_due: req.sla_resolution_due,
-  }))
-
-  const result = await provider().send({ to, subject: rendered.subject, html: rendered.html })
-  console.log(`${key} for ${req.ref} → ${to.join(', ')}: ${result.ok ? 'sent' : `FAILED ${result.detail}`}`)
-  return json({ event: key, to, ...result }, result.ok ? 200 : 502)
+  // legacy per-event path (kept for manual/direct posts); the durable route is
+  // enqueue-on-trigger + the drain mode above
+  const record = body.record as EventRecord
+  const res = await deliverEvent(db, record)
+  if (res.skipped) return json({ skipped: res.skipped })
+  return json({ recipients: res.recipients, ok: res.ok, detail: res.detail }, res.ok ? 200 : 502)
 })
