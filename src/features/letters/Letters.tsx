@@ -37,15 +37,54 @@ interface Ev { id: number; event_type: string; detail: Record<string, unknown>; 
 interface Person { id: string; display_name: string }
 interface Scheme { id: string; name: string; format: string; seq_scope: string; reset_policy: string; is_default: boolean }
 
-const CONF_STYLE: Record<Confidentiality, { bg: string; fg: string; label: string }> = {
-  general: { bg: 'var(--surface)', fg: 'var(--muted)', label: 'General' },
-  restricted: { bg: 'var(--amber-soft)', fg: 'var(--amber)', label: 'Restricted' },
-  confidential: { bg: 'var(--red-soft)', fg: 'var(--red)', label: 'Confidential' },
+const CONF_STYLE: Record<Confidentiality, { cls: string; lock: boolean; label: string }> = {
+  general: { cls: 't-muted', lock: false, label: 'General' },
+  restricted: { cls: 't-amber', lock: true, label: 'Restricted' },
+  confidential: { cls: 't-red', lock: true, label: 'Confidential' },
+}
+const STATUS_CLS: Record<string, string> = {
+  registered: 't-it', in_review: 't-amber', answered: 't-green', closed: 't-muted',
+}
+const ETAG_CLS: Record<string, string> = {
+  view_clear: 't-red', viewed: 't-muted', downloaded: 't-amber', printed: 't-muted',
+  shared: 't-it', number_issued: 't-accent', registered: 't-muted',
+  confidentiality_changed: 't-red', transferred: 't-it',
+}
+const ETAG_LABEL: Record<string, string> = {
+  view_clear: 'view clear', number_issued: 'ref issued', confidentiality_changed: 'confidentiality',
 }
 const label10: React.CSSProperties = {
   fontSize: 10.5, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--muted)',
 }
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
+const isArabic = (s: string | null | undefined) => !!s && /[؀-ۿ]/.test(s)
+
+function LockIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
+      <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  )
+}
+
+function ConfChip({ c }: { c: Confidentiality }) {
+  const s = CONF_STYLE[c]
+  return (
+    <span className={`chip ${s.cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      {s.lock && <LockIcon />}{s.label}
+    </span>
+  )
+}
+
+function DirChip({ d, tag }: { d: Direction; tag?: boolean }) {
+  return (
+    <span className={`${tag ? 'dir-tag' : 'chip'} ${d === 'incoming' ? 't-it' : 't-green'}`}
+      style={tag ? undefined : { display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      <span className="ar">{d === 'incoming' ? 'وارد' : 'صادر'}</span>
+      {tag ? (d === 'incoming' ? 'IN' : 'OUT') : (d === 'incoming' ? 'Incoming' : 'Outgoing')}
+    </span>
+  )
+}
 
 /** Client-side twin of render_letter_number for the live preview. */
 export function previewNumber(format: string, seq = 142, dept = 'ADM', doctype = 'LTR') {
@@ -82,20 +121,20 @@ function Watermark({ stamp }: { stamp: string }) {
 }
 
 /**
- * Watermarked viewer. Every rendered copy identifies its viewer: name, id,
- * timestamp, reference and confidentiality tier tiled across the document.
+ * Inline watermarked viewer. Every rendered copy identifies its viewer: name,
+ * id, timestamp, reference and confidentiality tier tiled across the document.
  * Clear view (no overlay) is reserved for the letter owner when the tenant
- * allows it, and every open is written to the immutable audit log.
+ * allows it, and every open — watermarked or clear — is written to the
+ * immutable audit log the moment the document renders.
  */
-function Viewer({ letter, file, clear, viewer, onClose }: {
-  letter: Letter; file: LetterFile; clear: boolean
-  viewer: { id: string; name: string }; onClose: () => void
+function DocViewer({ letter, file, clear, stamp, onLogged }: {
+  letter: Letter; file: LetterFile; clear: boolean; stamp: string; onLogged: () => void
 }) {
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.storage.from('letters').createSignedUrl(file.path, 60).then(({ data, error: e }) => {
+    supabase.storage.from('letters').createSignedUrl(file.path, 300).then(({ data, error: e }) => {
       if (e) setError(e.message)
       else setUrl(data?.signedUrl ?? null)
     })
@@ -103,47 +142,27 @@ function Viewer({ letter, file, clear, viewer, onClose }: {
       p_letter: letter.id,
       p_type: clear ? 'view_clear' : 'viewed',
       p_detail: { file: file.filename },
-    })
-  }, [letter.id, file.path, file.filename, clear])
+    }).then(() => onLogged())
+  }, [letter.id, file.path, file.filename, clear, onLogged])
 
-  const stamp = `${viewer.name} · ${viewer.id.slice(0, 8)} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} · ${letter.ref_ours ?? letter.ref_theirs ?? letter.id.slice(0, 8)} · ${letter.confidentiality.toUpperCase()}`
   const isPdf = (file.mime ?? '').includes('pdf') || file.filename.toLowerCase().endsWith('.pdf')
 
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(16,25,46,.55)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={onClose}
-    >
-      <div
-        style={{ position: 'relative', width: 'min(880px, 92vw)', height: '86vh', background: '#fff', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--line)' }}>
-          <span className="chip" style={{ background: CONF_STYLE[letter.confidentiality].bg, color: CONF_STYLE[letter.confidentiality].fg }}>
-            {CONF_STYLE[letter.confidentiality].label}
-          </span>
-          <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink)', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-            {file.filename}{clear ? ' — clear copy (audited)' : ''}
-          </span>
-          <button className="btn" onClick={onClose}>Close</button>
+    <div className="lt-viewer" style={{ overflowY: isPdf ? 'hidden' : 'auto', borderTop: '1px solid var(--line)' }}>
+      {error && <p className="error-note" style={{ padding: 16 }}>{error}</p>}
+      {isPdf ? (
+        <>
+          {url && <iframe title={file.filename} src={url} style={{ width: '100%', height: '100%', border: 'none' }} />}
+          {!clear && <Watermark stamp={stamp} />}
+        </>
+      ) : (
+        // tall scans scroll; the watermark wrapper spans the full scrolled
+        // length so no part of the document renders clean
+        <div style={{ position: 'relative', minHeight: '100%' }}>
+          {url && <img src={url} alt={file.filename} style={{ width: '100%', display: 'block' }} />}
+          {!clear && <Watermark stamp={stamp} />}
         </div>
-        <div style={{ position: 'relative', flex: 1, background: 'var(--surface)', overflowY: isPdf ? 'hidden' : 'auto' }}>
-          {error && <p className="error-note" style={{ padding: 16 }}>{error}</p>}
-          {isPdf ? (
-            <>
-              {url && <iframe title={file.filename} src={url} style={{ width: '100%', height: '100%', border: 'none' }} />}
-              {!clear && <Watermark stamp={stamp} />}
-            </>
-          ) : (
-            // tall scans scroll; the watermark wrapper spans the full scrolled
-            // length so no part of the document renders clean
-            <div style={{ position: 'relative', minHeight: '100%' }}>
-              {url && <img src={url} alt={file.filename} style={{ width: '100%', display: 'block' }} />}
-              {!clear && <Watermark stamp={stamp} />}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -158,7 +177,8 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
   const [comment, setComment] = useState('')
   const [shareUser, setShareUser] = useState('')
   const [shareDept, setShareDept] = useState('')
-  const [viewing, setViewing] = useState<{ file: LetterFile; clear: boolean } | null>(null)
+  const [activePath, setActivePath] = useState<string | null>(null)
+  const [clear, setClear] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isOwner = letter.owner_id === viewer.id
@@ -241,182 +261,263 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
     load()
   }
 
-  const field = (label: string, value: React.ReactNode) => (
-    <div>
-      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, color: 'var(--ink)' }}>{value ?? '—'}</div>
-    </div>
-  )
   const comments = events.filter((e) => e.event_type === 'comment')
+  const trail = events.filter((e) => e.event_type !== 'comment')
   const c = DEPT_COLOR[letter.dept]
+  const activeFile = files.find((f) => f.path === activePath) ?? files[0] ?? null
+  const stamp = `${viewer.name} · ${viewer.id.slice(0, 8)} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} · ${letter.ref_ours ?? letter.ref_theirs ?? letter.id.slice(0, 8)} · ${letter.confidentiality.toUpperCase()}`
+
+  const evWho = (e: Ev) => {
+    const who = e.actor?.display_name ?? 'System'
+    switch (e.event_type) {
+      case 'viewed': return `${who} (watermarked)`
+      case 'view_clear': return `${who} opened a clear copy`
+      case 'downloaded': return `${who} downloaded ${str(e.detail.file)}`
+      case 'printed': return `${who} printed a QR label`
+      case 'shared': return `${who} added a named viewer`
+      case 'number_issued': return `${str(e.detail.ref) || 'reference'} assigned`
+      case 'registered': return `${who} registered the letter`
+      case 'transferred': return `${who} transferred ownership`
+      case 'confidentiality_changed': return `${who}: ${str(e.detail.from)} → ${str(e.detail.to)}`
+      default: return who
+    }
+  }
+
+  const attachLabel = (
+    <label className="btn" style={{ cursor: uploading ? 'wait' : 'pointer', padding: '3px 9px', fontSize: 11 }}>
+      {uploading ? 'Uploading…' : '+ Attach scan'}
+      <input
+        type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={uploading}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) attach(f); e.target.value = '' }}
+      />
+    </label>
+  )
 
   return (
     <>
-      <button className="btn" style={{ marginBottom: 12 }} onClick={onBack}>← Registry</button>
-      <div className="card" style={{ padding: 18, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-              <span className="chip mono" style={{ background: 'var(--ink)', color: '#fff' }}>
-                {letter.ref_ours ?? 'no ref'}
-              </span>
-              <span className="chip" style={{ background: letter.direction === 'incoming' ? 'var(--it-soft)' : 'var(--green-soft)', color: letter.direction === 'incoming' ? 'var(--it)' : 'var(--green)' }}>
-                {letter.direction === 'incoming' ? 'Incoming — وارد' : 'Outgoing — صادر'}
-              </span>
-              <span className="chip" style={{ background: conf.bg, color: conf.fg }}>{conf.label}</span>
+      <button className="btn" style={{ marginBottom: 12, padding: '3px 9px', fontSize: 11 }} onClick={onBack}>← Back to register</button>
+      <div className="detail-grid">
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div className="dhead">
+            <div className="chips">
+              <span className="chip t-ink mono">{letter.ref_ours ?? 'no ref'}</span>
+              <DirChip d={letter.direction} />
+              <ConfChip c={letter.confidentiality} />
               <span className="chip" style={{ background: c.soft, color: c.rail }}>{c.label}</span>
+              <span className={`chip ${STATUS_CLS[letter.status] ?? 't-muted'}`}>{letter.status.replace('_', ' ')}</span>
             </div>
-            <h2 style={{ fontSize: 17 }}>{letter.subject}</h2>
-          </div>
-          {!letter.ref_ours && <button className="btn primary" onClick={issueNumber}>Issue reference</button>}
-          <button className="btn" onClick={qrLabel}>QR label</button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-          {field('Their ref', letter.ref_theirs)}
-          {field('Letter date', letter.letter_date)}
-          {field('Received', letter.received_on)}
-          {field('Sender', letter.sender)}
-          {field('Addressee', letter.addressee)}
-          {field('Owner', letter.owner?.display_name)}
-          {field('Status', letter.status.replace('_', ' '))}
-        </div>
-
-        {(letter.brief_ar || letter.brief_en) && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-            {letter.brief_en && (
-              <div style={{ background: 'var(--surface)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5 }}>
-                <div style={label10}>Brief · EN</div>{letter.brief_en}
-              </div>
-            )}
-            {letter.brief_ar && (
-              <div dir="rtl" style={{ background: 'var(--surface)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5 }}>
-                <div style={{ ...label10, textAlign: 'right' }}>الملخص</div>{letter.brief_ar}
-              </div>
+            {isArabic(letter.subject) ? (
+              <>
+                <h2 className="ar" dir="rtl">{letter.subject}</h2>
+                {letter.brief_en && <div className="subj-en">{letter.brief_en}</div>}
+              </>
+            ) : (
+              <h2 style={{ fontSize: 17 }}>{letter.subject}</h2>
             )}
           </div>
-        )}
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {files.map((f) => (
-            <span key={f.id} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', border: '1px solid var(--line)', borderRadius: 9, padding: '6px 10px', fontSize: 12 }}>
-              <span className="mono" style={{ fontSize: 11 }}>{f.filename}</span>
-              <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setViewing({ file: f, clear: false })}>View</button>
-              {isOwner && allowOwnerClear && (
-                <button className="btn" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--accent)' }} onClick={() => setViewing({ file: f, clear: true })}>Clear copy</button>
-              )}
-              {isOwner && letter.confidentiality !== 'confidential' && (
-                <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => download(f)}>Download</button>
-              )}
-              {isOwner && (
-                <button className="btn" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--red)' }} onClick={() => removeFile(f)}>×</button>
-              )}
-            </span>
-          ))}
-          {files.length === 0 && <span className="row-desc">No scanned copy yet — attach one:</span>}
-          <label className="btn" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
-            {uploading ? 'Uploading…' : '+ Attach scan'}
-            <input
-              type="file" accept="application/pdf,image/*" style={{ display: 'none' }} disabled={uploading}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) attach(f); e.target.value = '' }}
-            />
-          </label>
-        </div>
+          {letter.confidentiality === 'confidential' && (
+            <div className="conf-banner">
+              <svg className="shield" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M12 3l7 3v5c0 4.4-3 8.4-7 9.6C8 22.4 5 18.4 5 14V6z" /><path d="M9.5 12l1.8 1.8L15 10" />
+              </svg>
+              <div className="txt">
+                <b>Confidential — access restricted to owner and named viewers.</b>{' '}
+                Sharing is disabled; downloads are blocked. Every copy is stamped with the viewer's identity and logged.
+              </div>
+            </div>
+          )}
 
-        {isOwner && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-            <div>
-              <label className="field-label">Confidentiality (owner only)</label>
-              <select className="input" style={{ width: 170 }} value={letter.confidentiality}
-                onChange={(e) => run(supabase.from('letters').update({ confidentiality: e.target.value }).eq('id', letter.id))}>
-                {(['general', 'restricted', 'confidential'] as const).map((v) => <option key={v} value={v}>{CONF_STYLE[v].label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="field-label">Status</label>
-              <select className="input" style={{ width: 150 }} value={letter.status}
-                onChange={(e) => run(supabase.from('letters').update({ status: e.target.value }).eq('id', letter.id))}>
-                {['registered', 'in_review', 'answered', 'closed'].map((v) => <option key={v} value={v}>{v.replace('_', ' ')}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="field-label">Transfer ownership</label>
-              <PersonPicker
-                people={people.filter((p) => p.id !== letter.owner_id)} width={210}
-                placeholder="Transfer to…"
-                onPick={(p) => run(supabase.from('letters').update({ owner_id: p.id }).eq('id', letter.id))}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14, alignItems: 'start' }}>
-        <div className="card" style={{ padding: 16 }}>
-          <div style={{ ...label10, marginBottom: 8 }}>Comments · {comments.length}</div>
-          {comments.map((e) => (
-            <div key={e.id} style={{ padding: '7px 0', borderTop: '1px solid #EDEFF4', fontSize: 12.5 }}>
-              <span style={{ fontWeight: 600 }}>{e.actor?.display_name ?? 'Unknown'}</span>
-              <span style={{ color: 'var(--muted)', fontSize: 11, marginLeft: 8 }}>{new Date(e.created_at).toLocaleString()}</span>
-              <div style={{ marginTop: 2 }}>{str(e.detail.body)}</div>
-            </div>
-          ))}
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <input className="input" placeholder="Add a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
-            <button className="btn primary" disabled={!comment.trim()}
-              onClick={() => { run(supabase.rpc('add_letter_comment', { p_letter: letter.id, p_body: comment })); setComment('') }}>
-              Post
-            </button>
-          </div>
-
-          {letter.confidentiality !== 'confidential' ? (
+          {activeFile ? (
             <>
-              <div style={{ ...label10, margin: '18px 0 8px' }}>Shared with</div>
-              {shares.map((s) => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12.5, borderTop: '1px solid #EDEFF4' }}>
-                  <span style={{ flex: 1 }}>{s.user?.display_name ?? (s.dept ? `${DEPT_COLOR[s.dept].label} (department)` : '—')}</span>
-                  {isOwner && <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }}
-                    onClick={() => run(supabase.from('letter_shares').delete().eq('id', s.id))}>Remove</button>}
-                </div>
-              ))}
-              {isOwner && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <PersonPicker people={people} value={shareUser || null} flex={1}
-                    placeholder="Share with person…" onPick={(p) => setShareUser(p.id)} />
-                  <select className="input" style={{ width: 190 }} value={shareDept} onChange={(e) => setShareDept(e.target.value)}>
-                    <option value="">…or department</option>
-                    {PORTAL_DEPTS.map((d) => <option key={d} value={d}>{DEPT_COLOR[d].label}</option>)}
+              <DocViewer letter={letter} file={activeFile} clear={clear} stamp={stamp} onLogged={load} />
+              <div className={`wm-note${clear ? ' clear' : ''}`}>
+                <svg className="eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
+                </svg>
+                {clear ? (
+                  <span>You are viewing a <b>clear copy</b> — owner-only. This open was logged to the audit trail.</span>
+                ) : (
+                  <span>You are viewing a <b>watermarked copy</b> stamped <span className="mono">{stamp}</span>. This open was logged.</span>
+                )}
+              </div>
+              <div className="viewer-bar">
+                <span className="fname">{activeFile.filename}</span>
+                {files.length > 1 && (
+                  <select className="input" style={{ width: 180 }} aria-label="Attached file"
+                    value={activeFile.path} onChange={(e) => { setActivePath(e.target.value); setClear(false) }}>
+                    {files.map((f) => <option key={f.id} value={f.path}>{f.filename}</option>)}
                   </select>
-                  <button className="btn" disabled={!shareUser && !shareDept} onClick={() => {
-                    run(supabase.from('letter_shares').insert(shareUser ? { letter_id: letter.id, user_id: shareUser } : { letter_id: letter.id, dept: shareDept }))
-                    setShareUser(''); setShareDept('')
-                  }}>Share</button>
-                </div>
-              )}
+                )}
+                {isOwner && allowOwnerClear && (
+                  <button className="btn" style={{ padding: '3px 9px', fontSize: 11, color: 'var(--accent)', borderColor: 'var(--accent)' }}
+                    onClick={() => setClear((v) => !v)}>
+                    {clear ? 'Back to watermarked' : 'View clear copy'}
+                  </button>
+                )}
+                {isOwner && letter.confidentiality !== 'confidential' && (
+                  <button className="btn" style={{ padding: '3px 9px', fontSize: 11 }} onClick={() => download(activeFile)}>Download</button>
+                )}
+                {isOwner && (
+                  <button className="btn" style={{ padding: '3px 9px', fontSize: 11, color: 'var(--red)' }} onClick={() => removeFile(activeFile)}>Remove</button>
+                )}
+                {attachLabel}
+                <span className="owner-note">{isOwner && allowOwnerClear ? 'Owner-only · audited' : 'Every open is audited'}</span>
+              </div>
             </>
           ) : (
-            <p className="row-desc" style={{ marginTop: 16 }}>Confidential — sharing disabled; transfer ownership instead.</p>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '14px 18px', borderTop: '1px solid var(--line)' }}>
+              <span className="row-desc">No scanned copy yet — attach one:</span>
+              {attachLabel}
+            </div>
           )}
+
+          <div className="meta-row">
+            <div><div className="f-lbl">Our reference</div><div className="f-val mono">{letter.ref_ours ?? '—'}</div></div>
+            <div><div className="f-lbl">Their reference</div><div className="f-val mono">{letter.ref_theirs ?? '—'}</div></div>
+            <div><div className="f-lbl">Received</div><div className="f-val mono">{letter.received_on}</div></div>
+            <div><div className="f-lbl">Owner</div><div className="f-val">{letter.owner?.display_name ?? '—'}</div></div>
+          </div>
+
+          <div className="actions-bar">
+            {!letter.ref_ours && (
+              <button className="btn primary" style={{ padding: '3px 9px', fontSize: 11 }} onClick={issueNumber}>Issue reference</button>
+            )}
+            <button className="btn" style={{ padding: '3px 9px', fontSize: 11 }} onClick={qrLabel}>QR label</button>
+            {isOwner && (
+              <>
+                <select className="input" style={{ width: 130 }} aria-label="Status" value={letter.status}
+                  onChange={(e) => run(supabase.from('letters').update({ status: e.target.value }).eq('id', letter.id))}>
+                  {['registered', 'in_review', 'answered', 'closed'].map((v) => <option key={v} value={v}>{v.replace('_', ' ')}</option>)}
+                </select>
+                <select className="input" style={{ width: 150 }} aria-label="Confidentiality (owner only)" value={letter.confidentiality}
+                  onChange={(e) => run(supabase.from('letters').update({ confidentiality: e.target.value }).eq('id', letter.id))}>
+                  {(['general', 'restricted', 'confidential'] as const).map((v) => <option key={v} value={v}>{CONF_STYLE[v].label}</option>)}
+                </select>
+                <PersonPicker small width={170} people={people.filter((p) => p.id !== letter.owner_id)}
+                  placeholder="Transfer to…"
+                  onPick={(p) => run(supabase.from('letters').update({ owner_id: p.id }).eq('id', letter.id))} />
+              </>
+            )}
+            {letter.confidentiality === 'confidential' && (
+              <span className="disabled-note owner-note">Download &amp; share disabled — confidential</span>
+            )}
+          </div>
         </div>
 
-        <div className="card" style={{ padding: 16 }}>
-          <div style={{ ...label10, marginBottom: 8 }}>Audit trail</div>
-          {events.filter((e) => e.event_type !== 'comment').map((e) => (
-            <div key={e.id} style={{ display: 'flex', gap: 8, padding: '5px 0', fontSize: 11.5, borderTop: '1px solid #EDEFF4' }}>
-              <span className="chip" style={{ background: e.event_type === 'view_clear' ? 'var(--red-soft)' : 'var(--surface)', color: e.event_type === 'view_clear' ? 'var(--red)' : 'var(--muted)', fontSize: 9.5 }}>
-                {e.event_type.replace('_', ' ')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="card" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={label10}>Extracted fields</span>
+              <span className="ai-badge">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                  <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18" />
+                </svg>
+                Read by Claude · confirm to correct
               </span>
-              <span style={{ flex: 1, color: 'var(--ink)' }}>{e.actor?.display_name ?? 'System'}</span>
-              <span className="mono" style={{ color: 'var(--muted)', fontSize: 10 }}>{new Date(e.created_at).toLocaleString()}</span>
             </div>
-          ))}
+            <div className="lt-fgrid">
+              <div>
+                <div className="f-lbl">Sender · المُرسِل</div>
+                <div className={isArabic(letter.sender) ? 'f-val ar' : 'f-val'} dir={isArabic(letter.sender) ? 'rtl' : undefined}>
+                  {letter.sender ?? '—'}
+                </div>
+              </div>
+              <div>
+                <div className="f-lbl">Addressee · المُرسَل إليه</div>
+                <div className={isArabic(letter.addressee) ? 'f-val ar' : 'f-val'} dir={isArabic(letter.addressee) ? 'rtl' : undefined}>
+                  {letter.addressee ?? '—'}
+                </div>
+              </div>
+              <div><div className="f-lbl">Letter number</div><div className="f-val mono">{letter.ref_theirs ?? '—'}</div></div>
+              <div><div className="f-lbl">Letter date</div><div className="f-val mono">{letter.letter_date ?? '—'}</div></div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div className="f-lbl">Subject · الموضوع</div>
+                <div className={isArabic(letter.subject) ? 'f-val ar' : 'f-val'} dir={isArabic(letter.subject) ? 'rtl' : undefined}>
+                  {letter.subject}
+                </div>
+              </div>
+            </div>
+            {letter.brief_ar && (
+              <div className="brief ar" dir="rtl">
+                <div className="f-lbl" style={{ marginBottom: 4 }}>الملخص · عربي</div>
+                {letter.brief_ar}
+              </div>
+            )}
+            {letter.brief_en && (
+              <div className="brief">
+                <div className="f-lbl" style={{ marginBottom: 4 }}>Brief · English</div>
+                {letter.brief_en}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ padding: '16px 18px' }}>
+            <div style={{ ...label10, marginBottom: 10 }}>Audit trail</div>
+            {trail.map((e) => (
+              <div key={e.id} className="ev">
+                <span className={`etag ${ETAG_CLS[e.event_type] ?? 't-muted'}`}>
+                  {ETAG_LABEL[e.event_type] ?? e.event_type.replace(/_/g, ' ')}
+                </span>
+                <span className="who" title={evWho(e)}>{evWho(e)}</span>
+                <span className="ts">{new Date(e.created_at).toLocaleString()}</span>
+              </div>
+            ))}
+            {trail.length === 0 && <div className="row-desc">No events yet.</div>}
+          </div>
+
+          <div className="card" style={{ padding: '16px 18px' }}>
+            <div style={{ ...label10, marginBottom: 8 }}>Comments · {comments.length}</div>
+            {comments.map((e) => (
+              <div key={e.id} style={{ padding: '7px 0', borderTop: '1px solid #EDEFF4', fontSize: 12.5 }}>
+                <span style={{ fontWeight: 600 }}>{e.actor?.display_name ?? 'Unknown'}</span>
+                <span style={{ color: 'var(--muted)', fontSize: 11, marginInlineStart: 8 }}>{new Date(e.created_at).toLocaleString()}</span>
+                <div style={{ marginTop: 2 }} dir={isArabic(str(e.detail.body)) ? 'rtl' : undefined} className={isArabic(str(e.detail.body)) ? 'ar' : undefined}>
+                  {str(e.detail.body)}
+                </div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <input className="input" placeholder="Add a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
+              <button className="btn primary" disabled={!comment.trim()}
+                onClick={() => { run(supabase.rpc('add_letter_comment', { p_letter: letter.id, p_body: comment })); setComment('') }}>
+                Post
+              </button>
+            </div>
+
+            {letter.confidentiality !== 'confidential' ? (
+              <>
+                <div style={{ ...label10, margin: '18px 0 8px' }}>Shared with</div>
+                {shares.map((s) => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12.5, borderTop: '1px solid #EDEFF4' }}>
+                    <span style={{ flex: 1 }}>{s.user?.display_name ?? (s.dept ? `${DEPT_COLOR[s.dept].label} (department)` : '—')}</span>
+                    {isOwner && <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }}
+                      onClick={() => run(supabase.from('letter_shares').delete().eq('id', s.id))}>Remove</button>}
+                  </div>
+                ))}
+                {isOwner && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <PersonPicker people={people} value={shareUser || null} flex={1}
+                      placeholder="Share with person…" onPick={(p) => setShareUser(p.id)} />
+                    <select className="input" style={{ width: 170 }} value={shareDept} onChange={(e) => setShareDept(e.target.value)}>
+                      <option value="">…or department</option>
+                      {PORTAL_DEPTS.map((d) => <option key={d} value={d}>{DEPT_COLOR[d].label}</option>)}
+                    </select>
+                    <button className="btn" disabled={!shareUser && !shareDept} onClick={() => {
+                      run(supabase.from('letter_shares').insert(shareUser ? { letter_id: letter.id, user_id: shareUser } : { letter_id: letter.id, dept: shareDept }))
+                      setShareUser(''); setShareDept('')
+                    }}>Share</button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="row-desc" style={{ marginTop: 16 }}>Confidential — sharing disabled; transfer ownership instead.</p>
+            )}
+          </div>
         </div>
       </div>
 
       {error && <p className="error-note">{error}</p>}
-      {viewing && (
-        <Viewer letter={letter} file={viewing.file} clear={viewing.clear} viewer={viewer} onClose={() => setViewing(null)} />
-      )}
     </>
   )
 }
@@ -673,23 +774,24 @@ export function Letters() {
   const [direction, setDirection] = useState('')
   const [conf, setConf] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [sortAsc, setSortAsc] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isSys = hasRole('system_admin')
 
+  // direction filters client-side so the segmented counts stay stable
   const load = useCallback(() => {
     let q = supabase.from('letters')
       .select('*, owner:profiles!letters_owner_id_fkey(display_name)')
-      .order('created_at', { ascending: false }).limit(200)
+      .order('created_at', { ascending: sortAsc }).limit(200)
     if (query.trim()) q = q.textSearch('tsv', query.trim(), { type: 'websearch', config: 'simple' })
-    if (direction) q = q.eq('direction', direction)
     if (conf) q = q.eq('confidentiality', conf)
     q.then(({ data, error: e }) => {
       if (e) setError(e.message)
       else setLetters((data as unknown as Letter[]) ?? [])
       setLoaded(true)
     })
-  }, [query, direction, conf])
+  }, [query, conf, sortAsc])
   useEffect(load, [load])
 
   useEffect(() => {
@@ -714,6 +816,10 @@ export function Letters() {
     incoming: letters.filter((l) => l.direction === 'incoming').length,
     outgoing: letters.filter((l) => l.direction === 'outgoing').length,
   }), [letters])
+  const shown = useMemo(
+    () => (direction ? letters.filter((l) => l.direction === direction) : letters),
+    [letters, direction]
+  )
 
   if (!profile) return null
   const viewer = { id: profile.id, name: profile.display_name }
@@ -730,70 +836,94 @@ export function Letters() {
 
   return (
     <>
-      <h2 className="page-head">Correspondence — الصادر والوارد</h2>
+      <h2 className="page-head">Correspondence <span className="ar">الصادر والوارد</span></h2>
       <p className="page-sub">
-        Register, search and route official letters. Every view is watermarked and audited.
+        Register, search and route official letters. Every open is per-viewer watermarked and written
+        to an immutable audit log.
       </p>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        {(['registry', 'register', ...(isSys ? ['settings'] as const : [])] as const).map((t) => (
-          <button key={t} className="chip" style={{
-            border: 'none', cursor: 'pointer',
-            background: tab === t ? 'var(--accent-soft)' : 'transparent',
-            color: tab === t ? 'var(--accent)' : 'var(--muted)', fontWeight: tab === t ? 600 : 500,
-          }} onClick={() => setTab(t)}>
-            {t === 'registry' ? `Registry · ${letters.length}` : t === 'register' ? 'Register letter' : 'Settings'}
-          </button>
-        ))}
-      </div>
 
-      {tab === 'registry' && (
+      {tab === 'registry' ? (
         <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <input className="input" style={{ maxWidth: 340 }} placeholder="Search subject, parties, text… (ar/en)"
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+            <div className="seg" style={{ marginBottom: 0 }}>
+              <button className={direction === '' ? 'active' : ''} onClick={() => setDirection('')}>
+                <span>All</span><span className="cnt">{letters.length}</span>
+              </button>
+              <button className={direction === 'incoming' ? 'active' : ''} onClick={() => setDirection('incoming')}>
+                <span className="ar">وارد</span><span>Incoming</span><span className="cnt">{counts.incoming}</span>
+              </button>
+              <button className={direction === 'outgoing' ? 'active' : ''} onClick={() => setDirection('outgoing')}>
+                <span className="ar">صادر</span><span>Outgoing</span><span className="cnt">{counts.outgoing}</span>
+              </button>
+            </div>
+            <span style={{ flex: 1 }} />
+            <input className="input" style={{ maxWidth: 300 }} placeholder="Search subject, parties, full text… (ar / en)"
               value={query} onChange={(e) => setQuery(e.target.value)} />
-            <select className="input" style={{ width: 150 }} value={direction} onChange={(e) => setDirection(e.target.value)}>
-              <option value="">All directions</option>
-              <option value="incoming">Incoming · {counts.incoming}</option>
-              <option value="outgoing">Outgoing · {counts.outgoing}</option>
-            </select>
-            <select className="input" style={{ width: 160 }} value={conf} onChange={(e) => setConf(e.target.value)}>
+            <select className="input" style={{ width: 160 }} aria-label="Confidentiality" value={conf} onChange={(e) => setConf(e.target.value)}>
               <option value="">Any confidentiality</option>
               {(['general', 'restricted', 'confidential'] as const).map((v) => <option key={v} value={v}>{CONF_STYLE[v].label}</option>)}
             </select>
+            <button className="btn primary" onClick={() => setTab('register')}>+ Register letter</button>
+            {isSys && <button className="btn" onClick={() => setTab('settings')}>Settings</button>}
           </div>
+
           <div className="card">
-            {letters.map((l) => {
-              const cs = CONF_STYLE[l.confidentiality]
-              const dc = DEPT_COLOR[l.dept]
-              return (
-                <button key={l.id} className="pc-row" onClick={() => setSelectedId(l.id)}>
-                  <span className="tile-code" style={{ background: l.direction === 'incoming' ? 'var(--it-soft)' : 'var(--green-soft)', color: l.direction === 'incoming' ? 'var(--it)' : 'var(--green)', fontSize: 10.5 }}>
-                    {l.direction === 'incoming' ? 'وارد IN' : 'صادر OUT'}
-                  </span>
-                  <span className="pc-row-main">
-                    <span className="pc-row-name">{l.subject}</span>
-                    <span className="pc-row-desc">
-                      {l.ref_ours ?? l.ref_theirs ?? 'no ref'} · {l.sender ?? '—'} → {l.addressee ?? '—'} · {l.letter_date ?? l.received_on}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: '1px solid var(--line)' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-head)', color: 'var(--ink)' }}>Register</span>
+              <span className="chip t-muted mono">{shown.length} records</span>
+              <span style={{ flex: 1 }} />
+              <button className="btn" style={{ padding: '3px 9px', fontSize: 11 }} onClick={() => setSortAsc((a) => !a)}>
+                Sort: Date {sortAsc ? '↑' : '↓'}
+              </button>
+            </div>
+            <div className="lt-scroll">
+              <div className="lt-head">
+                <span /><span>Reference</span><span>Direction</span><span>Subject</span>
+                <span>From → To</span><span>Date</span><span>Confidentiality</span><span>Status</span>
+              </div>
+              {shown.map((l) => {
+                const dc = DEPT_COLOR[l.dept]
+                const ar = isArabic(l.subject)
+                return (
+                  <button key={l.id} className="lrow" onClick={() => setSelectedId(l.id)}>
+                    <span className="rail-bar" style={{ background: dc.rail }} />
+                    <span>
+                      <span className="r-ref">{l.ref_ours ?? '—'}</span>
+                      <span className="r-ref2">their: {l.ref_theirs ?? '—'}</span>
                     </span>
-                  </span>
-                  <span className="chip" style={{ background: dc.soft, color: dc.rail, fontSize: 10 }}>{l.dept}</span>
-                  <span className="chip" style={{ background: cs.bg, color: cs.fg, fontSize: 10 }}>{cs.label}</span>
-                  <span style={{ fontSize: 11.5, color: 'var(--muted)', width: 130, textAlign: 'right' }}>{l.owner?.display_name ?? ''}</span>
-                </button>
-              )
-            })}
-            {loaded && letters.length === 0 && (
-              <div className="row-desc" style={{ padding: '14px 16px' }}>No letters match.</div>
-            )}
+                    <span><DirChip d={l.direction} tag /></span>
+                    <span style={{ minWidth: 0 }}>
+                      <span className={ar ? 'r-subj ar' : 'r-subj'} dir={ar ? 'rtl' : undefined} style={{ display: 'block' }}>
+                        {l.subject}
+                      </span>
+                    </span>
+                    <span className="parties">{l.sender ?? '—'} → {l.addressee ?? '—'}</span>
+                    <span className="r-date">{l.letter_date ?? l.received_on}</span>
+                    <span><ConfChip c={l.confidentiality} /></span>
+                    <span>
+                      <span className={`chip ${STATUS_CLS[l.status] ?? 't-muted'}`}>{l.status.replace('_', ' ')}</span>
+                    </span>
+                  </button>
+                )
+              })}
+              {loaded && shown.length === 0 && (
+                <div className="row-desc" style={{ padding: '14px 16px' }}>No letters match.</div>
+              )}
+            </div>
           </div>
         </>
+      ) : (
+        <>
+          <button className="btn" style={{ marginBottom: 12, padding: '3px 9px', fontSize: 11 }} onClick={() => setTab('registry')}>
+            ← Back to register
+          </button>
+          {tab === 'register' && (
+            <Register people={people} selfId={profile.id} settings={settings}
+              onDone={() => { setTab('registry'); load() }} />
+          )}
+          {tab === 'settings' && isSys && <Settings settings={settings} onChanged={reloadSettings} />}
+        </>
       )}
-
-      {tab === 'register' && (
-        <Register people={people} selfId={profile.id} settings={settings}
-          onDone={() => { setTab('registry'); load() }} />
-      )}
-      {tab === 'settings' && isSys && <Settings settings={settings} onChanged={reloadSettings} />}
       {error && <p className="error-note">{error}</p>}
     </>
   )
