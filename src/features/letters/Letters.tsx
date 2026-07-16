@@ -121,31 +121,65 @@ function Watermark({ stamp }: { stamp: string }) {
 }
 
 /**
- * Inline watermarked viewer. Every rendered copy identifies its viewer: name,
- * id, timestamp, reference and confidentiality tier tiled across the document.
- * Clear view (no overlay) is reserved for the letter owner when the tenant
- * allows it, and every open — watermarked or clear — is written to the
- * immutable audit log the moment the document renders.
+ * Inline watermarked viewer. Documents are served by the letter-rendition
+ * edge function, which verifies letter access, burns the per-viewer stamp
+ * (name, id fragment, timestamp, reference, tier) into a PDF rendition
+ * server-side, and writes the viewed/view_clear audit event — the raw
+ * object itself is only readable by the letter owner (storage policy 00062),
+ * so lifting the network request never yields a clean copy.
+ *
+ * Local stacks that haven't deployed the function fall back to the owner's
+ * raw signed URL with the client overlay (non-owners are blocked by the
+ * storage policy either way).
  */
 function DocViewer({ letter, file, clear, stamp, onLogged }: {
   letter: Letter; file: LetterFile; clear: boolean; stamp: string; onLogged: () => void
 }) {
   const [url, setUrl] = useState<string | null>(null)
+  const [isPdf, setIsPdf] = useState(true)
+  const [fallback, setFallback] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.storage.from('letters').createSignedUrl(file.path, 300).then(({ data, error: e }) => {
-      if (e) setError(e.message)
-      else setUrl(data?.signedUrl ?? null)
-    })
-    supabase.rpc('log_letter_event', {
-      p_letter: letter.id,
-      p_type: clear ? 'view_clear' : 'viewed',
-      p_detail: { file: file.filename },
-    }).then(() => onLogged())
-  }, [letter.id, file.path, file.filename, clear, onLogged])
+    let objectUrl: string | null = null
+    let cancelled = false
+    setUrl(null)
+    setError(null)
+    setFallback(false)
 
-  const isPdf = (file.mime ?? '').includes('pdf') || file.filename.toLowerCase().endsWith('.pdf')
+    supabase.functions
+      .invoke('letter-rendition', { body: { letter_id: letter.id, path: file.path, clear } })
+      .then(async ({ data, error: e }) => {
+        if (cancelled) return
+        if (!e && data instanceof Blob) {
+          objectUrl = URL.createObjectURL(data)
+          setIsPdf(data.type.includes('pdf'))
+          setUrl(objectUrl)
+          onLogged() // the function wrote the audit event; refresh the trail
+          return
+        }
+        // function unavailable (e.g. local stack) — owner-only raw fallback
+        const { data: s, error: e2 } = await supabase.storage.from('letters').createSignedUrl(file.path, 300)
+        if (cancelled) return
+        if (e2 || !s) {
+          setError(e2?.message ?? e?.message ?? 'preview failed')
+          return
+        }
+        setFallback(true)
+        setIsPdf((file.mime ?? '').includes('pdf') || file.filename.toLowerCase().endsWith('.pdf'))
+        setUrl(s.signedUrl)
+        supabase.rpc('log_letter_event', {
+          p_letter: letter.id,
+          p_type: clear ? 'view_clear' : 'viewed',
+          p_detail: { file: file.filename, rendition: 'client-fallback' },
+        }).then(() => onLogged())
+      })
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [letter.id, file.path, file.filename, file.mime, clear, onLogged])
 
   return (
     <div className="lt-viewer" style={{ overflowY: isPdf ? 'hidden' : 'auto', borderTop: '1px solid var(--line)' }}>
@@ -153,14 +187,14 @@ function DocViewer({ letter, file, clear, stamp, onLogged }: {
       {isPdf ? (
         <>
           {url && <iframe title={file.filename} src={url} style={{ width: '100%', height: '100%', border: 'none' }} />}
-          {!clear && <Watermark stamp={stamp} />}
+          {fallback && !clear && <Watermark stamp={stamp} />}
         </>
       ) : (
-        // tall scans scroll; the watermark wrapper spans the full scrolled
-        // length so no part of the document renders clean
+        // tall scans scroll; the fallback watermark wrapper spans the full
+        // scrolled length so no part of the document renders clean
         <div style={{ position: 'relative', minHeight: '100%' }}>
           {url && <img src={url} alt={file.filename} style={{ width: '100%', display: 'block' }} />}
-          {!clear && <Watermark stamp={stamp} />}
+          {fallback && !clear && <Watermark stamp={stamp} />}
         </div>
       )}
     </div>

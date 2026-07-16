@@ -418,3 +418,6 @@ enabled = true
 # Deploy: supabase functions deploy send-notification
 [functions.send-notification]
 verify_jwt = false
+
+[functions.letter-rendition]
+verify_jwt = true
