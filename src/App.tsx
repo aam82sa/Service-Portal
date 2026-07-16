@@ -223,17 +223,6 @@ export default function App() {
                 <span className="nav-label">{t(n.tkey)}</span>
                 {n.id === 'work' && workBadge > 0 && <span className="nav-badge">{workBadge}</span>}
               </button>
-              {n.id === 'admin' && activePage === 'admin' && !collapsed &&
-                adminSections.map((s) => (
-                  <button
-                    key={s.id}
-                    className={`nav-item sub${(adminSection ?? adminSections[0]?.id) === s.id ? ' active' : ''}`}
-                        onClick={() => nav(`/admin/${s.id}`)}
-                    title={s.label}
-                  >
-                    <span className="nav-label">{s.label}</span>
-                  </button>
-                ))}
             </div>
           )
         })}

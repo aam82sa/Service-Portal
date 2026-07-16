@@ -121,30 +121,40 @@ export function AuditLog() {
       </div>
 
       <div className="card">
+        <div className="aud-head">
+          <span>Timestamp</span><span>Source</span><span>Actor</span><span>Area</span><span>Event</span><span>Ref</span>
+        </div>
         {rows.map((r) => (
-          <div className="row" key={`${r.source}-${r.event_id}`} style={{ gap: 10 }}>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--muted)', width: 130 }}>
-              {new Date(r.created_at).toLocaleString()}
+          <div className="aud-row" key={`${r.source}-${r.event_id}`} title={JSON.stringify(r.detail, null, 2)}>
+            <span className="ts">{new Date(r.created_at).toLocaleString()}</span>
+            <span>
+              <span className="chip" style={{ background: SOURCE_COLOR[r.source].bg, color: SOURCE_COLOR[r.source].fg }}>
+                {r.source}
+              </span>
             </span>
-            <span className="chip" style={{ background: SOURCE_COLOR[r.source].bg, color: SOURCE_COLOR[r.source].fg }}>
-              {r.source}
+            <span className="actor">{r.actor_name}</span>
+            <span>
+              <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
+                {r.area}
+              </span>
             </span>
-            <span style={{ width: 150, fontSize: 12.5, fontWeight: 500 }}>{r.actor_name}</span>
-            <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
-              {r.area}
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {r.action.replace(/_/g, ' ')}
+              <span className="detail" style={{ marginInlineStart: 8 }}>{JSON.stringify(r.detail)}</span>
             </span>
-            <span style={{ fontSize: 12.5 }}>{r.action.replace(/_/g, ' ')}</span>
-            {r.ref && <span className="mono" style={{ fontSize: 11.5, color: 'var(--accent)' }}>{r.ref}</span>}
-            <span className="mono" title={JSON.stringify(r.detail, null, 2)}
-              style={{ flex: 1, fontSize: 10.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-              {JSON.stringify(r.detail)}
-            </span>
+            <span className="ref">{r.ref ?? '\u2014'}</span>
           </div>
         ))}
         {rows.length === 0 && <div className="row row-desc">No events match these filters.</div>}
-        <div className="row">
+        <div className="pager">
+          <span className="readonly-flag">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Read-only ledger
+          </span>
+          <span className="mid">page {page + 1} · {PAGE} per page · export honours filters (up to 500 rows)</span>
           <button className="btn" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>← Newer</button>
-          <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: 'var(--muted)' }}>page {page + 1}</span>
           <button className="btn" disabled={rows.length < PAGE} onClick={() => setPage((p) => p + 1)}>Older →</button>
         </div>
       </div>
