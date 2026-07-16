@@ -5,6 +5,34 @@
 -- ============ Test users ============
 -- The standard test-user matrix (system admin, dept heads, team leads,
 -- agents, business requesters) is created by migration 00035.
+--
+-- Migration 00061 fails closed: it scrambles seeded-account passwords and
+-- strips their email identities so fresh *production* replays never ship
+-- usable shared credentials. seed.sql runs on local `supabase db reset`
+-- only, so restoring the dev matrix here keeps local and e2e sign-in
+-- working — production never executes this file. The database flag stops
+-- later partial migration runs from re-neutralizing this database.
+do $$
+begin
+  execute format('alter database %I set app.seed_demo = ''on''', current_database());
+end $$;
+
+update auth.users
+   set encrypted_password = crypt('AbcTest!2026', gen_salt('bf'))
+ where email like 'tester%@dev.abccorp.com';
+update auth.users
+   set encrypted_password = crypt('AbcHub!2026', gen_salt('bf'))
+ where email like '%@dev.abccorp.com' and email not like 'tester%';
+
+insert into auth.identities (id, user_id, provider_id, identity_data, provider,
+  last_sign_in_at, created_at, updated_at)
+select gen_random_uuid(), u.id, u.id::text,
+       jsonb_build_object('sub', u.id::text, 'email', u.email), 'email', now(), now(), now()
+  from auth.users u
+ where u.email like '%@dev.abccorp.com'
+   and not exists (
+     select 1 from auth.identities i where i.user_id = u.id and i.provider = 'email'
+   );
 
 -- ============ Sample services ============
 insert into services (dept, code, name, description, sla_response_minutes, sla_resolution_minutes, requires_approval, form_schema) values

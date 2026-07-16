@@ -15,6 +15,8 @@ export const USERS = {
 export async function signInAs(page: Page, email: string): Promise<void> {
   await page.goto('/')
   await page.selectOption('select.input', email)
+  // the form no longer prefills a password (nothing usable ships in the bundle)
+  await page.fill('input[type="password"]', PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByText('Overview')).toBeVisible({ timeout: 15_000 })
 }
