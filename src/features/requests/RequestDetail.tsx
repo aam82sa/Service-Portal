@@ -24,6 +24,9 @@ interface Detail {
   sla_resolution_due: string | null
   sla_paused_at: string | null
   requester_id: string
+  resolved_at: string | null
+  rating: number | null
+  rating_comment: string | null
   service: { code: string; name: string; form_schema: FormField[] } | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
@@ -93,7 +96,7 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
     supabase
       .from('requests')
       .select(
-        '*, service:services(code, name, form_schema), requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), approvals(id, request_id, step_order, approver_hint, decision, comment, assigned:profiles!approvals_assigned_approver_id_fkey(display_name))'
+        '*, service:services(code, name, form_schema), resolved_at, rating, rating_comment, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), approvals(id, request_id, step_order, approver_hint, decision, comment, assigned:profiles!approvals_assigned_approver_id_fkey(display_name))'
       )
       .eq('id', requestId)
       .single()
@@ -172,6 +175,22 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
     load()
   }
 
+  const reopen = async () => {
+    const { error: e } = await supabase.rpc('reopen_request', {
+      p_request: requestId, p_reason: null,
+    })
+    if (e) setError(e.message)
+    else load()
+  }
+
+  const rate = async (stars: number) => {
+    const { error: e } = await supabase.rpc('rate_request', {
+      p_request: requestId, p_rating: stars, p_comment: null,
+    })
+    if (e) setError(e.message)
+    else load()
+  }
+
   if (!req) return <p className="page-sub">{error ?? 'Loading…'}</p>
   const c = DEPT_COLOR[req.dept]
   const fields = (req.service?.form_schema ?? []).filter((f) => req.payload?.[f.key])
@@ -233,6 +252,49 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
             <Chain steps={chain} />
           </div>
         )}
+
+        {req.requester_id === profile?.id && ['resolved', 'closed'].includes(req.status) && (() => {
+          const withinWindow = req.status === 'resolved' && req.resolved_at != null
+            && Date.now() - new Date(req.resolved_at).getTime() < 24 * 3600 * 1000
+          return (
+            <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 8 }}>
+                {req.status === 'resolved'
+                  ? 'This request was resolved. Rate the service or reopen it within 24 hours if it isn’t fixed.'
+                  : 'This request is closed. You can still rate the service.'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 2 }} role="radiogroup" aria-label="Rate this request">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                      aria-pressed={(req.rating ?? 0) >= n}
+                      onClick={() => rate(n)}
+                      style={{
+                        padding: '2px 7px', fontSize: 16, lineHeight: 1,
+                        border: 'none', background: 'none', cursor: 'pointer',
+                        color: (req.rating ?? 0) >= n ? 'var(--amber)' : 'var(--line)',
+                      }}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+                {req.rating != null && (
+                  <span className="chip" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>
+                    You rated {req.rating}/5
+                  </span>
+                )}
+                {withinWindow && (
+                  <button className="btn" style={{ color: 'var(--amber-ink)', borderColor: 'var(--amber)' }} onClick={reopen}>
+                    Reopen — not fixed
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {(canEscalate || conversion || req.project_id) && (
           <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
