@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ABC Services Hub — Insights (executive dashboard) redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens copied verbatim from src/styles/app.css :root ---- */
+:root{
+  --ink:#10192E; --ink-2:#1A2540; --ink-3:#243356;
+  --surface:#F4F5F8; --card:#FFFFFF; --line:#E4E7EE;
+  --text:#1B2437; --muted:#6B7280;
+  --accent:#D97757; --accent-soft:#FBEFE9;
+  --green:#2E9E6B; --green-soft:#E7F5EE;
+  --amber:#DE9B2D; --amber-soft:#FBF2DF;
+  --red:#D64545; --red-soft:#FBEAEA;
+  --it:#3E6DD8; --it-soft:#EAF0FC;
+  --admin:#8A5FC9; --admin-soft:#F2EDFA;
+  --log:#2E9E6B; --log-soft:#E7F5EE;
+  --radius:14px;
+  --font-head:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+  /* added for this sweep (AA amber text on white/soft) */
+  --amber-ink:#A9741A;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);background:var(--surface);color:var(--text);font-size:14px}
+h1,h2,h3{font-family:var(--font-head);color:var(--ink);margin:0}
+.mono{font-family:var(--font-mono)}
+.shell{display:flex;min-height:100vh}
+
+/* ---- sidebar ---- */
+.sidebar{width:200px;background:var(--ink);color:#B9C2D6;padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;color:#fff;font-family:var(--font-head);font-weight:600;padding:0 8px 18px}
+.brand-badge{font-family:var(--font-mono);font-size:11px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 6px}
+.nav-group{font-size:11px;color:#5E6B85;margin:14px 8px 4px;font-weight:500}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:12.5px;color:#B9C2D6;background:none;border:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item.active::before{content:'';position:absolute;inset-inline-start:0;top:7px;bottom:7px;width:3px;background:var(--accent);border-radius:2px}
+.nav-badge{margin-inline-start:auto;background:var(--accent);color:#fff;font-family:var(--font-mono);font-size:9.5px;border-radius:99px;padding:1px 6px}
+.sidebar-foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--ink-3)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.foot-name{color:#fff;font-size:12px;font-weight:500}
+.foot-mail{font-family:var(--font-mono);font-size:9.5px;color:#5E6B85}
+
+.main{flex:1;padding:16px 22px;min-width:0}
+
+/* ---- page header ---- */
+.hd{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.eyebrow{font-size:10px;font-weight:700;color:var(--admin);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px}
+.page-head{font-size:19px}
+.page-sub{color:var(--muted);font-size:12.5px;margin:3px 0 0}
+.hd-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.hd-actions{display:flex;gap:8px}
+.date-note{font-size:10px;color:var(--muted)}
+
+.btn{font-family:var(--font-body);font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface)}
+.btn.sm{padding:4px 12px;font-size:11px}
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.t-red{background:var(--red-soft);color:var(--red)}
+.t-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.t-green{background:var(--green-soft);color:var(--green)}
+.t-accent{background:var(--accent-soft);color:var(--accent)}
+.t-it{background:var(--it-soft);color:var(--it)}
+.t-admin{background:var(--admin-soft);color:var(--admin)}
+.t-muted{background:var(--surface);color:var(--muted)}
+.t-green-o{background:var(--green-soft);color:var(--green);border:1px solid var(--green)}
+
+/* ---- filter bar ---- */
+.filters{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.fgroup{display:flex;align-items:center;gap:8px}
+.fgroup .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+select.input,input.input{font-family:var(--font-body);font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+select.input:focus,input.input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.seg-pills{display:inline-flex;gap:6px;flex-wrap:wrap}
+.pill{font-size:11px;padding:5px 13px;border-radius:20px;cursor:pointer;font-weight:500;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);font-family:var(--font-body)}
+.pill.on{color:#fff}
+.pill.on.all{background:var(--accent);border-color:var(--accent)}
+.pill.on.it{background:var(--it);border-color:var(--it)}
+.pill.on.admin{background:var(--admin);border-color:var(--admin)}
+.pill.on.proc{background:var(--green);border-color:var(--green)}
+.filter-spacer{flex:1}
+.applied{font-size:11px;color:var(--muted)}
+
+/* ---- KPI cards ---- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.kpi .rail{position:absolute;top:0;inset-inline:0;height:4px}
+.kpi .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.kpi .lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding-top:4px}
+.kpi .val{font-size:32px;font-weight:700;line-height:1;font-family:var(--font-head);margin-bottom:6px}
+.kpi .sub{font-size:11px;color:var(--muted)}
+.kpi .bar{height:4px;background:var(--surface);border-radius:2px;margin-top:11px;overflow:hidden}
+.kpi .bar>span{display:block;height:100%;border-radius:2px}
+.delta{font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;gap:2px}
+.delta.up{color:var(--green)}.delta.down{color:var(--red)}
+
+/* ---- charts row ---- */
+.charts{display:grid;grid-template-columns:1fr 1.35fr;gap:14px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px 0}
+.card-title{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.card-body{padding:12px 16px 16px}
+
+/* horizontal bars (requests by department) */
+.hbar{display:flex;align-items:center;gap:10px;padding:6px 0}
+.hbar .nm{font-size:11.5px;width:96px;flex-shrink:0;text-align:end;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbar .track{flex:1;background:var(--surface);border-radius:4px;height:18px;overflow:hidden}
+.hbar .fill{height:100%;border-radius:4px}
+.hbar .v{font-family:var(--font-mono);font-size:11px;width:30px;text-align:end;color:var(--muted)}
+
+/* SLA trend line chart */
+.legend{display:flex;gap:14px;font-size:10.5px;color:var(--muted);align-items:center}
+.legend b{display:inline-flex;align-items:center;gap:5px;font-weight:500}
+.legend .sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+.axis-lbl{font-size:9.5px;fill:var(--muted);font-family:var(--font-mono)}
+
+/* ---- breaches table ---- */
+.tbl-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.tbl-head .ttl{font-size:13px;font-weight:700;font-family:var(--font-head);color:var(--ink);display:flex;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--ink)}
+th{padding:9px 14px;font-size:10px;font-weight:600;color:#fff;text-align:start;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px}
+td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--line)}
+tbody tr:nth-child(even){background:var(--surface)}
+tbody tr:hover{background:var(--accent-soft)}
+.ref{font-family:var(--font-mono);font-size:11.5px;color:var(--accent)}
+.overdue{color:var(--red);font-weight:600;font-family:var(--font-mono);font-size:11.5px}
+.atrisk{color:var(--amber-ink);font-weight:600;font-family:var(--font-mono);font-size:11.5px}
+.assignee{display:inline-flex;align-items:center;gap:7px}
+.assignee .avatar{width:22px;height:22px;font-size:9px;background:var(--ink-2)}
+
+/* print friendliness */
+@media print{
+  .sidebar,.hd-actions{display:none}
+  body{background:#fff;font-size:11px}
+  .main{padding:0}
+  .kpi,.card,.filters{break-inside:avoid;box-shadow:none}
+  .charts{grid-template-columns:1fr 1fr}
+  thead tr{background:#fff}
+  th{color:var(--ink);border-bottom:2px solid var(--ink)}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-badge">ABC</span><span>Services Hub</span></div>
+    <button class="nav-item"><span>Overview</span></button>
+    <button class="nav-item"><span>New request</span></button>
+    <button class="nav-item"><span>My requests</span></button>
+    <div class="nav-group">Workspace</div>
+    <button class="nav-item"><span>Work</span><span class="nav-badge">7</span></button>
+    <button class="nav-item"><span>Projects</span></button>
+    <button class="nav-item"><span>Correspondence</span></button>
+    <button class="nav-item active"><span>Insights</span></button>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="avatar">SA</span>
+        <div><div class="foot-name">Sara Al-Amri</div><div class="foot-mail">sara.alamri@abc.sa</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- main -->
+  <main class="main">
+    <!-- header -->
+    <div class="hd">
+      <div>
+        <div class="eyebrow">Insights · Executive dashboard</div>
+        <h2 class="page-head">Service operations overview</h2>
+        <p class="page-sub">Service-desk health across IT, Administration and Procurement — 1–16 July 2026</p>
+      </div>
+      <div class="hd-right">
+        <div class="hd-actions">
+          <button class="btn sm" onclick="window.print()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print / PDF
+          </button>
+          <span class="chip t-green-o">● Live · 342 records</span>
+        </div>
+        <span class="date-note">Generated Thursday, 16 July 2026 · 09:42</span>
+      </div>
+    </div>
+
+    <!-- filters -->
+    <div class="filters">
+      <div class="fgroup">
+        <span class="lbl">Date range</span>
+        <select class="input" aria-label="Date range">
+          <option>Last 30 days</option><option>This month</option><option selected>1–16 Jul 2026</option><option>Last quarter</option><option>Custom…</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <span class="lbl">Department</span>
+        <div class="seg-pills">
+          <button class="pill on all">All</button>
+          <button class="pill it">IT Services</button>
+          <button class="pill admin">Administration</button>
+          <button class="pill proc">Procurement</button>
+        </div>
+      </div>
+      <div class="filter-spacer"></div>
+      <span class="applied">Comparing vs. previous period</span>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="kpis">
+      <!-- open requests -->
+      <div class="kpi">
+        <span class="rail" style="background:var(--it)"></span>
+        <div class="top">
+          <span class="lbl">Open requests</span>
+          <span class="delta down">▲ 6</span>
+        </div>
+        <div class="val" style="color:var(--it)">84</div>
+        <div class="sub">of 342 total · 31 unassigned</div>
+        <div class="bar"><span style="width:24%;background:var(--it)"></span></div>
+      </div>
+
+      <!-- SLA compliance -->
+      <div class="kpi">
+        <span class="rail" style="background:var(--green)"></span>
+        <div class="top">
+          <span class="lbl">SLA compliance</span>
+          <span class="delta up">▲ 2.4%</span>
+        </div>
+        <div class="val" style="color:var(--green)">91.6%</div>
+        <div class="sub">236 of 258 resolved on time</div>
+        <div class="bar"><span style="width:91.6%;background:var(--green)"></span></div>
+      </div>
+
+      <!-- avg resolution -->
+      <div class="kpi">
+        <span class="rail" style="background:var(--accent)"></span>
+        <div class="top">
+          <span class="lbl">Avg resolution</span>
+          <span class="delta up">▼ 3.2h</span>
+        </div>
+        <div class="val" style="color:var(--accent)">18.4<span style="font-size:16px">h</span></div>
+        <div class="sub">median 11.0h · target ≤ 24h</div>
+        <div class="bar"><span style="width:77%;background:var(--accent)"></span></div>
+      </div>
+
+      <!-- breaches -->
+      <div class="kpi">
+        <span class="rail" style="background:var(--red)"></span>
+        <div class="top">
+          <span class="lbl">SLA breaches</span>
+          <span class="chip t-red" style="font-size:9.5px">Needs attention</span>
+        </div>
+        <div class="val" style="color:var(--red)">7</div>
+        <div class="sub">+ 9 at risk within 8h</div>
+        <div class="bar"><span style="width:19%;background:var(--red)"></span></div>
+      </div>
+    </div>
+
+    <!-- charts -->
+    <div class="charts">
+      <!-- requests by department -->
+      <div class="card">
+        <div class="card-head"><span class="card-title">Requests by department</span><span class="chip t-muted mono">342</span></div>
+        <div class="card-body">
+          <div class="hbar"><span class="nm">IT Services</span><div class="track"><div class="fill" style="width:58%;background:var(--it)"></div></div><span class="v">198</span></div>
+          <div class="hbar"><span class="nm">Administration</span><div class="track"><div class="fill" style="width:29%;background:var(--admin)"></div></div><span class="v">98</span></div>
+          <div class="hbar"><span class="nm">Procurement</span><div class="track"><div class="fill" style="width:13%;background:var(--green)"></div></div><span class="v">46</span></div>
+          <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
+            <div class="card-title" style="margin-bottom:8px">Open by priority</div>
+            <div class="hbar"><span class="nm">P1 Critical</span><div class="track"><div class="fill" style="width:8%;background:var(--red)"></div></div><span class="v">3</span></div>
+            <div class="hbar"><span class="nm">P2 High</span><div class="track"><div class="fill" style="width:26%;background:var(--amber)"></div></div><span class="v">14</span></div>
+            <div class="hbar"><span class="nm">P3 Normal</span><div class="track"><div class="fill" style="width:70%;background:var(--it)"></div></div><span class="v">52</span></div>
+            <div class="hbar"><span class="nm">P4 Low</span><div class="track"><div class="fill" style="width:20%;background:#CBD2DE"></div></div><span class="v">15</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLA trend -->
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">SLA compliance trend</span>
+          <div class="legend">
+            <b><span class="sw" style="background:var(--green)"></span>Compliance %</b>
+            <b><span class="sw" style="background:var(--red);height:0;border-top:2px dashed var(--red)"></span>Target 90%</b>
+          </div>
+        </div>
+        <div class="card-body">
+          <svg viewBox="0 0 560 210" width="100%" height="210" font-family="var(--font-mono)">
+            <!-- gridlines -->
+            <line x1="42" y1="20"  x2="548" y2="20"  stroke="var(--line)"/>
+            <line x1="42" y1="60"  x2="548" y2="60"  stroke="var(--line)"/>
+            <line x1="42" y1="100" x2="548" y2="100" stroke="var(--line)"/>
+            <line x1="42" y1="140" x2="548" y2="140" stroke="var(--line)"/>
+            <line x1="42" y1="180" x2="548" y2="180" stroke="var(--line)"/>
+            <!-- y labels (75–100) -->
+            <text class="axis-lbl" x="8"  y="24">100</text>
+            <text class="axis-lbl" x="12" y="64">94</text>
+            <text class="axis-lbl" x="12" y="104">88</text>
+            <text class="axis-lbl" x="12" y="144">82</text>
+            <text class="axis-lbl" x="12" y="184">76</text>
+            <!-- target line at 90% -> y=40 -->
+            <line x1="42" y1="40" x2="548" y2="40" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <!-- compliance area + line: weeks W1..W6 -->
+            <polyline points="72,120 168,96 264,104 360,72 456,52 540,40" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polygon points="72,120 168,96 264,104 360,72 456,52 540,40 540,180 72,180" fill="var(--green)" opacity="0.08"/>
+            <!-- data points -->
+            <g fill="var(--green)">
+              <circle cx="72" cy="120" r="3.5"/><circle cx="168" cy="96" r="3.5"/><circle cx="264" cy="104" r="3.5"/>
+              <circle cx="360" cy="72" r="3.5"/><circle cx="456" cy="52" r="3.5"/><circle cx="540" cy="40" r="4.5" stroke="#fff" stroke-width="1.5"/>
+            </g>
+            <!-- x labels -->
+            <text class="axis-lbl" x="60"  y="200">W-6</text>
+            <text class="axis-lbl" x="156" y="200">W-5</text>
+            <text class="axis-lbl" x="252" y="200">W-4</text>
+            <text class="axis-lbl" x="348" y="200">W-3</text>
+            <text class="axis-lbl" x="444" y="200">W-2</text>
+            <text class="axis-lbl" x="524" y="200">Now</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- breaches / at-risk table -->
+    <div class="card">
+      <div class="tbl-head">
+        <span class="ttl">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>
+          Breached &amp; at-risk
+        </span>
+        <div style="display:flex;gap:6px">
+          <span class="chip t-red">7 breached</span>
+          <span class="chip t-amber">9 at risk</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Ref</th><th>Title</th><th>Dept</th><th>Assignee</th><th>Priority</th><th>SLA due</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+var DEPT={IT:{soft:'var(--it-soft)',rail:'var(--it)',cls:'t-it'},ADMIN:{soft:'var(--admin-soft)',rail:'var(--admin)',cls:'t-admin'},PROC:{soft:'var(--green-soft)',rail:'var(--green)',cls:'t-green'}};
+var PRIO={P1:'t-red',P2:'t-amber',P3:'t-muted',P4:'t-muted'};
+var ST={escalated:'t-red',in_progress:'t-it',pending_approval:'t-accent',pending_requester:'t-amber',triaged:'t-admin'};
+function initials(n){return n.split(' ').map(function(w){return w[0]}).slice(0,2).join('').toUpperCase();}
+
+var ROWS=[
+ {ref:'REQ-2048',title:'VPN access failing for Finance team',dept:'IT',who:'Omar Nasser',pr:'P1',due:'-3h 12m',breach:true,status:'escalated'},
+ {ref:'REQ-1994',title:'Payroll system export returns errors',dept:'IT',who:'Sara Al-Amri',pr:'P1',due:'-1h 40m',breach:true,status:'in_progress'},
+ {ref:'REQ-2012',title:'Contractor gate passes — batch 40',dept:'ADMIN',who:null,pr:'P2',due:'-52m',breach:true,status:'triaged'},
+ {ref:'REQ-2039',title:'Business travel authorization — Dubai',dept:'ADMIN',who:'Layla Saad',pr:'P2',due:'0h 46m',breach:false,status:'pending_approval'},
+ {ref:'REQ-2027',title:'Purchase — 20 monitoring displays',dept:'PROC',who:'Mona Zahran',pr:'P2',due:'2h 10m',breach:false,status:'pending_requester'},
+ {ref:'REQ-2041',title:'New laptop for onboarding — Software Eng.',dept:'IT',who:'Omar Nasser',pr:'P2',due:'4h 55m',breach:false,status:'in_progress'},
+ {ref:'REQ-2033',title:'Adobe Creative Cloud license renewal',dept:'IT',who:null,pr:'P3',due:'7h 30m',breach:false,status:'triaged'}
+];
+
+document.getElementById('tbody').innerHTML=ROWS.map(function(r){
+  var d=DEPT[r.dept];
+  var who=r.who
+    ? '<span class="assignee"><span class="avatar">'+initials(r.who)+'</span>'+r.who+'</span>'
+    : '<span class="chip t-amber" style="font-size:10px">⚠ Unassigned</span>';
+  var dueCls=r.breach?'overdue':'atrisk';
+  var duePrefix=r.breach?'':'due in ';
+  return '<tr>'+
+    '<td><span class="ref">'+r.ref+'</span></td>'+
+    '<td style="max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">'+r.title+'</td>'+
+    '<td><span class="chip '+d.cls+'" style="font-size:10px">'+r.dept+'</span></td>'+
+    '<td style="font-size:11.5px">'+who+'</td>'+
+    '<td><span class="chip '+PRIO[r.pr]+'" style="font-size:10px">'+r.pr+'</span></td>'+
+    '<td><span class="'+dueCls+'">'+duePrefix+r.due+(r.breach?' ⚠':'')+'</span></td>'+
+    '<td><span class="chip '+(ST[r.status]||'t-muted')+'" style="font-size:10px">'+r.status.replace('_',' ')+'</span></td>'+
+  '</tr>';
+}).join('');
+</script>
+</body>
+</html>

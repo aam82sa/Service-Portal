@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { PriorityChip, StatusChip } from '../../components/ui'
 
 interface Row {
   id: string
@@ -53,44 +54,6 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   cancelled: { bg: 'var(--surface)', fg: 'var(--muted)' },
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  new: 'var(--it)', triaged: 'var(--admin)', in_progress: '#6E8FE0',
-  pending_approval: 'var(--accent)', pending_requester: 'var(--amber)',
-  escalated: 'var(--red)', resolved: 'var(--green)', closed: '#1E6B48', cancelled: '#CBD2DE',
-}
-
-function Donut({ parts, centerTop, centerSub }: {
-  parts: { v: number; c: string }[]; centerTop: string; centerSub: string
-}) {
-  const total = parts.reduce((s, p) => s + p.v, 0) || 1
-  const R = 50
-  const C = 2 * Math.PI * R
-  let acc = 0
-  return (
-    <div style={{ position: 'relative', width: 128, height: 128, margin: '0 auto' }}>
-      <svg viewBox="0 0 128 128" width="128" height="128">
-        <circle cx="64" cy="64" r={R} fill="none" stroke="var(--surface)" strokeWidth="17" />
-        {parts.filter((p) => p.v > 0).map((p, i) => {
-          const frac = p.v / total
-          const el = (
-            <circle
-              key={i} cx="64" cy="64" r={R} fill="none" stroke={p.c} strokeWidth="17"
-              strokeDasharray={`${frac * C} ${C}`} strokeDashoffset={-acc * C}
-              transform="rotate(-90 64 64)"
-            />
-          )
-          acc += frac
-          return el
-        })}
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)', fontFamily: 'var(--font-head)' }}>{centerTop}</div>
-        <div style={{ fontSize: 9, color: 'var(--muted)' }}>{centerSub}</div>
-      </div>
-    </div>
-  )
-}
-
 function HBar({ name, value, max, color, nameColor }: {
   name: string; value: number; max: number; color: string; nameColor?: string
 }) {
@@ -123,6 +86,19 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
   const [page, setPage] = useState(1)
   const [openRow, setOpenRow] = useState<string | null>(null)
   const dept360 = hasRole('team_lead') || hasRole('executive') || hasRole('system_admin')
+  const [range, setRange] = useState<'30d' | 'month' | 'quarter' | 'all'>('30d')
+
+  const rangeStart = useMemo(() => {
+    const now = new Date()
+    if (range === '30d') return new Date(now.getTime() - 30 * DAY)
+    if (range === 'month') return new Date(now.getFullYear(), now.getMonth(), 1)
+    if (range === 'quarter') return new Date(now.getTime() - 90 * DAY)
+    return null
+  }, [range])
+
+  const rangeLabel = range === '30d' ? 'Last 30 days'
+    : range === 'month' ? 'This month'
+    : range === 'quarter' ? 'Last 90 days' : 'All time'
 
   useEffect(() => {
     supabase
@@ -150,11 +126,88 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
   }, [])
 
   const open = rows.filter((r) => !CLOSED.includes(r.status))
-  const done = rows.filter((r) => DONE.includes(r.status))
   const unassigned = open.filter((r) => !r.assignee)
-  const doneWithSla = done.filter((r) => r.sla_resolution_due)
-  const slaMet = doneWithSla.filter((r) => new Date(r.updated_at).getTime() <= new Date(r.sla_resolution_due!).getTime())
-  const slaPct = doneWithSla.length > 0 ? Math.round((slaMet.length / doneWithSla.length) * 100) : null
+
+  // ---- executive KPI set, scoped to the date range (delta vs the previous
+  // equal-length window; hidden for All time) ----
+  const inRange = (iso: string, start: Date | null, end?: Date) => {
+    const t = new Date(iso).getTime()
+    if (start && t < start.getTime()) return false
+    if (end && t >= end.getTime()) return false
+    return true
+  }
+  const prevStart = rangeStart
+    ? new Date(rangeStart.getTime() - (Date.now() - rangeStart.getTime()))
+    : null
+
+  const openedNow = rangeStart ? rows.filter((r) => inRange(r.created_at, rangeStart)) : rows
+  const openedPrev = rangeStart ? rows.filter((r) => inRange(r.created_at, prevStart, rangeStart)) : []
+
+  const resolvedIn = (start: Date | null, end?: Date) =>
+    rows.filter((r) => DONE.includes(r.status) && r.sla_resolution_due && inRange(r.updated_at, start, end))
+  const resNow = resolvedIn(rangeStart)
+  const resPrev = rangeStart ? resolvedIn(prevStart, rangeStart) : []
+  const pctOf = (list: Row[]) => {
+    const met = list.filter((r) => new Date(r.updated_at).getTime() <= new Date(r.sla_resolution_due!).getTime())
+    return list.length > 0 ? (met.length / list.length) * 100 : null
+  }
+  const compNow = pctOf(resNow)
+  const compPrev = pctOf(resPrev)
+
+  const hoursOf = (list: Row[]) =>
+    list.map((r) => (new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / 3600000)
+      .filter((h) => h >= 0)
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+  const median = (xs: number[]) => {
+    if (!xs.length) return null
+    const s2 = [...xs].sort((a, b) => a - b)
+    return s2[Math.floor(s2.length / 2)]
+  }
+  const avgNow = avg(hoursOf(resNow))
+  const avgPrev = avg(hoursOf(resPrev))
+  const medNow = median(hoursOf(resNow))
+
+  const breached = open.filter((r) => r.sla_resolution_due && new Date(r.sla_resolution_due).getTime() < Date.now())
+  const atRisk = open.filter((r) => {
+    if (!r.sla_resolution_due) return false
+    const left = new Date(r.sla_resolution_due).getTime() - Date.now()
+    return left > 0 && left <= 8 * 3600000
+  })
+  const attention = [...breached, ...atRisk].sort((a, b) =>
+    (a.sla_resolution_due ?? '').localeCompare(b.sla_resolution_due ?? ''))
+
+  // weekly SLA-compliance trend over the last six weeks
+  const trend = useMemo(() => {
+    const out: { label: string; pct: number | null }[] = []
+    for (let w = 5; w >= 0; w--) {
+      const end = new Date(Date.now() - w * 7 * DAY)
+      const start = new Date(end.getTime() - 7 * DAY)
+      const list = rows.filter((r) => DONE.includes(r.status) && r.sla_resolution_due && inRange(r.updated_at, start, end))
+      const met = list.filter((r) => new Date(r.updated_at).getTime() <= new Date(r.sla_resolution_due!).getTime())
+      out.push({ label: w === 0 ? 'Now' : `W-${w}`, pct: list.length ? (met.length / list.length) * 100 : null })
+    }
+    return out
+  }, [rows])
+
+  const dueText = (r: Row) => {
+    const ms = new Date(r.sla_resolution_due!).getTime() - Date.now()
+    const h = Math.floor(Math.abs(ms) / 3600000)
+    const m = Math.round((Math.abs(ms) % 3600000) / 60000)
+    return ms < 0 ? `-${h}h ${m}m` : `${h}h ${m}m`
+  }
+
+  const delta = (now: number | null, prev: number | null, unit: string, goodWhenUp: boolean) => {
+    if (now == null || prev == null || range === 'all') return null
+    const d = now - prev
+    if (Math.abs(d) < 0.05) return null
+    const up = d > 0
+    const good = up === goodWhenUp
+    return (
+      <span className="chip" style={{ fontSize: 10, background: good ? 'var(--green-soft)' : 'var(--red-soft)', color: good ? 'var(--green)' : 'var(--red)' }}>
+        {up ? '\u25b2' : '\u25bc'} {Math.abs(d).toFixed(1)}{unit}
+      </span>
+    )
+  }
 
   const assignees = useMemo(() => {
     const m = new Map<string, number>()
@@ -192,25 +245,7 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
   const clickSort = (col: typeof sort.col) =>
     setSort((s) => ({ col, dir: s.col === col ? ((s.dir * -1) as 1 | -1) : 1 }))
 
-  const statusCounts = filtered.reduce<Record<string, number>>((acc, r) => {
-    acc[r.status] = (acc[r.status] ?? 0) + 1
-    return acc
-  }, {})
-  const donePct = filtered.length > 0
-    ? Math.round((filtered.filter((r) => DONE.includes(r.status)).length / filtered.length) * 100)
-    : 0
-
-  const assigneeChart = useMemo(() => {
-    const m = new Map<string, number>()
-    filtered.forEach((r) => {
-      const k = r.assignee?.display_name ?? '__un__'
-      m.set(k, (m.get(k) ?? 0) + 1)
-    })
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
-  }, [filtered])
-  const maxAssignee = Math.max(1, ...assigneeChart.map(([, n]) => n))
-
-  const prioCounts = ['P1', 'P2', 'P3', 'P4'].map((p) => [p, filtered.filter((r) => r.priority === p).length] as const)
+  const prioCounts = ['P1', 'P2', 'P3', 'P4'].map((p) => [p, open.filter((r) => r.priority === p).length] as const)
   const maxPrio = Math.max(1, ...prioCounts.map(([, n]) => n))
 
   const activeTags: { label: string; clear: () => void }[] = []
@@ -225,39 +260,21 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
     background: active ? color : 'var(--surface)', color: active ? '#fff' : 'var(--muted)',
   } as const)
 
-  const kd = (v: number | string, color: string, lbl: string) => (
-    <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 6, padding: '6px 4px' }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color }}>{v}</div>
-      <div style={{ fontSize: 9, color: 'var(--muted)' }}>{lbl}</div>
-    </div>
-  )
-
-  const kpiCard = (
-    id: 'all' | 'done' | 'open', rail: string, label: string, value: number,
-    tag: { text: string; bg: string; fg: string }, details: React.ReactNode, barPct?: number
+  const execCard = (
+    rail: string, label: string, value: string, deltaChip: React.ReactNode,
+    sub: string, barPct: number
   ) => (
-    <div
-      className="card"
-      style={{
-        padding: '16px 18px', cursor: 'pointer', position: 'relative', overflow: 'hidden',
-        outline: kpi === id ? `2px solid ${rail}` : 'none',
-      }}
-      onClick={() => setFilter(() => setKpi(kpi === id ? 'all' : id))}
-    >
+    <div className="card" style={{ padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
       <span style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: rail }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', paddingTop: 4 }}>{label}</div>
-        <span className="chip" style={{ background: tag.bg, color: tag.fg, fontSize: 10 }}>{tag.text}</span>
+        {deltaChip}
       </div>
-      <div style={{ fontSize: 32, fontWeight: 700, color: rail, lineHeight: 1, fontFamily: 'var(--font-head)', marginBottom: 10 }}>{value}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-        {details}
+      <div style={{ fontSize: 30, fontWeight: 700, color: rail, lineHeight: 1, fontFamily: 'var(--font-head)', marginBottom: 8 }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{sub}</div>
+      <div style={{ height: 4, background: 'var(--surface)', borderRadius: 2, marginTop: 10, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, barPct))}%`, height: '100%', background: rail, borderRadius: 2 }} />
       </div>
-      {barPct !== undefined && (
-        <div style={{ height: 4, background: 'var(--surface)', borderRadius: 2, marginTop: 10, overflow: 'hidden' }}>
-          <div style={{ width: `${barPct}%`, height: '100%', background: rail, borderRadius: 2 }} />
-        </div>
-      )}
     </div>
   )
 
@@ -275,11 +292,11 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 14, borderBottom: '1px solid var(--line)', marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--admin)', textTransform: 'uppercase', letterSpacing: '.7px', marginBottom: 4 }}>
-            Insights · Operations tracker
+            Insights · Executive dashboard
           </div>
-          <h2 className="page-head">Request operations</h2>
+          <h2 className="page-head">Service operations overview</h2>
           <p className="page-sub" style={{ margin: '2px 0 0' }}>
-            {rows.length} requests in your scope · click any row to expand full details
+            Service-desk health across IT, Administration and Procurement · {rangeLabel}
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
@@ -288,11 +305,11 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
               Print / PDF
             </button>
             <span className="chip" style={{ background: 'var(--green-soft)', color: 'var(--green)', border: '1px solid var(--green)' }}>
-              ✓ live from database · {rows.length} records
+              ● Live · {rows.length} records
             </span>
           </div>
           <span style={{ fontSize: 10, color: 'var(--muted)' }}>
-            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            Generated {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
       </div>
@@ -329,40 +346,57 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>
-        {kpiCard('all', 'var(--it)', 'Total requests', rows.length,
-          { text: 'All records', bg: 'var(--green-soft)', fg: 'var(--green)' },
-          <>
-            {kd(rows.filter((r) => r.priority === 'P1').length, 'var(--red)', 'P1 Critical')}
-            {kd(rows.filter((r) => r.priority === 'P2').length, 'var(--amber)', 'P2 High')}
-            {kd(rows.filter((r) => ['P3', 'P4'].includes(r.priority)).length, 'var(--muted)', 'P3 / P4')}
-          </>
-        )}
-        {kpiCard('done', 'var(--green)', 'Completed / closed', done.length,
-          { text: `${rows.length > 0 ? Math.round((done.length / rows.length) * 100) : 0}% rate`, bg: 'var(--green-soft)', fg: 'var(--green)' },
-          <>
-            {kd(rows.filter((r) => r.status === 'resolved').length, 'var(--green)', 'Resolved')}
-            {kd(rows.filter((r) => r.status === 'closed').length, 'var(--green)', 'Closed')}
-            {kd(slaPct !== null ? `${slaPct}%` : '—', slaPct !== null && slaPct < 70 ? 'var(--red)' : 'var(--green)', 'SLA met')}
-          </>,
-          rows.length > 0 ? Math.round((done.length / rows.length) * 100) : 0
-        )}
-        {kpiCard('open', 'var(--amber)', 'Open requests', open.length,
-          { text: open.length > 0 ? 'Needs attention' : 'All clear', bg: open.length > 0 ? 'var(--red-soft)' : 'var(--green-soft)', fg: open.length > 0 ? 'var(--red)' : 'var(--green)' },
-          <>
-            {kd(open.filter((r) => r.status === 'new').length, 'var(--muted)', 'New')}
-            {kd(open.filter((r) => ['triaged', 'in_progress'].includes(r.status)).length, 'var(--it)', 'In progress')}
-            {kd(open.filter((r) => ['pending_approval', 'pending_requester', 'escalated'].includes(r.status)).length, 'var(--red)', 'Waiting')}
-          </>,
-          rows.length > 0 ? Math.round((open.length / rows.length) * 100) : 0
-        )}
+      <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--muted)' }}>Date range</span>
+          <select className="input" value={range} aria-label="Date range"
+            onChange={(e) => setRange(e.target.value as typeof range)}>
+            <option value="30d">Last 30 days</option>
+            <option value="month">This month</option>
+            <option value="quarter">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--muted)' }}>Department</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button style={pill(dept === 'all')} onClick={() => setFilter(() => setDept('all'))}>All</button>
+            {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => (
+              <button key={d} style={pill(dept === d, DEPT_COLOR[d].rail)} onClick={() => setFilter(() => setDept(dept === d ? 'all' : d))}>
+                {DEPT_COLOR[d].label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+          {range === 'all' ? 'No comparison period' : 'Comparing vs. previous period'}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 16 }}>
+        {execCard('var(--it)', 'Open requests', String(open.length),
+          delta(openedNow.length, openedPrev.length, '', false),
+          `${openedNow.length} opened ${range === 'all' ? 'overall' : 'in period'} · ${unassigned.length} unassigned`,
+          rows.length > 0 ? Math.round((open.length / rows.length) * 100) : 0)}
+        {execCard('var(--green)', 'SLA compliance', compNow != null ? `${compNow.toFixed(1)}%` : '—',
+          delta(compNow, compPrev, '%', true),
+          `${resNow.length} resolved in period · target 90%`,
+          compNow != null ? Math.round(compNow) : 0)}
+        {execCard('var(--admin)', 'Avg resolution', avgNow != null ? `${avgNow.toFixed(1)}h` : '—',
+          delta(avgNow, avgPrev, 'h', false),
+          `median ${medNow != null ? medNow.toFixed(0) : '—'}h · target ≤ 24h`,
+          avgNow != null ? Math.min(100, Math.round((avgNow / 24) * 100)) : 0)}
+        {execCard('var(--red)', 'SLA breaches', String(breached.length), null,
+          `+ ${atRisk.length} at risk within 8h`,
+          open.length > 0 ? Math.round((breached.length / open.length) * 100) : 0)}
       </div>
 
       <div className="card" style={{ padding: '14px 18px', marginBottom: 16 }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
           Filter requests
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 7 }}>Assigned to</div>
             <select className="input" value={who} onChange={(e) => setFilter(() => setWho(e.target.value))}>
@@ -372,17 +406,6 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
               ))}
               {unassigned.length > 0 && <option value="unassigned">⚠ Unassigned ({unassigned.length})</option>}
             </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 7 }}>Department</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button style={pill(dept === 'all')} onClick={() => setFilter(() => setDept('all'))}>All</button>
-              {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => (
-                <button key={d} style={pill(dept === d, DEPT_COLOR[d].rail)} onClick={() => setFilter(() => setDept(dept === d ? 'all' : d))}>
-                  {DEPT_COLOR[d].label}
-                </button>
-              ))}
-            </div>
           </div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 7 }}>Priority</div>
@@ -423,66 +446,142 @@ export function Insights({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
         <div className="card" style={{ padding: '14px 16px' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>
-            Requests by assignee
+            Requests by department · {rangeLabel}
           </div>
-          {assigneeChart.map(([name, n]) => (
+          {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => (
             <HBar
-              key={name}
-              name={name === '__un__' ? '⚠ Unassigned' : name}
-              value={n} max={maxAssignee}
-              color={name === '__un__' ? 'var(--red)' : 'var(--admin)'}
-              nameColor={name === '__un__' ? 'var(--red)' : undefined}
-            />
-          ))}
-          {assigneeChart.length === 0 && <div className="row-desc">Nothing matches the filters.</div>}
-        </div>
-
-        <div className="card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>
-            Status breakdown
-          </div>
-          <Donut
-            parts={Object.entries(statusCounts).map(([s, v]) => ({ v, c: STATUS_COLOR[s] ?? 'var(--muted)' }))}
-            centerTop={`${donePct}%`} centerSub="complete"
-          />
-          <div style={{ marginTop: 8 }}>
-            {Object.entries(statusCounts).map(([s, n]) => (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '2px 0' }}>
-                <span style={{ width: 9, height: 9, borderRadius: 2, background: STATUS_COLOR[s] ?? 'var(--muted)' }} />
-                {s.replace('_', ' ')}
-                <span style={{ marginLeft: 'auto', fontWeight: 600 }}>{n}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 10 }}>
-            Priority distribution
-          </div>
-          {prioCounts.map(([p, n]) => (
-            <HBar
-              key={p} name={PRIO[p].label} value={n} max={maxPrio}
-              color={p === 'P1' ? 'var(--red)' : p === 'P2' ? 'var(--amber)' : p === 'P3' ? 'var(--it)' : '#CBD2DE'}
+              key={d} name={DEPT_COLOR[d].label}
+              value={openedNow.filter((r) => r.dept === d).length}
+              max={Math.max(1, ...(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((x) => openedNow.filter((r) => r.dept === x).length))}
+              color={DEPT_COLOR[d].rail}
             />
           ))}
           <div style={{ borderTop: '1px solid var(--line)', marginTop: 10, paddingTop: 10 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 8 }}>
-              By department
+              Open by priority
             </div>
-            {(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((d) => (
+            {prioCounts.map(([p, n]) => (
               <HBar
-                key={d} name={DEPT_COLOR[d].label}
-                value={filtered.filter((r) => r.dept === d).length}
-                max={Math.max(1, ...(['IT', 'ADMIN', 'PROC'] as DeptCode[]).map((x) => filtered.filter((r) => r.dept === x).length))}
-                color={DEPT_COLOR[d].rail}
+                key={p} name={PRIO[p].label} value={n} max={maxPrio}
+                color={p === 'P1' ? 'var(--red)' : p === 'P2' ? 'var(--amber)' : p === 'P3' ? 'var(--it)' : '#CBD2DE'}
               />
             ))}
           </div>
         </div>
+
+        <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>
+            SLA compliance trend — last 6 weeks
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+            Weekly % of resolutions inside SLA · dashed line = 90% target
+          </div>
+          <svg viewBox="0 0 560 212" style={{ width: '100%', flex: 1 }} role="img" aria-label="SLA compliance trend, weekly, versus the 90 percent target">
+            {[100, 90, 80].map((v) => {
+              const y = 20 + ((100 - v) * 160) / 24
+              return (
+                <g key={v}>
+                  <line x1={36} x2={548} y1={y} y2={y}
+                    stroke={v === 90 ? 'var(--red)' : 'var(--line)'}
+                    strokeDasharray={v === 90 ? '5 4' : undefined} strokeWidth={1} />
+                  <text x={30} y={y + 3} textAnchor="end" fontSize={9} fill="var(--muted)">{v}%</text>
+                </g>
+              )
+            })}
+            {(() => {
+              const pts = trend.map((t, i) => ({
+                ...t, x: 60 + i * 96,
+                y: t.pct == null ? null : 20 + ((100 - Math.max(76, Math.min(100, t.pct))) * 160) / 24,
+              }))
+              const line = pts.filter((p) => p.y != null)
+              return (
+                <>
+                  {line.length > 1 && (
+                    <polyline
+                      points={line.map((p) => `${p.x},${p.y}`).join(' ')}
+                      fill="none" stroke="var(--accent)" strokeWidth={2}
+                    />
+                  )}
+                  {pts.map((p) => (
+                    <g key={p.label}>
+                      {p.y != null ? (
+                        <>
+                          <circle cx={p.x} cy={p.y} r={3.5} fill="var(--accent)" />
+                          <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize={9} fontWeight={600} fill="var(--ink)">
+                            {p.pct!.toFixed(0)}%
+                          </text>
+                        </>
+                      ) : (
+                        <text x={p.x} y={104} textAnchor="middle" fontSize={9} fill="var(--muted)">—</text>
+                      )}
+                      <text x={p.x} y={204} textAnchor="middle" fontSize={9} fill="var(--muted)">{p.label}</text>
+                    </g>
+                  ))}
+                </>
+              )
+            })()}
+          </svg>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--line)' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>Breached &amp; at-risk — needs action now</span>
+          <span style={{ flex: 1 }} />
+          <span className="chip" style={{ background: 'var(--red-soft)', color: 'var(--red)' }}>{breached.length} breached</span>
+          <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>{atRisk.length} at risk</span>
+        </div>
+        {attention.length === 0 ? (
+          <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--green)' }}>
+            No breaches and nothing at risk — every open request is inside its SLA window.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                  {['Ref', 'Title', 'Dept', 'Assigned to', 'Priority', 'SLA due', 'Status'].map((h) => (
+                    <th key={h} style={{ padding: '8px 12px', fontSize: 10, fontWeight: 600, color: 'var(--muted)', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '.4px', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {attention.slice(0, 8).map((r) => {
+                  const isBreach = breached.includes(r)
+                  return (
+                    <tr key={r.id} style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }} onClick={() => onOpen(r.id)}>
+                      <td className="mono" style={{ padding: '8px 12px', fontSize: 11.5, color: 'var(--accent)' }}>{r.ref}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, fontWeight: 500, maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</td>
+                      <td style={{ padding: '8px 12px' }}>
+                        <span className="chip" style={{ background: DEPT_COLOR[r.dept].soft, color: DEPT_COLOR[r.dept].rail, fontSize: 10 }}>{r.dept}</span>
+                      </td>
+                      <td style={{ padding: '8px 12px', fontSize: 11.5 }}>
+                        {r.assignee?.display_name ?? <span style={{ color: 'var(--amber-ink)', fontWeight: 600 }}>⚠ Unassigned</span>}
+                      </td>
+                      <td style={{ padding: '8px 12px' }}><PriorityChip priority={r.priority} /></td>
+                      <td style={{ padding: '8px 12px', fontSize: 11.5, fontWeight: 600, color: isBreach ? 'var(--red)' : 'var(--amber-ink)', whiteSpace: 'nowrap' }}>
+                        {isBreach ? `${dueText(r)} ⚠` : `due in ${dueText(r)}`}
+                      </td>
+                      <td style={{ padding: '8px 12px' }}><StatusChip status={r.status} /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {attention.length > 8 && (
+              <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--muted)', borderTop: '1px solid var(--line)' }}>
+                Showing 8 of {attention.length} — most urgent first.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card">
