@@ -5,32 +5,83 @@ import { DEPT_COLOR, type DeptCode, type Service } from '../../lib/types'
 import type { FormField } from '../catalog/RequestForm'
 import type { FieldRule } from '../../lib/formRules'
 
+/**
+ * Three-pane no-code form builder (matches
+ * prototype/form-builder-reference.html): palette · live canvas ·
+ * properties. Same form_schema shape as before — this is a builder UI,
+ * not a schema change. Validation stays server-side against the saved
+ * schema.
+ */
+
 interface ServiceRow extends Service {
   form_schema: FormField[]
   parent_id: string | null
 }
 
-const FIELD_TYPES: FormField['type'][] = [
-  'text',
-  'longtext',
-  'number',
-  'amount',
-  'date',
-  'dropdown',
-  'yesno',
-  'costcenter',
-  'attachment',
-  'asset_picker',
-  'employee_picker',
+const PALETTE: { group: string; items: { type: FormField['type']; label: string; ico: string }[] }[] = [
+  {
+    group: 'Basic',
+    items: [
+      { type: 'text', label: 'Text', ico: 'Ab' },
+      { type: 'longtext', label: 'Long text', ico: '¶' },
+      { type: 'number', label: 'Number', ico: '#' },
+      { type: 'amount', label: 'Amount', ico: '$' },
+      { type: 'date', label: 'Date', ico: 'Dt' },
+    ],
+  },
+  {
+    group: 'Choice',
+    items: [
+      { type: 'dropdown', label: 'Dropdown', ico: '▾' },
+      { type: 'yesno', label: 'Yes / no', ico: 'Y/N' },
+    ],
+  },
+  {
+    group: 'Data-backed',
+    items: [
+      { type: 'costcenter', label: 'Cost center', ico: 'CC' },
+      { type: 'attachment', label: 'Attachment', ico: '@' },
+      { type: 'asset_picker', label: 'Asset picker', ico: 'As' },
+      { type: 'employee_picker', label: 'Employee picker', ico: 'Pp' },
+    ],
+  },
 ]
 
-/** builder hint shown under rows for types with server-backed data */
+const ALL_TYPES = PALETTE.flatMap((g) => g.items.map((i) => i.type))
+
 const TYPE_HINT: Partial<Record<FormField['type'], string>> = {
-  costcenter: 'options come from the admin-maintained cost-center list below',
-  attachment: 'files upload to secure storage; required = at least one file',
-  asset_picker: "lists the requester's own assigned assets",
-  employee_picker: 'searchable picker over active people',
-  yesno: 'stored as a true/false value',
+  amount: 'Amount fields drive the DoA approval chain — the saved value picks a band in the DoA matrix.',
+  costcenter: 'Options come from the admin-maintained cost-center list below the builder.',
+  attachment: 'Files upload to secure storage; required means at least one file.',
+  asset_picker: "Lists the requester's own assigned assets.",
+  employee_picker: 'Searchable picker over active people.',
+  yesno: 'Stored as a true/false value — pairs well with show/require conditions.',
+}
+
+const RULE_OPS: FieldRule['op'][] = ['eq', 'neq', 'gte', 'lte', 'in']
+
+const OP_TEXT: Record<FieldRule['op'], string> = {
+  eq: '=', neq: '≠', gte: '≥', lte: '≤', in: 'in',
+}
+
+const condText = (r: FieldRule) =>
+  `${r.when} ${OP_TEXT[r.op]} ${Array.isArray(r.value) ? r.value.join(', ') : String(r.value)}`
+
+const sanitizeKey = (v: string) =>
+  v.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+
+/** mock input for the live canvas, by field type */
+function CanvasInput({ f }: { f: FormField }) {
+  if (f.type === 'longtext') return <div className="fb-input tall" />
+  if (f.type === 'dropdown' || f.type === 'costcenter' || f.type === 'asset_picker' || f.type === 'employee_picker') {
+    const hint = f.type === 'dropdown'
+      ? (f.options?.length ? `${f.options[0]}…` : 'Choose…')
+      : f.type === 'costcenter' ? 'CC-…' : 'Search…'
+    return <div className="fb-input pick">{hint}<span>▾</span></div>
+  }
+  if (f.type === 'yesno') return <div className="fb-input pick">No<span>◯</span></div>
+  if (f.type === 'attachment') return <div className="fb-input pick">Drop files…<span>@</span></div>
+  return <div className="fb-input" />
 }
 
 export function FormBuilder() {
@@ -38,7 +89,11 @@ export function FormBuilder() {
   const [services, setServices] = useState<ServiceRow[]>([])
   const [serviceId, setServiceId] = useState<string>('')
   const [fields, setFields] = useState<FormField[]>([])
-  const [optDrafts, setOptDrafts] = useState<Record<number, string>>({})
+  const [selIdx, setSelIdx] = useState<number | null>(null)
+  const [preview, setPreview] = useState(false)
+  const [optDraft, setOptDraft] = useState('')
+  const [cond, setCond] = useState<{ effect: FieldRule['effect']; when: string; op: FieldRule['op']; value: string }>(
+    { effect: 'show', when: '', op: 'eq', value: '' })
   const [dirty, setDirty] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -65,10 +120,12 @@ export function FormBuilder() {
   }, [hasRole])
 
   const service = useMemo(() => services.find((s) => s.id === serviceId), [services, serviceId])
+  const sel = selIdx != null ? fields[selIdx] ?? null : null
 
   const pick = (id: string) => {
     setServiceId(id)
     setFields(services.find((s) => s.id === id)?.form_schema ?? [])
+    setSelIdx(null)
     setDirty(false)
     setNote(null)
     setError(null)
@@ -80,23 +137,54 @@ export function FormBuilder() {
     setNote(null)
   }
 
-  const move = (i: number, dir: -1 | 1) => {
+  /** renaming a key rewrites conditions on other fields that point at it */
+  const renameKey = (i: number, raw: string) => {
+    const next = sanitizeKey(raw)
+    const old = fields[i]?.key
+    setFields((fs) => fs.map((f, j) => {
+      if (j === i) return { ...f, key: next }
+      if (f.rules?.some((r) => r.when === old)) {
+        return { ...f, rules: f.rules.map((r) => (r.when === old ? { ...r, when: next } : r)) }
+      }
+      return f
+    }))
+    setDirty(true)
+  }
+
+  const addField = (type: FormField['type'], at?: number) => {
+    const base = PALETTE.flatMap((g) => g.items).find((i) => i.type === type)
+    const f: FormField = {
+      key: sanitizeKey(`${type}_${Date.now() % 100000}`),
+      label: base?.label ?? 'New field',
+      type,
+      visible: true,
+      required: false,
+      width: type === 'longtext' || type === 'attachment' ? 'full' : 'half',
+    }
     setFields((fs) => {
       const next = [...fs]
-      const j = i + dir
-      if (j < 0 || j >= next.length) return fs
-      ;[next[i], next[j]] = [next[j], next[i]]
+      const idx = at ?? next.length
+      next.splice(idx, 0, f)
+      setSelIdx(idx)
       return next
     })
     setDirty(true)
   }
 
-  const addField = () => {
-    const n = fields.length + 1
-    setFields((fs) => [
-      ...fs,
-      { key: `field_${Date.now() % 100000}`, label: `New field ${n}`, type: 'text', visible: true, required: false },
-    ])
+  const removeField = (i: number) => {
+    setFields((fs) => fs.filter((_, j) => j !== i))
+    setSelIdx(null)
+    setDirty(true)
+  }
+
+  const moveField = (from: number, to: number) => {
+    setFields((fs) => {
+      const next = [...fs]
+      const [item] = next.splice(from, 1)
+      next.splice(to, 0, item)
+      return next
+    })
+    setSelIdx(to)
     setDirty(true)
   }
 
@@ -118,30 +206,48 @@ export function FormBuilder() {
     return <p className="page-sub">{error ?? 'No services you can edit.'}</p>
   }
   const c = service ? DEPT_COLOR[service.dept as DeptCode] : null
+  const isSys = hasRole('system_admin')
+  const earlier = selIdx != null ? fields.slice(0, selIdx).filter((f) => f.key) : []
+
+  const onDropCanvas = (e: React.DragEvent, at: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const data = e.dataTransfer.getData('text/plain')
+    if (data.startsWith('new:')) addField(data.slice(4) as FormField['type'], at)
+    else {
+      const from = Number(data)
+      if (!Number.isNaN(from) && from !== at) moveField(from, from < at ? at - 1 : at)
+    }
+  }
 
   return (
     <>
-      <h2 className="page-head">Form builder</h2>
-      <p className="page-sub">
-        Configure each service form without touching code. Validation is enforced server-side
-        against the saved schema.
-      </p>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-        <select className="input" style={{ maxWidth: 340 }} value={serviceId} onChange={(e) => pick(e.target.value)}>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.dept} · {s.code} — {s.name}
-            </option>
-          ))}
-        </select>
-        {c && service && (
-          <span className="tile-code" style={{ background: c.soft, color: c.rail }}>
-            {service.code}
+      <div className="builder-bar">
+        <h2>Form builder</h2>
+        {service && (
+          <span className="scope-badge scope-dept">
+            {isSys ? 'System admin' : 'Department admin'} · {service.dept}
           </span>
         )}
-        <button className="btn primary" style={{ marginLeft: 'auto' }} onClick={save} disabled={!dirty}>
-          Save form
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <select className="input" style={{ maxWidth: 280 }} value={serviceId} aria-label="Service"
+            onChange={(e) => pick(e.target.value)}>
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>{s.dept} · {s.code} — {s.name}</option>
+            ))}
+          </select>
+          {c && service && (
+            <span className="tile-code" style={{ background: c.soft, color: c.rail }}>{service.code}</span>
+          )}
+        </span>
+        <span className="tool-spacer" />
+        {dirty
+          ? <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>Unsaved changes</span>
+          : note && <span className="chip" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>{note}</span>}
+        <button className="btn" onClick={() => setPreview((p) => !p)}>
+          {preview ? 'Back to builder' : 'Preview form'}
         </button>
+        <button className="btn primary" onClick={save} disabled={!dirty}>Save form</button>
       </div>
 
       {fields.length === 0 && service?.parent_id && (() => {
@@ -159,272 +265,247 @@ export function FormBuilder() {
           </div>
         )
       })()}
-      <div className="card">
-        <div className="row" style={{ fontSize: 11, color: 'var(--muted)' }}>
-          <span style={{ width: 60 }}>Drag / order</span>
-          <span style={{ flex: 1 }}>Label</span>
-          <span style={{ width: 110 }}>Type</span>
-          <span style={{ width: 64 }}>Width</span>
-          <span style={{ width: 60 }}>Visible</span>
-          <span style={{ width: 66 }}>Required</span>
-          <span style={{ width: 30 }} />
-        </div>
-        {fields.map((f, i) => (
-          <div
-            key={i}
-            draggable
-            onDragStart={(e) => e.dataTransfer.setData('text/plain', String(i))}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              const from = Number(e.dataTransfer.getData('text/plain'))
-              if (Number.isNaN(from) || from === i) return
-              setFields((fs) => {
-                const next = [...fs]
-                const [item] = next.splice(from, 1)
-                next.splice(i, 0, item)
-                return next
-              })
-              setDirty(true)
-            }}
-          >
-          <div className="row" style={{ opacity: f.visible === false ? 0.55 : 1 }}>
-            <span style={{ width: 60, display: 'flex', gap: 2, alignItems: 'center' }}>
-              <span style={{ cursor: 'grab', color: 'var(--muted)', fontSize: 14, padding: '0 2px' }} title="Drag to reorder">⠿</span>
-              <button className="btn" style={{ padding: '2px 6px' }} onClick={() => move(i, -1)} aria-label="Move up">↑</button>
-              <button className="btn" style={{ padding: '2px 6px' }} onClick={() => move(i, 1)} aria-label="Move down">↓</button>
-            </span>
-            <input
-              className="input"
-              style={{ flex: 1 }}
-              value={f.label}
-              onChange={(e) => patch(i, { label: e.target.value })}
-            />
-            <select
-              className="input"
-              style={{ width: 130 }}
-              value={f.type}
-              onChange={(e) => patch(i, { type: e.target.value as FormField['type'] })}
-            >
-              {FIELD_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <button
-              className="btn mono"
-              style={{ width: 64, padding: '4px 6px', fontSize: 10.5 }}
-              title="Toggle field width in the form"
-              onClick={() => patch(i, { width: f.width === 'half' ? 'full' : 'half' })}
-            >
-              {f.width === 'half' ? '◧ half' : '▭ full'}
-            </button>
-            <span style={{ width: 60 }}>
-              <button
-                className={`toggle${f.visible !== false ? ' on' : ''}`}
-                onClick={() => patch(i, { visible: f.visible === false })}
-                aria-label={`visible: ${f.visible !== false}`}
-              />
-            </span>
-            <span style={{ width: 66 }}>
-              <button
-                className={`toggle${f.required ? ' on' : ''}`}
-                onClick={() => patch(i, { required: !f.required })}
-                aria-label={`required: ${!!f.required}`}
-              />
-            </span>
-            <button
-              className="btn"
-              style={{ width: 30, padding: '2px 6px', color: 'var(--red)' }}
-              onClick={() => { setFields((fs) => fs.filter((_, j) => j !== i)); setDirty(true) }}
-              aria-label="Remove field"
-            >
-              ×
-            </button>
-          </div>
-          {TYPE_HINT[f.type] && (
-            <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', fontSize: 11, color: 'var(--muted)' }}>
-              {TYPE_HINT[f.type]}
-            </div>
-          )}
-          {f.type === 'dropdown' && (
-            <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>options</span>
-              {(f.options ?? []).map((o) => (
-                <span key={o} className="chip" style={{ background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--line)', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
-                  {o}
-                  <span
-                    style={{ cursor: 'pointer', color: 'var(--red)' }}
-                    onClick={() => patch(i, { options: (f.options ?? []).filter((x) => x !== o) })}
-                  >
-                    ×
-                  </span>
-                </span>
-              ))}
-              <input
-                className="input"
-                style={{ width: 140, padding: '4px 8px', fontSize: 12 }}
-                placeholder="Add option + Enter"
-                value={optDrafts[i] ?? ''}
-                onChange={(e) => setOptDrafts((s) => ({ ...s, [i]: e.target.value }))}
-                onKeyDown={(e) => {
-                  const v = (optDrafts[i] ?? '').trim()
-                  if (e.key === 'Enter' && v && !(f.options ?? []).includes(v)) {
-                    patch(i, { options: [...(f.options ?? []), v] })
-                    setOptDrafts((s) => ({ ...s, [i]: '' }))
-                  }
-                }}
-              />
-            </div>
-          )}
-          <RuleEditor field={f} index={i} fields={fields} patch={patch} />
-          </div>
-        ))}
-        <div className="row">
-          <button className="btn" style={{ borderStyle: 'dashed' }} onClick={addField}>
-            + Add field
-          </button>
-          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>
-            {dirty ? 'Unsaved changes' : note ?? 'Form changes are audit-logged'}
-          </span>
-        </div>
-      </div>
 
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', margin: '14px 0 6px' }}>
-        Layout canvas — drag fields where they should appear · click ⇔ to resize
-      </div>
-      <div className="card" style={{ padding: '14px 16px', background: 'var(--surface)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 4%' }}>
-          {fields.map((f, i) => (
-            <div
-              key={i}
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('text/plain', String(i))}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault()
-                const from = Number(e.dataTransfer.getData('text/plain'))
-                if (Number.isNaN(from) || from === i) return
-                setFields((fs) => {
-                  const next = [...fs]
-                  const [item] = next.splice(from, 1)
-                  next.splice(i, 0, item)
-                  return next
-                })
-                setDirty(true)
-              }}
-              style={{
-                width: f.width === 'half' ? '48%' : '100%',
-                background: 'var(--card)', border: '1.5px dashed var(--line)', borderRadius: 9,
-                padding: '8px 10px', cursor: 'grab',
-                opacity: f.visible === false ? 0.45 : 1,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: 'var(--muted)', fontSize: 12 }}>⠿</span>
-                <span style={{ fontSize: 11.5, fontWeight: 500, flex: 1 }}>
-                  {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
-                </span>
-                <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)', fontSize: 9.5 }}>{f.type}</span>
-                <button
-                  className="btn" style={{ padding: '1px 7px', fontSize: 11 }}
-                  title="Toggle full / half width"
-                  onClick={() => patch(i, { width: f.width === 'half' ? 'full' : 'half' })}
-                >
-                  ⇔
+      <div className="builder" style={preview ? { gridTemplateColumns: '1fr' } : undefined}>
+        {!preview && (
+          <aside className="pane" aria-label="Field palette">
+            <div className="pane-head">Fields</div>
+            <div className="palette">
+              {PALETTE.map((g) => (
+                <div key={g.group}>
+                  <div className="pal-group">{g.group}</div>
+                  {g.items.map((it) => (
+                    <button
+                      key={it.type}
+                      className="pal-item"
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData('text/plain', `new:${it.type}`)}
+                      onClick={() => addField(it.type)}
+                      title={`Add a ${it.label.toLowerCase()} field`}
+                    >
+                      <span className="pal-ico">{it.ico}</span>{it.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
+
+        <section className="pane" aria-label="Form canvas">
+          <div className="pane-head">
+            <span>{preview ? 'Preview — what the requester sees' : 'Canvas — drag to reorder · click a field to edit'}</span>
+            <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
+              {fields.length} field{fields.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="canvas-wrap">
+            <div className="canvas">
+              <div className="canvas-title">{service?.name}</div>
+              <div className="canvas-sub">
+                {preview ? service?.description : 'Live preview of the requester form · fields wrap by width'}
+              </div>
+              <div className="fgrid">
+                {fields.map((f, i) => {
+                  if (preview && f.visible === false) return null
+                  const hasShowRule = (f.rules ?? []).some((r) => r.effect === 'show')
+                  return (
+                    <div
+                      key={i}
+                      className={[
+                        'fb-field',
+                        f.width === 'half' ? 'half' : 'full',
+                        !preview && selIdx === i ? 'sel' : '',
+                        !preview && (f.visible === false || hasShowRule) ? 'is-hidden' : '',
+                      ].filter(Boolean).join(' ')}
+                      style={preview ? { cursor: 'default' } : undefined}
+                      draggable={!preview}
+                      onDragStart={(e) => e.dataTransfer.setData('text/plain', String(i))}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => onDropCanvas(e, i)}
+                      onClick={() => !preview && setSelIdx(i)}
+                    >
+                      <div className="fb-field-top">
+                        {!preview && <span className="fb-grip">⠿</span>}
+                        <span className="fb-label">
+                          {f.label}{f.required && <span className="req"> *</span>}
+                        </span>
+                        {!preview && (
+                          <span className="chip fb-type" style={{ background: selIdx === i ? 'var(--accent-soft)' : 'var(--surface)', color: selIdx === i ? 'var(--accent)' : 'var(--muted)' }}>
+                            {f.type}
+                          </span>
+                        )}
+                        {!preview && f.visible === false && (
+                          <span className="chip fb-type" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>hidden</span>
+                        )}
+                        {!preview && f.visible !== false && hasShowRule && (
+                          <span className="chip fb-type" title="Shown by a condition" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>conditional</span>
+                        )}
+                      </div>
+                      <CanvasInput f={f} />
+                    </div>
+                  )
+                })}
+                {!preview && (
+                  <div
+                    className="drop-hint"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDropCanvas(e, fields.length)}
+                  >
+                    Drop a field here — or click one in the palette
+                  </div>
+                )}
+                {preview && fields.length === 0 && (
+                  <div className="canvas-sub">This form has no fields yet.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {!preview && (
+          <aside className="pane" aria-label="Field properties">
+            <div className="pane-head">Properties</div>
+            {!sel || selIdx == null ? (
+              <div className="props-empty">Click a field on the canvas to edit its label, key, width, and conditions.</div>
+            ) : (
+              <div className="props">
+                <div className="prop-row">
+                  <label className="prop-lbl" htmlFor="p-label">Label</label>
+                  <input className="input" id="p-label" value={sel.label}
+                    onChange={(e) => patch(selIdx, { label: e.target.value })} />
+                </div>
+                <div className="prop-row">
+                  <label className="prop-lbl" htmlFor="p-key">Field key</label>
+                  <input className="input mono" id="p-key" value={sel.key}
+                    onChange={(e) => renameKey(selIdx, e.target.value)} />
+                  <p className="prop-hint">Renaming updates conditions on other fields automatically.</p>
+                </div>
+                <div className="prop-row">
+                  <label className="prop-lbl" htmlFor="p-type">Type</label>
+                  <select className="input" id="p-type" value={sel.type}
+                    onChange={(e) => patch(selIdx, { type: e.target.value as FormField['type'] })}>
+                    {ALL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="prop-row">
+                  <span className="prop-lbl">Width</span>
+                  <div className="prop-seg" role="group" aria-label="Field width">
+                    <button className={sel.width !== 'half' ? 'on' : ''}
+                      onClick={() => patch(selIdx, { width: 'full' })}>Full</button>
+                    <button className={sel.width === 'half' ? 'on' : ''}
+                      onClick={() => patch(selIdx, { width: 'half' })}>Half</button>
+                  </div>
+                </div>
+
+                <div className="toggle-row">
+                  <span style={{ fontSize: 12 }}>Visible</span>
+                  <button className={`toggle${sel.visible !== false ? ' on' : ''}`}
+                    aria-label={`Visible: ${sel.visible !== false ? 'on' : 'off'}`}
+                    onClick={() => patch(selIdx, { visible: sel.visible === false })} />
+                </div>
+                <div className="toggle-row">
+                  <span style={{ fontSize: 12 }}>Required</span>
+                  <button className={`toggle${sel.required ? ' on' : ''}`}
+                    aria-label={`Required: ${sel.required ? 'on' : 'off'}`}
+                    onClick={() => patch(selIdx, { required: !sel.required })} />
+                </div>
+
+                {sel.type === 'dropdown' && (
+                  <>
+                    <div className="prop-sec">Options</div>
+                    <div className="opt-chips">
+                      {(sel.options ?? []).map((o) => (
+                        <span key={o} className="opt-chip">
+                          {o}
+                          <button className="x" aria-label={`Remove option ${o}`}
+                            onClick={() => patch(selIdx, { options: (sel.options ?? []).filter((x) => x !== o) })}>
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <input className="input" style={{ width: '100%', marginTop: 6 }}
+                      placeholder="Add option + Enter" value={optDraft}
+                      onChange={(e) => setOptDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        const v = optDraft.trim()
+                        if (e.key === 'Enter' && v && !(sel.options ?? []).includes(v)) {
+                          patch(selIdx, { options: [...(sel.options ?? []), v] })
+                          setOptDraft('')
+                        }
+                      }} />
+                  </>
+                )}
+
+                <div className="prop-sec">Conditions</div>
+                {(sel.rules ?? []).map((r, j) => (
+                  <div key={j} className="cond">
+                    {r.effect === 'show' ? 'Show when' : 'Require when'}
+                    <span className="mono">{condText(r)}</span>
+                    <button className="x" aria-label="Remove condition"
+                      onClick={() => patch(selIdx, { rules: (sel.rules ?? []).filter((_, k) => k !== j) })}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {earlier.length > 0 ? (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                      <select className="input" value={cond.effect} aria-label="Effect"
+                        onChange={(e) => setCond((s) => ({ ...s, effect: e.target.value as FieldRule['effect'] }))}>
+                        <option value="show">show</option>
+                        <option value="require">require</option>
+                      </select>
+                      <select className="input" value={cond.op} aria-label="Operator"
+                        onChange={(e) => setCond((s) => ({ ...s, op: e.target.value as FieldRule['op'] }))}>
+                        {RULE_OPS.map((o) => <option key={o} value={o}>{OP_TEXT[o]} {o}</option>)}
+                      </select>
+                      <select className="input" value={cond.when} aria-label="Source field"
+                        onChange={(e) => setCond((s) => ({ ...s, when: e.target.value }))}>
+                        <option value="">earlier field…</option>
+                        {earlier.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                      </select>
+                      <input className="input" placeholder={cond.op === 'in' ? 'a, b, c' : 'value'}
+                        value={cond.value} aria-label="Value"
+                        onChange={(e) => setCond((s) => ({ ...s, value: e.target.value }))} />
+                    </div>
+                    <button className="btn dashed" style={{ width: '100%', justifyContent: 'center', fontSize: 11.5 }}
+                      disabled={!cond.when || cond.value.trim() === ''}
+                      onClick={() => {
+                        const value: FieldRule['value'] = cond.op === 'in'
+                          ? cond.value.split(',').map((s) => s.trim()).filter(Boolean)
+                          : cond.value.trim()
+                        patch(selIdx, {
+                          rules: [...(sel.rules ?? []), { when: cond.when, op: cond.op, value, effect: cond.effect }],
+                        })
+                        setCond((s) => ({ ...s, value: '' }))
+                      }}>
+                      + Add condition
+                    </button>
+                  </>
+                ) : (
+                  <p className="prop-hint">Conditions can reference fields earlier in the form — this is the first field.</p>
+                )}
+
+                <div className="prop-sec">Validation</div>
+                <p className="prop-hint">
+                  {TYPE_HINT[sel.type] ?? 'Server-side validation is enforced against the saved schema.'}
+                </p>
+
+                <button className="btn" style={{ width: '100%', justifyContent: 'center', color: 'var(--red)', marginTop: 14 }}
+                  onClick={() => removeField(selIdx)}>
+                  Remove field
                 </button>
               </div>
-              <div style={{
-                marginTop: 5, background: 'var(--surface)', borderRadius: 6,
-                height: f.type === 'longtext' ? 34 : 20, border: '1px solid var(--line)',
-              }} />
-            </div>
-          ))}
-          {fields.length === 0 && <span className="row-desc">No fields yet — add them above.</span>}
-        </div>
+            )}
+          </aside>
+        )}
       </div>
+
       <CostCenterAdmin onError={setError} />
       {error && <p className="error-note">{error}</p>}
     </>
-  )
-}
-
-const RULE_OPS: FieldRule['op'][] = ['eq', 'neq', 'gte', 'lte', 'in']
-
-/** describe a rule for the chip list */
-const ruleText = (r: FieldRule) =>
-  `${r.effect} when ${r.when} ${r.op} ${Array.isArray(r.value) ? r.value.join(', ') : String(r.value)}`
-
-/**
- * Per-field conditions editor: show/require this field when another field
- * matches. Only fields EARLIER in the form can be referenced, so evaluation
- * order is always well-defined.
- */
-function RuleEditor({
-  field, index, fields, patch,
-}: {
-  field: FormField
-  index: number
-  fields: FormField[]
-  patch: (i: number, p: Partial<FormField>) => void
-}) {
-  const sources = fields.slice(0, index).filter((s) => s.key && s.key !== field.key)
-  const [when, setWhen] = useState('')
-  const [op, setOp] = useState<FieldRule['op']>('eq')
-  const [value, setValue] = useState('')
-  const [effect, setEffect] = useState<FieldRule['effect']>('show')
-
-  const rules = field.rules ?? []
-  if (sources.length === 0 && rules.length === 0) return null
-
-  const add = () => {
-    if (!when || value.trim() === '') return
-    const v: FieldRule['value'] = op === 'in' ? value.split(',').map((s) => s.trim()).filter(Boolean) : value.trim()
-    patch(index, { rules: [...rules, { when, op, value: v, effect }] })
-    setValue('')
-  }
-
-  return (
-    <div className="row" style={{ paddingLeft: 56, background: 'var(--surface)', gap: 6, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 11, color: 'var(--muted)' }}>conditions</span>
-      {rules.map((r, j) => (
-        <span key={j} className="chip" style={{ background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--line)', display: 'inline-flex', gap: 5, alignItems: 'center' }}>
-          {ruleText(r)}
-          <span
-            style={{ cursor: 'pointer', color: 'var(--red)' }}
-            onClick={() => patch(index, { rules: rules.filter((_, k) => k !== j) })}
-          >
-            ×
-          </span>
-        </span>
-      ))}
-      {sources.length > 0 && (
-        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-          <select className="input" style={{ width: 78, padding: '3px 6px', fontSize: 11.5 }} value={effect}
-            onChange={(e) => setEffect(e.target.value as FieldRule['effect'])}>
-            <option value="show">show</option>
-            <option value="require">require</option>
-          </select>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>when</span>
-          <select className="input" style={{ width: 130, padding: '3px 6px', fontSize: 11.5 }} value={when}
-            onChange={(e) => setWhen(e.target.value)}>
-            <option value="">earlier field…</option>
-            {sources.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <select className="input" style={{ width: 62, padding: '3px 6px', fontSize: 11.5 }} value={op}
-            onChange={(e) => setOp(e.target.value as FieldRule['op'])}>
-            {RULE_OPS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <input className="input" style={{ width: 130, padding: '3px 8px', fontSize: 12 }}
-            placeholder={op === 'in' ? 'a, b, c' : 'value'} value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
-          <button className="btn" style={{ padding: '2px 8px', fontSize: 11.5 }} onClick={add}
-            disabled={!when || value.trim() === ''}>
-            + add
-          </button>
-        </span>
-      )}
-    </div>
   )
 }
 
@@ -485,4 +566,3 @@ function CostCenterAdmin({ onError }: { onError: (m: string) => void }) {
     </>
   )
 }
-
