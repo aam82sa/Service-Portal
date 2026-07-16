@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ABC Services Hub — Correspondence (الصادر / الوارد) redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Naskh+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens copied verbatim from src/styles/app.css :root ---- */
+:root{
+  --ink:#10192E; --ink-2:#1A2540; --ink-3:#243356;
+  --surface:#F4F5F8; --card:#FFFFFF; --line:#E4E7EE;
+  --text:#1B2437; --muted:#6B7280;
+  --accent:#D97757; --accent-soft:#FBEFE9;
+  --green:#2E9E6B; --green-soft:#E7F5EE;
+  --amber:#DE9B2D; --amber-soft:#FBF2DF;
+  --red:#D64545; --red-soft:#FBEAEA;
+  --it:#3E6DD8; --it-soft:#EAF0FC;
+  --admin:#8A5FC9; --admin-soft:#F2EDFA;
+  --log:#2E9E6B; --log-soft:#E7F5EE;
+  --radius:14px;
+  --font-head:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+  /* added for this sweep (AA amber text on white/soft) */
+  --amber-ink:#A9741A;
+  --font-ar:'Noto Naskh Arabic','Inter',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);background:var(--surface);color:var(--text);font-size:14px}
+h1,h2,h3{font-family:var(--font-head);color:var(--ink);margin:0}
+.mono{font-family:var(--font-mono)}
+.ar{font-family:var(--font-ar)}
+.shell{display:flex;min-height:100vh}
+
+/* ---- sidebar (matches app.css language) ---- */
+.sidebar{width:200px;background:var(--ink);color:#B9C2D6;padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;color:#fff;font-family:var(--font-head);font-weight:600;padding:0 8px 18px}
+.brand-badge{font-family:var(--font-mono);font-size:11px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 6px}
+.nav-group{font-size:11px;color:#5E6B85;margin:14px 8px 4px;font-weight:500}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:12.5px;color:#B9C2D6;background:none;border:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item.active::before{content:'';position:absolute;inset-inline-start:0;top:7px;bottom:7px;width:3px;background:var(--accent);border-radius:2px}
+.nav-badge{margin-inline-start:auto;background:var(--accent);color:#fff;font-family:var(--font-mono);font-size:9.5px;border-radius:99px;padding:1px 6px}
+.sidebar-foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--ink-3)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.foot-name{color:#fff;font-size:12px;font-weight:500}
+.foot-mail{font-family:var(--font-mono);font-size:9.5px;color:#5E6B85}
+
+.main{flex:1;padding:16px 22px;min-width:0}
+.page-head{font-size:19px;margin-bottom:2px}
+.page-head .ar{font-size:16px;color:var(--muted);font-weight:500}
+.page-sub{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+
+/* ---- segmented switcher (All / وارد / صادر) ---- */
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg button{font-family:var(--font-body);font-size:12.5px;font-weight:500;border:none;background:none;color:var(--muted);padding:6px 14px;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.seg button:hover{color:var(--ink)}
+.seg button.active{background:var(--ink);color:#fff}
+.seg .cnt{font-family:var(--font-mono);font-size:10px;background:var(--surface);color:var(--muted);border-radius:99px;padding:0 6px}
+.seg button.active .cnt{background:var(--ink-3);color:#fff}
+
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.tool-spacer{flex:1}
+.btn{font-family:var(--font-body);font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#c9694b}
+.btn.sm{padding:3px 9px;font-size:11px;border-radius:7px}
+.search{position:relative}
+.search input{width:300px;font-family:var(--font-body);font-size:12.5px;padding:7px 10px 7px 30px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.search input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.search svg{position:absolute;inset-inline-start:9px;top:8px;color:var(--muted)}
+select.input{font-family:var(--font-body);font-size:12px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+select.input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+
+/* ---- chips (semantic) ---- */
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.chip .lock{width:9px;height:9px}
+.t-red{background:var(--red-soft);color:var(--red)}
+.t-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.t-green{background:var(--green-soft);color:var(--green)}
+.t-accent{background:var(--accent-soft);color:var(--accent)}
+.t-it{background:var(--it-soft);color:var(--it)}
+.t-admin{background:var(--admin-soft);color:var(--admin)}
+.t-muted{background:var(--surface);color:var(--muted)}
+.t-ink{background:var(--ink);color:#fff}
+
+/* ---- register table ---- */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.panel-head{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.panel-head .ttl{font-size:13px;font-weight:700;font-family:var(--font-head);color:var(--ink)}
+.col-head,.lrow{display:grid;grid-template-columns:26px 150px 92px 1fr 150px 96px 116px 96px;align-items:center;gap:12px}
+.col-head{padding:8px 16px;border-bottom:1px solid var(--line);background:var(--surface);font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+.lrow{padding:11px 16px;border-top:1px solid #EDEFF4;width:100%;background:none;border-inline:none;border-bottom:none;font-family:var(--font-body);text-align:start;cursor:pointer;position:relative}
+.lrow:hover{background:var(--surface)}
+.lrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.lrow.sel{background:var(--accent-soft)}
+.rail-bar{position:absolute;inset-inline-start:0;top:6px;bottom:6px;width:4px;border-radius:2px}
+.r-ref{font-family:var(--font-mono);font-size:12px;color:var(--ink);display:block}
+.r-ref2{font-family:var(--font-mono);font-size:10px;color:var(--muted);display:block;margin-top:1px}
+.r-subj{font-weight:500;color:var(--ink);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-subj.ar{font-size:14px}
+.parties{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-date{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+.dir-tag{font-family:var(--font-mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;display:inline-flex;gap:4px;align-items:center}
+
+/* ---- detail layout ---- */
+.detail-grid{display:grid;grid-template-columns:1.35fr .95fr;gap:16px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+.dhead{padding:16px 18px;border-bottom:1px solid var(--line)}
+.dhead .chips{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
+.dhead h2{font-size:17px}
+.dhead h2.ar{font-family:var(--font-ar);line-height:1.5}
+.dhead .subj-en{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* confidentiality banner */
+.conf-banner{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--red-soft);border-bottom:1px solid #F2D2D2}
+.conf-banner .shield{color:var(--red);flex-shrink:0}
+.conf-banner .txt{font-size:11.5px;color:#8A2F2F;line-height:1.4}
+.conf-banner .txt b{color:var(--red)}
+
+/* document viewer + watermark */
+.viewer{position:relative;background:var(--surface);height:430px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.doc-page{position:relative;width:300px;height:392px;background:#fff;box-shadow:0 6px 24px rgba(16,25,46,.12);border-radius:3px;padding:26px 24px;overflow:hidden}
+.doc-page .letterhead{border-bottom:2px solid var(--ink);padding-bottom:8px;margin-bottom:12px;text-align:center}
+.doc-page .letterhead .m1{font-family:var(--font-ar);font-size:11px;color:var(--ink);font-weight:600}
+.doc-page .letterhead .m2{font-size:8px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-top:2px}
+.doc-line{height:6px;border-radius:3px;background:#EEF0F5;margin-bottom:7px}
+.doc-line.rtl{margin-inline-start:auto}
+.wm{position:absolute;inset:0;overflow:hidden;pointer-events:none;user-select:none}
+.wm .row{position:absolute;inset-inline-start:-25%;width:150%;transform:rotate(-27deg);white-space:nowrap;font-family:var(--font-mono);font-size:11px;font-weight:600;color:rgba(16,25,46,.15);letter-spacing:1px}
+.viewer-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--line);background:var(--card)}
+.viewer-bar .fname{font-family:var(--font-mono);font-size:11px;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wm-note{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--amber-soft);border-top:1px solid #EDDCB4;font-size:11px;color:var(--amber-ink)}
+.wm-note .eye{color:var(--amber-ink);flex-shrink:0}
+
+/* AI-extracted fields */
+.sect-lbl{font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.ai-badge{font-size:9.5px;font-weight:600;color:var(--admin);background:var(--admin-soft);border-radius:99px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
+.fields{padding:16px 18px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:12px}
+.f-lbl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:2px}
+.f-val{font-size:12.5px;color:var(--ink)}
+.f-val.mono{font-family:var(--font-mono);font-size:11.5px}
+.f-val.ar{font-family:var(--font-ar);font-size:13px;line-height:1.5}
+.brief{border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:10px}
+.brief.en{background:var(--surface)}
+.brief.ar{background:var(--surface);font-family:var(--font-ar);font-size:12.5px;line-height:1.7}
+
+/* audit trail */
+.audit{padding:16px 18px}
+.ev{display:flex;gap:9px;align-items:center;padding:8px 0;border-top:1px solid #EDEFF4;font-size:11.5px}
+.ev:first-of-type{border-top:none}
+.ev .who{flex:1;color:var(--ink)}
+.ev .ts{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.ev .etag{font-size:9.5px;font-weight:500;padding:2px 7px;border-radius:99px}
+
+.meta-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;padding:14px 18px;border-top:1px solid var(--line)}
+.actions-bar{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.owner-note{font-size:11px;color:var(--muted);margin-inline-start:auto}
+.disabled-note{font-size:11px;color:var(--muted);font-style:italic}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-badge">ABC</span><span>Services Hub</span></div>
+    <button class="nav-item"><span>Overview</span></button>
+    <button class="nav-item"><span>New request</span></button>
+    <button class="nav-item"><span>My requests</span></button>
+    <div class="nav-group">Workspace</div>
+    <button class="nav-item"><span>Work</span><span class="nav-badge">7</span></button>
+    <button class="nav-item"><span>Projects</span></button>
+    <button class="nav-item active"><span>Correspondence</span><span class="nav-badge">3</span></button>
+    <button class="nav-item"><span>Insights</span></button>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="avatar">SA</span>
+        <div><div class="foot-name">Sara Al-Amri</div><div class="foot-mail">sara.alamri@abc.sa</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- main -->
+  <main class="main">
+    <h2 class="page-head">Correspondence <span class="ar">الصادر والوارد</span></h2>
+    <p class="page-sub">Register, search and route official letters. Every open is per-viewer watermarked and written to an immutable audit log.</p>
+
+    <!-- segmented in/out register + tools -->
+    <div class="topbar">
+      <div class="seg">
+        <button class="active"><span>All</span><span class="cnt">128</span></button>
+        <button><span class="ar">وارد</span><span>Incoming</span><span class="cnt">71</span></button>
+        <button><span class="ar">صادر</span><span>Outgoing</span><span class="cnt">57</span></button>
+      </div>
+      <div class="tool-spacer"></div>
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input placeholder="Search subject, parties, full text… (ar / en)" />
+      </div>
+      <select class="input" aria-label="Confidentiality">
+        <option>Any confidentiality</option><option>General</option><option>Restricted</option><option>Confidential</option>
+      </select>
+      <button class="btn primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Register letter</button>
+    </div>
+
+    <!-- REGISTER TABLE -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="ttl">Register</span>
+        <span class="chip t-muted mono">128 records</span>
+        <span class="tool-spacer"></span>
+        <button class="btn sm">Sort: Date ↓</button>
+      </div>
+      <div class="col-head">
+        <span></span>
+        <span>Reference</span>
+        <span>Direction</span>
+        <span>Subject</span>
+        <span>From → To</span>
+        <span>Date</span>
+        <span>Confidentiality</span>
+        <span>Status</span>
+      </div>
+      <div id="rows"></div>
+    </section>
+
+    <!-- LETTER DETAIL (confidential incoming example, currently selected) -->
+    <button class="btn sm" style="margin-bottom:12px">← Back to register</button>
+    <div class="detail-grid">
+      <!-- LEFT: header + document viewer -->
+      <div class="card" style="overflow:hidden">
+        <div class="dhead">
+          <div class="chips">
+            <span class="chip t-ink mono">ADM/2026/0142</span>
+            <span class="chip t-it"><span class="ar">وارد</span> Incoming</span>
+            <span class="chip t-red">
+              <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              Confidential
+            </span>
+            <span class="chip t-admin">Administration</span>
+            <span class="chip t-amber">In review</span>
+          </div>
+          <h2 class="ar" dir="rtl">تعميم بشأن ترتيبات الدخول الأمني للمقر الرئيسي خلال الزيارة الرسمية</h2>
+          <div class="subj-en">Circular on security entry arrangements for HQ during the official visit</div>
+        </div>
+
+        <!-- confidentiality / DLP banner -->
+        <div class="conf-banner">
+          <svg class="shield" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 9.6C8 22.4 5 18.4 5 14V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+          <div class="txt">
+            <b>Confidential — access restricted to owner and named viewers.</b> Sharing is disabled; downloads are blocked. Every copy is stamped with the viewer's identity and logged.
+          </div>
+        </div>
+
+        <!-- watermarked document viewer -->
+        <div class="viewer">
+          <div class="doc-page" dir="rtl">
+            <div class="letterhead">
+              <div class="m1">وزارة الداخلية — الأمن العام</div>
+              <div class="m2">Ministry of Interior · Public Security</div>
+            </div>
+            <div class="doc-line" style="width:55%"></div>
+            <div class="doc-line" style="width:82%"></div>
+            <div class="doc-line" style="width:74%"></div>
+            <div class="doc-line" style="width:88%"></div>
+            <div class="doc-line" style="width:40%"></div>
+            <div class="doc-line" style="width:0"></div>
+            <div class="doc-line" style="width:79%"></div>
+            <div class="doc-line" style="width:86%"></div>
+            <div class="doc-line" style="width:63%"></div>
+            <div class="doc-line" style="width:0"></div>
+            <div class="doc-line" style="width:48%"></div>
+            <div class="doc-line" style="width:70%"></div>
+          </div>
+          <!-- per-viewer watermark overlay -->
+          <div class="wm" id="wm" aria-hidden="true"></div>
+        </div>
+        <div class="wm-note">
+          <svg class="eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>You are viewing a <b>watermarked copy</b> stamped <span class="mono">Sara Al-Amri · 4f9c2a1b · 2026-07-16 09:42 · ADM/2026/0142 · CONFIDENTIAL</span>. This open was logged.</span>
+        </div>
+        <div class="viewer-bar">
+          <span class="fname">moi-circular-4471-1447.pdf</span>
+          <!-- signatory-only clear-view affordance -->
+          <button class="btn sm" style="color:var(--accent);border-color:var(--accent)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            View clear copy
+          </button>
+          <span class="owner-note">Owner-only · audited</span>
+        </div>
+
+        <!-- key metadata -->
+        <div class="meta-row">
+          <div><div class="f-lbl">Our reference</div><div class="f-val mono">ADM/2026/0142</div></div>
+          <div><div class="f-lbl">Their reference</div><div class="f-val mono">4471 / 1447</div></div>
+          <div><div class="f-lbl">Received</div><div class="f-val mono">2026-07-14</div></div>
+          <div><div class="f-lbl">Owner</div><div class="f-val">Sara Al-Amri</div></div>
+        </div>
+
+        <div class="actions-bar">
+          <button class="btn sm">Issue reference</button>
+          <button class="btn sm">QR label</button>
+          <button class="btn sm">Add comment</button>
+          <button class="btn sm">Transfer ownership</button>
+          <span class="disabled-note owner-note">Download &amp; share disabled — confidential</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: AI extraction + audit -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <div class="fields">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="sect-lbl">Extracted fields</span>
+              <span class="ai-badge">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18"/></svg>
+                Read by Claude · confirm to correct
+              </span>
+            </div>
+            <div class="fgrid">
+              <div><div class="f-lbl">Sender · المُرسِل</div><div class="f-val ar" dir="rtl">وزارة الداخلية — الأمن العام</div></div>
+              <div><div class="f-lbl">Addressee · المُرسَل إليه</div><div class="f-val ar" dir="rtl">شركة ABC للخدمات</div></div>
+              <div><div class="f-lbl">Letter number</div><div class="f-val mono">4471 / 1447</div></div>
+              <div><div class="f-lbl">Letter date (Hijri→Greg.)</div><div class="f-val mono">2026-07-11</div></div>
+              <div style="grid-column:1/-1"><div class="f-lbl">Subject · الموضوع</div><div class="f-val ar" dir="rtl">تعميم بشأن ترتيبات الدخول الأمني للمقر الرئيسي خلال الزيارة الرسمية</div></div>
+            </div>
+            <div class="brief ar" dir="rtl">
+              <div class="f-lbl" style="margin-bottom:4px">الملخص · عربي</div>
+              يوجّه التعميم جميع الجهات إلى تطبيق ترتيبات دخول مشددة للمقر الرئيسي خلال فترة الزيارة الرسمية، ويطلب تزويد الأمن العام بقوائم الزوّار قبل ثلاثة أيام عمل.
+            </div>
+            <div class="brief en">
+              <div class="f-lbl" style="margin-bottom:4px">Brief · English</div>
+              The circular directs all entities to apply enhanced HQ entry controls during the official visit and requests visitor lists be submitted to Public Security three working days in advance.
+            </div>
+          </div>
+        </div>
+
+        <!-- audit trail -->
+        <div class="card">
+          <div class="audit">
+            <div class="sect-lbl" style="margin-bottom:10px">Audit trail</div>
+            <div class="ev">
+              <span class="etag t-red">view clear</span>
+              <span class="who">Sara Al-Amri opened a clear copy</span>
+              <span class="ts">09:42</span>
+            </div>
+            <div class="ev">
+              <span class="etag t-muted">viewed</span>
+              <span class="who">Sara Al-Amri (watermarked)</span>
+              <span class="ts">09:41</span>
+            </div>
+            <div class="ev">
+              <span class="etag t-it">shared</span>
+              <span class="who">→ Khalid Al-Mutairi (named viewer)</span>
+              <span class="ts">Jul 15 · 14:20</span>
+            </div>
+            <div class="ev">
+              <span class="etag t-amber">status</span>
+              <span class="who">registered → in review</span>
+              <span class="ts">Jul 15 · 08:05</span>
+            </div>
+            <div class="ev">
+              <span class="etag t-accent">ref issued</span>
+              <span class="who">ADM/2026/0142 assigned</span>
+              <span class="ts">Jul 14 · 16:33</span>
+            </div>
+            <div class="ev">
+              <span class="etag t-muted">registered</span>
+              <span class="who">Sara Al-Amri · read with AI</span>
+              <span class="ts">Jul 14 · 16:30</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ---- register data (in/out, bilingual subjects, confidentiality tiers) ----
+var DEPT={IT:{rail:'var(--it)',cls:'t-it',label:'IT'},ADMIN:{rail:'var(--admin)',cls:'t-admin',label:'ADM'},PROC:{rail:'var(--green)',cls:'t-green',label:'PRC'}};
+var CONF={general:{cls:'t-muted',label:'General',lock:false},restricted:{cls:'t-amber',label:'Restricted',lock:true},confidential:{cls:'t-red',label:'Confidential',lock:true}};
+var STATUS={registered:'t-it',in_review:'t-amber',answered:'t-green',closed:'t-muted'};
+var lockSvg='<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+
+var DATA=[
+ {dir:'in',refOurs:'ADM/2026/0142',refTheirs:'4471/1447',subj:'تعميم بشأن ترتيبات الدخول الأمني للمقر الرئيسي',ar:true,from:'وزارة الداخلية',to:'ABC',date:'2026-07-14',dept:'ADMIN',conf:'confidential',status:'in_review',sel:true},
+ {dir:'out',refOurs:'IT/2026/0311',refTheirs:'—',subj:'Response — service continuity plan for core systems',ar:false,from:'ABC · IT',to:'Vendor Ops',date:'2026-07-13',dept:'IT',conf:'restricted',status:'answered'},
+ {dir:'in',refOurs:'PRC/2026/0098',refTheirs:'PO-88421',subj:'عرض أسعار — تجديد تراخيص البرمجيات السنوية',ar:true,from:'مزوّد التقنية',to:'ABC · المشتريات',date:'2026-07-12',dept:'PROC',conf:'general',status:'registered'},
+ {dir:'out',refOurs:'ADM/2026/0139',refTheirs:'—',subj:'Official invitation — annual governance review',ar:false,from:'ABC · Admin',to:'Board members',date:'2026-07-10',dept:'ADMIN',conf:'restricted',status:'answered'},
+ {dir:'in',refOurs:'IT/2026/0305',refTheirs:'TIC-2291',subj:'Security advisory — patch mandate for endpoint fleet',ar:false,from:'National CERT',to:'ABC · IT',date:'2026-07-09',dept:'IT',conf:'restricted',status:'in_review'},
+ {dir:'out',refOurs:'PRC/2026/0094',refTheirs:'—',subj:'خطاب ترسية — توريد أجهزة العرض والشاشات',ar:true,from:'ABC · المشتريات',to:'المورّد المعتمد',date:'2026-07-08',dept:'PROC',conf:'general',status:'closed'}
+];
+
+function dirTag(d){
+  return d==='in'
+    ? '<span class="dir-tag t-it"><span class="ar">وارد</span> IN</span>'
+    : '<span class="dir-tag t-green"><span class="ar">صادر</span> OUT</span>';
+}
+document.getElementById('rows').innerHTML=DATA.map(function(r){
+  var dp=DEPT[r.dept],cf=CONF[r.conf];
+  var subjCls=r.ar?'r-subj ar':'r-subj';
+  var dir=r.ar?' dir="rtl"':'';
+  return '<button class="lrow'+(r.sel?' sel':'')+'" tabindex="0">'+
+    '<span class="rail-bar" style="background:'+dp.rail+'"></span>'+
+    '<span><span class="r-ref">'+r.refOurs+'</span><span class="r-ref2">their: '+r.refTheirs+'</span></span>'+
+    '<span>'+dirTag(r.dir)+'</span>'+
+    '<span style="min-width:0"><div class="'+subjCls+'"'+dir+'>'+r.subj+'</div></span>'+
+    '<span class="parties">'+r.from+' → '+r.to+'</span>'+
+    '<span class="r-date">'+r.date+'</span>'+
+    '<span><span class="chip '+cf.cls+'">'+(cf.lock?lockSvg:'')+cf.label+'</span></span>'+
+    '<span><span class="chip '+STATUS[r.status]+'">'+r.status.replace('_',' ')+'</span></span>'+
+  '</button>';
+}).join('');
+
+// ---- build the tiled per-viewer watermark overlay ----
+(function(){
+  var stamp='Sara Al-Amri · 4f9c2a1b · 2026-07-16 09:42 · ADM/2026/0142 · CONFIDENTIAL';
+  var wm=document.getElementById('wm');var html='';
+  for(var i=0;i<9;i++){
+    html+='<div class="row" style="top:'+(i*54-30)+'px">'+stamp+'&nbsp;&nbsp;&nbsp;'+stamp+'</div>';
+  }
+  wm.innerHTML=html;
+})();
+
+// roving focus on register rows (keyboard nav parity with queue reference)
+var rows=[].slice.call(document.querySelectorAll('.lrow'));var idx=0;
+document.addEventListener('keydown',function(e){
+  if(e.key==='j'){idx=Math.min(idx+1,rows.length-1);rows[idx].focus();}
+  if(e.key==='k'){idx=Math.max(idx-1,0);rows[idx].focus();}
+});
+</script>
+</body>
+</html>
