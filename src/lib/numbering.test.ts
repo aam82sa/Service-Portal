@@ -38,4 +38,10 @@ describe('renderNumber', () => {
   it('repeats tokens consistently', () => {
     expect(renderNumber('{yy}-{yy}-{seq:2}-{seq:2}', 3, { on: JUL_2026 })).toBe('26-26-03-03')
   })
+
+  it('renders the Hijri year token where the runtime has the Umm al-Qura calendar', () => {
+    // 2026 falls in Hijri 1447/1448; ICU-less builds render the tokens empty.
+    const out = renderNumber('{hyyyy}/{hyy}', 1, { on: JUL_2026 })
+    if (out !== '/') expect(out).toMatch(/^14\d\d\/\d\d$/)
+  })
 })
