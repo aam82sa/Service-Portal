@@ -1,4 +1,5 @@
 import nodemailer from 'npm:nodemailer@6.9.14'
+import { Buffer } from 'node:buffer'
 import type { MailMessage, MailProvider, SendResult } from './types.ts'
 
 /**
@@ -30,6 +31,11 @@ export function smtpProvider(env: (k: string) => string | undefined): MailProvid
           to: msg.to.join(', '),
           subject: msg.subject,
           html: msg.html,
+          attachments: msg.attachments?.map((a) => ({
+            filename: a.filename,
+            content: Buffer.from(a.content),
+            contentType: a.contentType,
+          })),
         })
         return { ok: true, provider: 'smtp' }
       } catch (e) {
