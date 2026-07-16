@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { PersonPicker } from '../../components/PersonPicker'
 import { DEPT_COLOR, PORTAL_DEPTS, type DeptCode } from '../../lib/types'
 import { readLetter, type ExtractedLetter } from './aiReader'
+import { OutgoingLifecycle } from './OutgoingLifecycle'
 
 type Direction = 'incoming' | 'outgoing'
 type Confidentiality = 'general' | 'restricted' | 'confidential'
@@ -44,6 +45,7 @@ const CONF_STYLE: Record<Confidentiality, { cls: string; lock: boolean; label: s
 }
 const STATUS_CLS: Record<string, string> = {
   registered: 't-it', in_review: 't-amber', answered: 't-green', closed: 't-muted',
+  draft: 't-muted', in_initials: 't-amber', signed: 't-accent', dispatched: 't-green', voided: 't-red',
 }
 const ETAG_CLS: Record<string, string> = {
   view_clear: 't-red', viewed: 't-muted', downloaded: 't-amber', printed: 't-muted',
@@ -437,6 +439,16 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
               <span className="disabled-note owner-note">Download &amp; share disabled — confidential</span>
             )}
           </div>
+
+          {letter.direction === 'outgoing' && (
+            <OutgoingLifecycle
+              letterId={letter.id}
+              status={letter.status}
+              refOurs={letter.ref_ours}
+              subject={letter.subject}
+              onChanged={() => { load(); onChanged() }}
+            />
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
