@@ -421,3 +421,6 @@ verify_jwt = false
 
 [functions.letter-rendition]
 verify_jwt = true
+
+[functions.read-letter]
+verify_jwt = true

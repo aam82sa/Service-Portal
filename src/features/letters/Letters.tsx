@@ -556,8 +556,8 @@ function Detail({ letter, people, viewer, allowOwnerClear, onBack, onChanged }: 
   )
 }
 
-function Register({ people, selfId, settings, onDone }: {
-  people: Person[]; selfId: string; settings: Record<string, string>; onDone: () => void
+function Register({ people, selfId, onDone }: {
+  people: Person[]; selfId: string; onDone: () => void
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [direction, setDirection] = useState<Direction>('incoming')
@@ -569,15 +569,15 @@ function Register({ people, selfId, settings, onDone }: {
   const [reading, setReading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const apiKey = settings['anthropic_api_key']
 
   const aiRead = async () => {
-    if (!file || !apiKey) return
+    if (!file) return
     setReading(true); setError(null)
     try {
       const { data: fb } = await supabase.from('extraction_feedback')
         .select('field, extracted, corrected').order('created_at', { ascending: false }).limit(12)
-      const { fields, usage } = await readLetter(file, apiKey, settings['ai_model'] || 'claude-sonnet-5', fb ?? [])
+      // the read-letter edge function holds the API key — it never reaches the browser
+      const { fields } = await readLetter(file, fb ?? [])
       setAiExtract(fields)
       setF({
         ref_theirs: fields.letter_number ?? '',
@@ -588,10 +588,6 @@ function Register({ people, selfId, settings, onDone }: {
         brief_ar: fields.brief_ar ?? '',
         brief_en: fields.brief_en ?? '',
         ocr_text: fields.ocr_text ?? '',
-      })
-      await supabase.from('ai_usage').insert({
-        user_id: selfId, model: settings['ai_model'] || 'claude-sonnet-5',
-        input_tokens: usage.input_tokens, output_tokens: usage.output_tokens,
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -643,10 +639,10 @@ function Register({ people, selfId, settings, onDone }: {
       <div style={{ ...label10, marginBottom: 10 }}>Capture</div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
         <input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <button className="btn primary" disabled={!file || !apiKey || reading} onClick={aiRead}>
+        <button className="btn primary" disabled={!file || reading} onClick={aiRead}>
           {reading ? 'Reading…' : 'Read with AI'}
         </button>
-        {!apiKey && <span className="row-desc">Set the Claude API key under Settings to enable AI reading.</span>}
+        <span className="row-desc">Reading runs server-side; the API key never reaches the browser.</span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
@@ -775,7 +771,7 @@ function Settings({ settings, onChanged }: { settings: Record<string, string>; o
         <div style={{ ...label10, marginBottom: 10 }}>AI reading</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: 1, minWidth: 260 }}>
-            <label className="field-label">Claude API key (stored per tenant; usage is metered)</label>
+            <label className="field-label">Claude API key (held server-side; used only by the read-letter function)</label>
             <input className="input" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-ant-…" />
           </div>
           <div style={{ width: 200 }}>
@@ -952,7 +948,7 @@ export function Letters() {
             ← Back to register
           </button>
           {tab === 'register' && (
-            <Register people={people} selfId={profile.id} settings={settings}
+            <Register people={people} selfId={profile.id}
               onDone={() => { setTab('registry'); load() }} />
           )}
           {tab === 'settings' && isSys && <Settings settings={settings} onChanged={reloadSettings} />}
