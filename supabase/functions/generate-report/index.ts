@@ -18,6 +18,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { compileQuery, type ReportConfig } from './compiler.ts'
 import { artifactMeta, toCSV, toXLSX } from './render.ts'
 import { renderReportPdf } from './pdf.ts'
+import { buildPresentation } from './presentation.ts'
 
 const env = (k: string) => Deno.env.get(k)
 
@@ -39,6 +40,7 @@ interface DefinitionRow {
   data_source: string
   config: ReportConfig | null
   name: string | null
+  slug: string | null
 }
 interface RunRow {
   id: string
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
 
   const { data: runData, error: runErr } = await db
     .from('report_runs')
-    .select('id, status, format, run_as_owner, requested_by, attempts, definition:report_definitions(data_source, config, name)')
+    .select('id, status, format, run_as_owner, requested_by, attempts, requester:profiles!report_runs_requested_by_fkey(display_name), definition:report_definitions(data_source, config, name, slug)')
     .eq('id', runId)
     .single()
   if (runErr || !runData) return json({ error: 'run not found' }, 404)
@@ -128,11 +130,15 @@ Deno.serve(async (req) => {
     } else if (format === 'xlsx') {
       bytes = toXLSX(columns, rows)
     } else if (format === 'pdf') {
+      // per-report presentation: KPI band, chips, dept rails, tones, totals
+      const pres = buildPresentation(def.slug, columns, rows)
+      const requester = (run as unknown as { requester?: { display_name?: string } | { display_name?: string }[] }).requester
+      const runBy = Array.isArray(requester) ? requester[0]?.display_name : requester?.display_name
       bytes = await renderReportPdf(env, {
         title: def.name ?? 'Report',
         subtitle: periodLabel(def.config),
-        columns,
-        rows,
+        ...pres,
+        runBy,
       })
     } else {
       throw new Error(`unsupported format: ${format}`)

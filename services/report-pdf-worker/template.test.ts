@@ -61,3 +61,73 @@ describe('reportHtml', () => {
     expect(html).toContain('{&quot;k&quot;:&quot;&lt;x&gt;&quot;}')
   })
 })
+
+describe('services hub anatomy', () => {
+  const spec = {
+    title: 'SLA compliance',
+    columns: [
+      { key: 'ref', label: 'Ref', format: 'id' as const },
+      { key: 'dept', label: 'Department', deptRail: true },
+      { key: 'priority', label: 'Priority', chip: 'priority' as const },
+      { key: 'sla_met', label: 'SLA met', chip: 'boolean' as const },
+      { key: 'breached', label: 'Breached', chip: 'boolean' as const },
+      { key: 'amount', label: 'Amount', format: 'number' as const },
+    ],
+    rows: [
+      { ref: 'REQ-1001', dept: 'IT', priority: 'P1', sla_met: true, breached: true, amount: 12500 },
+      { ref: 'REQ-1002', dept: 'ADMIN', priority: 'P4', sla_met: false, breached: null, amount: null },
+    ],
+  }
+
+  it('renders chips: priority tones, Yes/No, Breached, em-dash for null', () => {
+    const html = reportHtml(spec)
+    expect(html).toContain('>P1</span>')
+    expect(html).toContain('>Yes</span>')
+    expect(html).toContain('>No</span>')
+    expect(html).toContain('>Breached</span>')
+    expect(html).toContain('—')
+  })
+
+  it('formats numbers with thousands separators and renders ids in mono', () => {
+    const html = reportHtml(spec)
+    expect(html).toContain('12,500')
+    expect(html).toContain('<span class="mono">REQ-1001</span>')
+  })
+
+  it('adds the department rail border from the dept color map', () => {
+    const html = reportHtml(spec)
+    expect(html).toContain('border-left:3px solid #3E6DD8')
+    expect(html).toContain('border-left:3px solid #8A5FC9')
+  })
+
+  it('renders the KPI band with tone colors', () => {
+    const html = reportHtml({ ...spec, kpis: [{ value: '94.2%', label: 'Compliance', tone: 'green' }] })
+    expect(html).toContain('94.2%')
+    expect(html).toContain('kpi-label')
+    expect(html).toContain('#2E9E6B')
+  })
+
+  it('renders the bar band scaled to the max value', () => {
+    const html = reportHtml({ ...spec, bars: [{ label: 'IT', value: 50, color: '#3E6DD8' }, { label: 'ADMIN', value: 25, color: '#8A5FC9' }] })
+    expect(html).toContain('width:100%')
+    expect(html).toContain('width:50%')
+  })
+
+  it('renders the personal-data banner when flagged (footer is printed by the worker)', () => {
+    const html = reportHtml({ ...spec, containsPersonalData: true })
+    expect(html).toContain('PERSONAL DATA')
+    expect(html).toContain('Do not forward')
+  })
+
+  it('renders a totals row and the truncation line', () => {
+    const html = reportHtml({ ...spec, totalsRow: { ref: 'Total', amount: 12500 }, rowCountTotal: 120 })
+    expect(html).toContain('class="totals"')
+    expect(html).toContain('Showing 2 of 120 rows.')
+  })
+
+  it('accent rule replaces the legacy gold theme', () => {
+    const html = reportHtml(spec)
+    expect(html).toContain('#D97757')
+    expect(html).not.toContain('#c9a227')
+  })
+})

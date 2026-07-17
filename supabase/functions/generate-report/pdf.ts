@@ -11,12 +11,24 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 
+import type { Bar, ColSpec, Kpi } from './presentation.ts'
+
 export interface PdfInput {
   title: string
   subtitle?: string
-  columns: string[]
+  columns: ColSpec[] | string[]
   rows: Record<string, unknown>[]
+  runBy?: string
+  rowCountTotal?: number
+  kpis?: Kpi[]
+  bars?: Bar[]
+  totalsRow?: Record<string, unknown>
+  containsPersonalData?: boolean
 }
+
+/** column keys/labels regardless of whether specs or plain strings came in */
+const colKey = (c: ColSpec | string) => (typeof c === 'string' ? c : c.key)
+const colLabel = (c: ColSpec | string) => (typeof c === 'string' ? c : c.label)
 
 /** Keep only WinAnsi-safe printable ASCII; everything else becomes '?'. */
 function asciiSafe(s: string): string {
@@ -42,7 +54,8 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
   const pageW = 842, pageH = 595            // A4 landscape, points
   const margin = 36
   const rowH = 16, size = 8
-  const cols = input.columns.length > 0 ? input.columns : ['(no columns)']
+  const cols = input.columns.length > 0 ? input.columns.map(colKey) : ['(no columns)']
+  const labels = input.columns.length > 0 ? input.columns.map(colLabel) : ['(no columns)']
   const colW = (pageW - margin * 2) / cols.length
 
   let page = doc.addPage([pageW, pageH])
@@ -56,7 +69,7 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
   y -= 4
 
   const header = () => {
-    cols.forEach((c, i) => draw(c, margin + i * colW, y, bold, size))
+    labels.forEach((c, i) => draw(c, margin + i * colW, y, bold, size))
     y -= rowH
   }
   header()
