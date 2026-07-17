@@ -168,3 +168,14 @@ export async function deleteSchedule(id: string): Promise<void> {
   const { error } = await supabase.from('report_schedules').delete().eq('id', id)
   if (error) throw error
 }
+
+/**
+ * A fresh signed URL for a stored artifact. The reports bucket read policy
+ * allows the run owner (their folder) and admins, so this works client-side
+ * for exactly the people who may see the report.
+ */
+export async function artifactSignedUrl(path: string, expiresIn = 300): Promise<string> {
+  const { data, error } = await supabase.storage.from('reports').createSignedUrl(path, expiresIn)
+  if (error || !data?.signedUrl) throw error ?? new Error('could not sign artifact url')
+  return data.signedUrl
+}
