@@ -21,8 +21,15 @@ import { renderReportPdf } from './pdf.ts'
 
 const env = (k: string) => Deno.env.get(k)
 
+/** Browser calls require CORS: allow the app origin's preflight + headers. */
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-hook-secret',
+  'access-control-allow-methods': 'POST, OPTIONS',
+}
+
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS } })
 
 function admin() {
   return createClient(env('SUPABASE_URL')!, env('SUPABASE_SERVICE_ROLE_KEY')!)
@@ -55,6 +62,7 @@ function slugify(name: string): string {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   const db = admin()
