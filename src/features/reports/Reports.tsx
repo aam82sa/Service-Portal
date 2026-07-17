@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import {
-  createSchedule, deleteSchedule, emailReport, listDefinitions, listRuns, listSchedules,
+  artifactSignedUrl, createSchedule, deleteSchedule, emailReport, listDefinitions, listRuns, listSchedules,
   previewReport, runReport, setScheduleEnabled,
   type Format, type Preview, type ReportDefinition, type ReportRun, type ReportSchedule,
 } from './api'
+import { artifactFilename, previewable, saveUrl } from './artifact'
 import { cadenceToCron, describeCadence, WEEKDAYS, type Preset } from './cron'
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -124,7 +125,8 @@ function ReportPanel({ def, ownerId }: { def: ReportDefinition; ownerId: string 
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [showSchedule, setShowSchedule] = useState(false)
-  const [showEmail, setShowEmail] = useState<{ runId: string } | null>(null)
+  const [showEmail, setShowEmail] = useState<ReportRun | null>(null)
+  const [showView, setShowView] = useState<ReportRun | null>(null)
 
   const refresh = () => {
     listRuns(def.id).then(setRuns).catch(() => {})
@@ -145,7 +147,8 @@ function ReportPanel({ def, ownerId }: { def: ReportDefinition; ownerId: string 
     try {
       const res = await runReport(def, ownerId, fmt)
       if (res.error) setNote(res.error)
-      else if (res.downloadUrl) window.open(res.downloadUrl, '_blank', 'noopener')
+      // programmatic anchor click — window.open after an await gets popup-blocked
+      else if (res.downloadUrl) saveUrl(res.downloadUrl, `${def.slug}.${fmt}`)
     } catch (e) { setNote((e as Error).message) }
     finally { setBusy(null); refresh() }
   }
@@ -212,8 +215,17 @@ function ReportPanel({ def, ownerId }: { def: ReportDefinition; ownerId: string 
                 <td style={{ padding: '7px 8px', textTransform: 'uppercase', color: 'var(--muted)' }}>{r.format}</td>
                 <td style={{ padding: '7px 8px' }}>{r.row_count ?? '—'} rows</td>
                 <td style={{ padding: '7px 8px', color: 'var(--muted)' }}>{fmtTime(r.created_at)}</td>
-                <td style={{ padding: '7px 4px', textAlign: 'right' }}>
-                  {r.status === 'succeeded' && <button className="btn ghost sm" onClick={() => setShowEmail({ runId: r.id })}>Email once</button>}
+                <td style={{ padding: '7px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {r.status === 'succeeded' && r.artifact_path && (
+                    <>
+                      <button className="btn ghost sm" onClick={() => setShowView(r)}>View</button>{' '}
+                      <button className="btn ghost sm" onClick={async () => {
+                        try { saveUrl(await artifactSignedUrl(r.artifact_path!), artifactFilename(r.artifact_path!)) }
+                        catch (e) { setNote((e as Error).message) }
+                      }}>Download</button>{' '}
+                      <button className="btn ghost sm" onClick={() => setShowEmail(r)}>Email once</button>
+                    </>
+                  )}
                   {r.status === 'failed' && r.error && <span style={{ color: 'var(--red)' }} title={r.error}>failed</span>}
                 </td>
               </tr>
@@ -248,8 +260,49 @@ function ReportPanel({ def, ownerId }: { def: ReportDefinition; ownerId: string 
         />
       )}
       {showEmail && (
-        <EmailReportDialog runId={showEmail.runId} onClose={() => setShowEmail(null)} />
+        <EmailReportDialog run={showEmail} onClose={() => setShowEmail(null)} />
       )}
+      {showView && (
+        <ArtifactViewer run={showView} title={def.name} onClose={() => setShowView(null)} />
+      )}
+    </div>
+  )
+}
+
+/** Inline viewer for a finished artifact — see the report exactly as delivered. */
+function ArtifactViewer({ run, title, onClose }: { run: ReportRun; title: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    if (!run.artifact_path) { setErr('no artifact stored for this run'); return }
+    artifactSignedUrl(run.artifact_path).then(setUrl).catch((e) => setErr((e as Error).message))
+  }, [run])
+
+  const canInline = previewable(run.format)
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,22,28,.5)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
+        style={{ background: 'var(--card, #fff)', borderRadius: 14, padding: 16, width: 'min(920px, 94vw)', height: 'min(82vh, 900px)', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: '0 12px 40px rgba(0,0,0,.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <b style={{ fontSize: 14 }}>{title} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· {run.format.toUpperCase()} · {run.row_count ?? '—'} rows</span></b>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {url && run.artifact_path && (
+              <button className="btn" style={{ fontSize: 12 }} onClick={() => saveUrl(url, artifactFilename(run.artifact_path!))}>Download</button>
+            )}
+            <button className="btn ghost" style={{ fontSize: 12 }} onClick={onClose}>Close</button>
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
+          {err && <div style={{ padding: 20, color: 'var(--red)', fontSize: 13 }}>{err}</div>}
+          {!err && !url && <div style={{ padding: 20, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>}
+          {url && canInline && <iframe title="Report preview" src={url} style={{ width: '100%', height: '100%', border: 0 }} />}
+          {url && !canInline && (
+            <div style={{ padding: 24, fontSize: 13, color: 'var(--muted)' }}>
+              XLSX has no in-browser preview — use <b>Download</b> to open it in Excel.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -325,17 +378,23 @@ function ScheduleDialog({ formats, onClose, onCreate }: {
 
 interface Person { id: string; display_name: string; upn: string }
 
-function EmailReportDialog({ runId, onClose }: { runId: string; onClose: () => void }) {
+function EmailReportDialog({ run, onClose }: { run: ReportRun; onClose: () => void }) {
+  const runId = run.id
   const [people, setPeople] = useState<Person[]>([])
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [external, setExternal] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('profiles').select('id, display_name, upn').eq('is_active', true).order('display_name').limit(500)
       .then(({ data }) => setPeople((data ?? []) as Person[]))
+    if (run.artifact_path && previewable(run.format)) {
+      artifactSignedUrl(run.artifact_path).then(setPreviewUrl).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const filtered = people.filter((p) => !q || (p.display_name + ' ' + p.upn).toLowerCase().includes(q.toLowerCase())).slice(0, 8)
@@ -357,6 +416,18 @@ function EmailReportDialog({ runId, onClose }: { runId: string; onClose: () => v
   return (
     <Overlay onClose={onClose}>
       <h3 style={{ marginTop: 0 }}>Email this report once</h3>
+      {previewUrl && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>This is exactly what recipients receive ({run.format.toUpperCase()}):</div>
+          <iframe title="Attachment preview" src={previewUrl}
+            style={{ width: '100%', height: 200, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--surface)' }} />
+        </div>
+      )}
+      {!previewUrl && run.artifact_path && !previewable(run.format) && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+          Attachment: <span className="mono">{artifactFilename(run.artifact_path)}</span> ({run.row_count ?? '—'} rows — XLSX has no inline preview)
+        </div>
+      )}
       <Field label="Internal recipients">
         <input placeholder="Search people…" value={q} onChange={(e) => setQ(e.target.value)} style={inp} />
       </Field>
