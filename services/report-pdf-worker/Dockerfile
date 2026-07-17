@@ -6,6 +6,7 @@ WORKDIR /app
 # Arabic script fonts so correspondence-quality PDFs render RTL text correctly.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends fonts-noto-core \
+  && (apt-get install -y --no-install-recommends fonts-inter fonts-jetbrains-mono || true) \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json ./

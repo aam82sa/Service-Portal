@@ -36,11 +36,25 @@ function browser(): Promise<Browser> {
   return browserPromise
 }
 
+/** Per-page print footer: confidentiality line left, Page N of M right. */
+function footerTemplate(input: ReportHtmlInput): string {
+  const left = input.containsPersonalData
+    ? '<span style="color:#D64545;font-weight:600">RESTRICTED — Personal data. Access limited to dept heads &amp; HR. Redistribution prohibited.</span>'
+    : '<span style="color:#9aa0ab">Confidential — generated under the requesting owner&#39;s data access.</span>'
+  return `<div style="width:100%;font-size:8px;font-family:'JetBrains Mono',monospace;padding:0 14mm;display:flex;justify-content:space-between;align-items:center">${left}<span style="color:#9aa0ab">Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`
+}
+
 async function renderPdf(input: ReportHtmlInput): Promise<Buffer> {
   const page = await (await browser()).newPage()
   try {
     await page.setContent(reportHtml(input), { waitUntil: 'networkidle' })
-    return await page.pdf({ printBackground: true, preferCSSPageSize: true })
+    return await page.pdf({
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<span></span>',
+      footerTemplate: footerTemplate(input),
+    })
   } finally {
     await page.close()
   }
