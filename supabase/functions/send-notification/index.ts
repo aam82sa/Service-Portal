@@ -27,8 +27,15 @@ import { deliveryMode, planRecipients, reportVars } from './reportDelivery.ts'
 
 const env = (k: string) => Deno.env.get(k)
 
+/** Browser calls require CORS: allow the app origin's preflight + headers. */
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-hook-secret',
+  'access-control-allow-methods': 'POST, OPTIONS',
+}
+
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS } })
 
 function provider(): MailProvider {
   return env('EMAIL_PROVIDER') === 'graph' ? graphProvider(env) : smtpProvider(env)
@@ -290,6 +297,7 @@ async function deliverReport(
 }
 
 Deno.serve(async (httpReq) => {
+  if (httpReq.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (httpReq.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   let body: Record<string, unknown>

@@ -19,10 +19,18 @@ import Anthropic from 'npm:@anthropic-ai/sdk'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { buildPrompt, mediaBlock, parseExtraction, type FeedbackExample } from './extract.ts'
 
+/** Browser calls require CORS: allow the app origin's preflight + headers. */
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-hook-secret',
+  'access-control-allow-methods': 'POST, OPTIONS',
+}
+
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS } })
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
   const url = Deno.env.get('SUPABASE_URL')!
