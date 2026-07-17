@@ -210,8 +210,13 @@ begin
   return result;
 end $$;
 -- own it by the non-privileged role so RLS binds; only the outer function
--- (running as postgres) reaches it — callers cannot invoke it directly
+-- (running as postgres) reaches it — callers cannot invoke it directly.
+-- ALTER OWNER requires the NEW owner to hold CREATE on the schema; on hosted
+-- Supabase `authenticated` (rightly) doesn't and postgres is not a superuser,
+-- so grant it transiently for the ownership change only.
+grant create on schema public to authenticated;
 alter function report_run_query(text, uuid) owner to authenticated;
+revoke create on schema public from authenticated;
 revoke all on function report_run_query(text, uuid) from public, anon, authenticated;
 
 create or replace function report_fetch_rows(p_run uuid, p_sql text)
