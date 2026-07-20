@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { useDepartments, useDeptStyle } from '../../lib/departments'
 import type { FormField } from '../catalog/RequestForm'
 
 interface Svc {
   id: string
-  dept: DeptCode
+  dept: DeptCode | null
+  dept_id: string | null
+  dept_ref: { code: string } | null
   code: string
   name: string
   description: string | null
@@ -18,10 +21,13 @@ interface Svc {
   form_schema: FormField[]
 }
 
-const PORTALS: DeptCode[] = ['IT', 'ADMIN', 'PROC']
+/** the code a service belongs to, resolved from dept_id for dynamic streams */
+const svcCode = (s: Svc): string => s.dept_ref?.code ?? s.dept ?? ''
 
 export function ServiceBuilder() {
   const { hasRole } = useAuth()
+  const { active: activeDepts, byCode } = useDepartments()
+  const styleForCode = useDeptStyle()
   const [services, setServices] = useState<Svc[]>([])
   const [slaProfiles, setSlaProfiles] = useState<{ id: string; name: string }[]>([])
   const [form, setForm] = useState({
@@ -35,11 +41,11 @@ export function ServiceBuilder() {
   const load = () =>
     supabase
       .from('services')
-      .select('id, dept, code, name, description, parent_id, requires_approval, is_active, sla_response_minutes, sla_resolution_minutes, form_schema')
-      .order('dept').order('name')
+      .select('id, dept, dept_id, code, name, description, parent_id, requires_approval, is_active, sla_response_minutes, sla_resolution_minutes, form_schema, dept_ref:departments!services_dept_id_fk(code)')
+      .order('name')
       .then(({ data, error: e }) => {
         if (e) setError(e.message)
-        else setServices((data as Svc[]) ?? [])
+        else setServices((data as unknown as Svc[]) ?? [])
       })
   useEffect(() => {
     load()
@@ -48,7 +54,7 @@ export function ServiceBuilder() {
   }, [])
 
   const editable = (d: DeptCode) => hasRole('system_admin') || hasRole('dept_admin', d)
-  const mains = services.filter((s) => !s.parent_id && s.dept === form.dept)
+  const mains = services.filter((s) => !s.parent_id && svcCode(s) === form.dept)
   const isChild = form.parent !== ''
 
   const create = async () => {
@@ -58,12 +64,15 @@ export function ServiceBuilder() {
     if (form.formSource.startsWith('copy:')) {
       schema = services.find((s) => s.id === form.formSource.slice(5))?.form_schema ?? []
     }
+    // built-in codes still populate the enum dept; dynamic streams use dept_id only
+    const isBuiltIn = form.dept in DEPT_COLOR
     const { data, error: e } = await supabase
       .from('services')
       .insert({
         name: form.name.trim(),
         description: form.description.trim() || null,
-        dept: form.dept,
+        dept: isBuiltIn ? form.dept : null,
+        dept_id: byCode[form.dept]?.id ?? null,
         parent_id: form.parent || null,
         requires_approval: form.requiresApproval,
         sla_profile_id: form.slaProfile || null,
@@ -119,8 +128,8 @@ export function ServiceBuilder() {
             <option value="">SLA: per-service hours</option>
             {slaProfiles.map((p) => <option key={p.id} value={p.id}>SLA: {p.name}</option>)}
           </select>
-          <select className="input" style={{ width: 150 }} value={form.dept} onChange={(e) => setForm({ ...form, dept: e.target.value as DeptCode, parent: '' })}>
-            {PORTALS.map((d) => <option key={d} value={d}>{DEPT_COLOR[d].label}</option>)}
+          <select className="input" style={{ width: 160 }} value={form.dept} onChange={(e) => setForm({ ...form, dept: e.target.value as DeptCode, parent: '' })}>
+            {activeDepts.map((d) => <option key={d.id} value={d.code}>{d.name}</option>)}
           </select>
           <select className="input" style={{ width: 200 }} value={form.parent} onChange={(e) => setForm({ ...form, parent: e.target.value })}>
             <option value="">Main service (no parent)</option>
@@ -161,7 +170,7 @@ export function ServiceBuilder() {
 
       <div className="card">
         {services.filter((s) => !s.parent_id).map((main) => {
-          const c = DEPT_COLOR[main.dept]
+          const c = styleForCode(svcCode(main))
           const children = services.filter((s) => s.parent_id === main.id)
           return (
             <div key={main.id}>
@@ -172,7 +181,7 @@ export function ServiceBuilder() {
                   <div className="row-desc">{main.description} · {c.label}</div>
                 </div>
                 {main.requires_approval && <span className="chip" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>DoA</span>}
-                {editable(main.dept) && (
+                {editable(svcCode(main)) && (
                   <button className={`toggle${main.is_active ? ' on' : ''}`} onClick={() => toggleActive(main)} aria-label="active" />
                 )}
               </div>
@@ -187,7 +196,7 @@ export function ServiceBuilder() {
                       {ch.requires_approval ? 'DoA required' : 'no approval'}
                     </div>
                   </div>
-                  {editable(ch.dept) && (
+                  {editable(svcCode(ch)) && (
                     <button className={`toggle${ch.is_active ? ' on' : ''}`} onClick={() => toggleActive(ch)} aria-label="active" />
                   )}
                 </div>
