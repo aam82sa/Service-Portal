@@ -13,6 +13,7 @@ import { AuditLog } from './AuditLog'
 import { Delegations } from './Delegations'
 import { Announcements } from './Announcements'
 import { ServiceBuilder } from './ServiceBuilder'
+import { ServiceStreams } from './ServiceStreams'
 import { PageAccess } from './PageAccess'
 import { getAdminSections, SCOPE_META, type AdminScope, type AdminSection } from './sections'
 
@@ -53,6 +54,7 @@ export function AdminPage({ section }: { section: AdminSection }) {
   const content = (() => {
     switch (section) {
       case 'functions': return <FeatureToggles />
+      case 'streams': return <ServiceStreams />
       case 'access': return <PageAccess />
       case 'email': return <EmailStudio />
       case 'sla': return <SlaCalendar />
