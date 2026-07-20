@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { WorkflowCanvas } from './WorkflowCanvas'
-import { DEPT_COLOR, type Service } from '../../lib/types'
+import { WorkflowProperties } from './WorkflowProperties'
+import { type Service } from '../../lib/types'
+import { TRIGGER_CATALOG, triggerAllowedOn } from '../../lib/workflowTriggers'
 import {
   analyzeWorkflow,
   type WorkflowGraph,
   type WorkflowStatus,
-  type WorkflowStepDef,
   type WorkflowTransition,
 } from '../../lib/workflowValidate'
+import './workflowDesigner.css'
 
 type Status = WorkflowStatus
 
@@ -17,7 +19,6 @@ const STATUSES: Status[] = [
   'new', 'triaged', 'in_progress', 'pending_approval', 'pending_requester',
   'escalated', 'resolved', 'closed', 'cancelled',
 ]
-const MAIN_PATH: Status[] = ['new', 'triaged', 'in_progress', 'pending_approval', 'resolved', 'closed']
 
 const STATUS_DOT: Record<Status, string> = {
   new: 'var(--it)', triaged: 'var(--admin)', in_progress: 'var(--amber)',
@@ -26,15 +27,9 @@ const STATUS_DOT: Record<Status, string> = {
   cancelled: 'var(--muted)',
 }
 
-const TRIGGER_CATALOG = [
-  'ack email', 'start SLA', 'pause SLA', 'auto-assign', 'DoA chain', 'notify team lead', 'CSAT survey',
-]
-
-type Transition = WorkflowTransition
-type StepDef = WorkflowStepDef
 type Graph = WorkflowGraph
 
-const DEFAULT_TRANSITIONS: Transition[] = [
+const DEFAULT_TRANSITIONS: WorkflowTransition[] = [
   { from: 'new', to: 'triaged' }, { from: 'new', to: 'cancelled' },
   { from: 'triaged', to: 'in_progress' },
   { from: 'in_progress', to: 'pending_approval' }, { from: 'in_progress', to: 'pending_requester' },
@@ -60,8 +55,17 @@ function defaultGraph(): Graph {
   }
 }
 
+const label = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, ' ')
+
 interface SvcRow extends Service { requires_approval: boolean }
 
+/**
+ * Workflow designer — three-pane builder (palette · canvas · properties) per
+ * prototype/workflow-designer-reference.html. The graph is edited spatially:
+ * click a step on the canvas to edit its transitions, triggers and requester
+ * wording in the properties pane. Validation runs live on every change and
+ * gates Publish.
+ */
 export function WorkflowDesigner() {
   const { hasRole } = useAuth()
   const [services, setServices] = useState<SvcRow[]>([])
@@ -70,9 +74,7 @@ export function WorkflowDesigner() {
   const [version, setVersion] = useState<number | null>(null)
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // WORKFL1 branch 1: read-only status-node canvas, off by default, shown
-  // alongside the matrix. Editing/validation/properties land in branches 2–5.
-  const [showCanvas, setShowCanvas] = useState(false)
+  const [selected, setSelected] = useState<Status>('new')
 
   useEffect(() => {
     supabase
@@ -104,17 +106,16 @@ export function WorkflowDesigner() {
     [graph, service, spawnsChildren],
   )
   const errors = issues.filter((i) => i.severity === 'error')
-  const warnings = issues.filter((i) => i.severity === 'warning')
   const errorSteps = useMemo(
     () => new Set(errors.map((e) => e.nodeId).filter(Boolean) as WorkflowStatus[]),
     [errors],
   )
-  const closedReachable = !errors.some((e) => e.message.startsWith('Closed is not reachable'))
 
   const loadWorkflow = async (id: string) => {
     setServiceId(id)
     setDirty(false)
     setError(null)
+    setSelected('new')
     const { data } = await supabase
       .from('workflow_definitions')
       .select('version, graph')
@@ -131,15 +132,19 @@ export function WorkflowDesigner() {
     }
   }
 
-  const has = (from: Status, to: Status) =>
-    graph.transitions.some((t) => t.from === from && t.to === to)
+  const addTransition = (from: Status, to: Status) => {
+    setGraph((g) =>
+      g.transitions.some((t) => t.from === from && t.to === to)
+        ? g
+        : { ...g, transitions: [...g.transitions, { from, to }] },
+    )
+    setDirty(true)
+  }
 
-  const toggleTransition = (from: Status, to: Status) => {
+  const removeTransition = (from: Status, to: Status) => {
     setGraph((g) => ({
       ...g,
-      transitions: has(from, to)
-        ? g.transitions.filter((t) => !(t.from === from && t.to === to))
-        : [...g.transitions, { from, to }],
+      transitions: g.transitions.filter((t) => !(t.from === from && t.to === to)),
     }))
     setDirty(true)
   }
@@ -161,6 +166,16 @@ export function WorkflowDesigner() {
     setDirty(true)
   }
 
+  const setStepLabel = (step: Status, text: string) => {
+    setGraph((g) => ({
+      ...g,
+      steps: g.steps.map((s) =>
+        s.id === step ? { ...s, label: text || undefined } : s
+      ),
+    }))
+    setDirty(true)
+  }
+
   const publish = async () => {
     if (errors.length > 0) return
     setError(null)
@@ -176,7 +191,6 @@ export function WorkflowDesigner() {
   }
 
   if (services.length === 0) return <p className="page-sub">{error ?? 'No services you can edit.'}</p>
-  const c = service ? DEPT_COLOR[service.dept] : null
 
   return (
     <>
@@ -185,8 +199,8 @@ export function WorkflowDesigner() {
         The published workflow is what the database enforces — a transition removed here is
         rejected server-side, buttons or not.
       </p>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-        <select className="input" style={{ maxWidth: 340 }} value={serviceId} onChange={(e) => loadWorkflow(e.target.value)}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <select className="input" style={{ maxWidth: 340 }} value={serviceId} onChange={(e) => loadWorkflow(e.target.value)} aria-label="Service">
           {services.map((s) => (
             <option key={s.id} value={s.id}>
               {s.dept} · {s.code} — {s.name}
@@ -197,19 +211,11 @@ export function WorkflowDesigner() {
           {version ? `v${version} published` : 'platform defaults'}
         </span>
         {dirty && (
-          <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber)' }}>
+          <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>
             unpublished changes
           </span>
         )}
-        <button
-          className={`btn${showCanvas ? ' primary' : ''}`}
-          style={{ marginLeft: 'auto' }}
-          onClick={() => setShowCanvas((v) => !v)}
-          aria-pressed={showCanvas}
-          title="Preview the new status-node canvas (beta)"
-        >
-          {showCanvas ? 'Canvas ✓' : 'Canvas (beta)'}
-        </button>
+        <span style={{ flex: 1 }} />
         {errors.length > 0 && (
           <span className="chip t-red">{errors.length} error{errors.length === 1 ? '' : 's'} block publish</span>
         )}
@@ -223,137 +229,81 @@ export function WorkflowDesigner() {
         </button>
       </div>
 
-      {/* live validation — runs on every edit, not on a button */}
-      <div className="wfd" style={{ marginBottom: 14 }}>
-        <div className="valbar" role="status" aria-label="Live validation" style={{ borderRadius: 'var(--radius)', border: '1px solid var(--line)' }}>
-          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: 'var(--muted)', marginInlineEnd: 2 }}>
-            Validation
-          </span>
-          {errors.map((e, i) => (
-            <span className="vitem err" key={`e${i}`}><span className="vmark e">!</span>{e.message}</span>
-          ))}
-          {warnings.map((w, i) => (
-            <span className="vitem warn" key={`w${i}`}><span className="vmark w">•</span>{w.message}</span>
-          ))}
-          {errors.length === 0 && warnings.length === 0 && (
-            <span className="vitem" style={{ color: 'var(--green)' }}>All guardrails satisfied.</span>
-          )}
-          <span className="tool-spacer" />
-          {closedReachable && <span className="chip t-green">Closed reachable from New</span>}
-        </div>
+      <div className="wfd builder">
+        <Palette selected={selected} graph={graph} onToggleTrigger={toggleTrigger} />
+        <WorkflowCanvas
+          graph={graph}
+          requiresApproval={service?.requires_approval}
+          errorSteps={errorSteps}
+          issues={issues}
+          selected={selected}
+          onSelect={setSelected}
+        />
+        <WorkflowProperties
+          graph={graph}
+          step={selected}
+          issues={issues}
+          onAddTransition={addTransition}
+          onRemoveTransition={removeTransition}
+          onToggleTrigger={toggleTrigger}
+          onSetLabel={setStepLabel}
+        />
       </div>
 
-      {showCanvas && (
-        <div style={{ marginBottom: 14 }}>
-          <WorkflowCanvas graph={graph} requiresApproval={service?.requires_approval} errorSteps={errorSteps} />
-        </div>
-      )}
-
-      <div className="card" style={{ padding: 16, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {MAIN_PATH.map((s, i) => (
-            <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              {i > 0 && (
-                <span
-                  style={{
-                    color: has(MAIN_PATH[i - 1], s) ? 'var(--ink)' : 'var(--line)',
-                    fontSize: 16,
-                  }}
-                >
-                  →
-                </span>
-              )}
-              <span
-                className="chip"
-                style={{
-                  background: 'var(--card)',
-                  border: '1.5px solid var(--line)',
-                  color: 'var(--ink)',
-                  display: 'inline-flex',
-                  gap: 6,
-                  alignItems: 'center',
-                  padding: '5px 10px',
-                }}
-              >
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[s] }} />
-                {s.replace('_', ' ')}
-              </span>
-            </span>
-          ))}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-          Side paths: pending requester · escalated · cancelled — edit all transitions below.
-        </div>
-      </div>
-
-
-      <div className="card">
-        {STATUSES.map((from) => {
-          const step = graph.steps.find((s) => s.id === from)
-          return (
-            <div className="row" key={from} style={{ alignItems: 'flex-start' }}>
-              <span
-                className="chip"
-                style={{
-                  background: 'var(--surface)', color: 'var(--ink)', width: 128,
-                  display: 'inline-flex', gap: 6, alignItems: 'center', marginTop: 2,
-                }}
-              >
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_DOT[from] }} />
-                {from.replace('_', ' ')}
-              </span>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 2, marginTop: 3 }}>→</span>
-                  {STATUSES.filter((to) => to !== from).map((to) => (
-                    <button
-                      key={to}
-                      className="chip"
-                      onClick={() => toggleTransition(from, to)}
-                      style={{
-                        cursor: 'pointer', border: 'none',
-                        background: has(from, to) ? 'var(--accent-soft)' : 'var(--surface)',
-                        color: has(from, to) ? 'var(--accent)' : 'var(--muted)',
-                        opacity: has(from, to) ? 1 : 0.7,
-                      }}
-                    >
-                      {to.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
-                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 2, marginTop: 2 }}>
-                    triggers
-                  </span>
-                  {TRIGGER_CATALOG.map((tr) => {
-                    const on = step?.triggers.includes(tr)
-                    return (
-                      <button
-                        key={tr}
-                        className="chip"
-                        onClick={() => toggleTrigger(from, tr)}
-                        style={{
-                          cursor: 'pointer', border: 'none', fontSize: 10,
-                          background: on ? 'var(--green-soft)' : 'var(--surface)',
-                          color: on ? 'var(--green)' : 'var(--muted)',
-                          opacity: on ? 1 : 0.6,
-                        }}
-                      >
-                        {tr}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
       <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>
         SLA, DoA chain, and audit triggers are engine-enforced today; email and CSAT triggers
         take effect when the notification module goes live.
       </p>
       {error && <p className="error-note">{error}</p>}
     </>
+  )
+}
+
+/** Statuses + triggers palette. Statuses are the fixed platform set (all on
+ *  canvas); clicking a trigger toggles it on the selected step. */
+function Palette({
+  selected, graph, onToggleTrigger,
+}: {
+  selected: Status
+  graph: Graph
+  onToggleTrigger: (step: Status, trigger: string) => void
+}) {
+  const stepTriggers = graph.steps.find((s) => s.id === selected)?.triggers ?? []
+  return (
+    <aside className="pane" aria-label="Steps and triggers palette">
+      <div className="pane-head">Palette</div>
+      <div className="palette">
+        <div className="pal-group">Statuses</div>
+        {STATUSES.map((s) => (
+          <button className="pal-item used" key={s} tabIndex={-1}>
+            <span className="pal-dot" style={{ background: STATUS_DOT[s] }} />
+            {label(s)}
+            <span className="pal-on">on canvas</span>
+          </button>
+        ))}
+        <div className="pal-group">Triggers</div>
+        {TRIGGER_CATALOG.map((t) => {
+          const on = stepTriggers.includes(t.key)
+          const allowed = triggerAllowedOn(t.key, selected)
+          return (
+            <button
+              className={`pal-item${on ? ' used' : ''}`}
+              key={t.key}
+              disabled={!allowed}
+              title={allowed ? `Toggle on ${label(selected)}` : t.sub}
+              onClick={() => allowed && onToggleTrigger(selected, t.key)}
+            >
+              <span className="pal-ico">{t.ico}</span>
+              {t.label}
+              {on && <span className="pal-on">on {label(selected)}</span>}
+            </button>
+          )
+        })}
+        <p className="hint" style={{ margin: '8px 6px 2px' }}>
+          Click a trigger to toggle it on the selected step. Transitions are edited in the
+          step's properties.
+        </p>
+      </div>
+    </aside>
   )
 }

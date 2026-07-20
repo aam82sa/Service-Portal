@@ -10,7 +10,13 @@ export type WorkflowStatus =
   | 'escalated' | 'resolved' | 'closed' | 'cancelled'
 
 export interface WorkflowTransition { from: WorkflowStatus; to: WorkflowStatus }
-export interface WorkflowStepDef { id: WorkflowStatus; triggers: string[] }
+export interface WorkflowStepDef {
+  id: WorkflowStatus
+  triggers: string[]
+  /** requester-visible wording ("Waiting for your reply") — additive to the
+   *  JSONB, ignored by the engine; the portal shows it instead of the raw key */
+  label?: string
+}
 export interface WorkflowGraph { steps: WorkflowStepDef[]; transitions: WorkflowTransition[] }
 
 /** Steps a request may legitimately stop at — no outgoing transition needed. */
