@@ -1,0 +1,29 @@
+name: DB tests
+
+# Tenant-isolation PR gate (Final Build, Phase 1). Boots the full Supabase
+# local stack — Postgres + auth + storage + pg_cron/pg_net/vault — applies
+# every migration and seed, then runs the pgTAP suite in supabase/tests/.
+# The tenant_isolation test proves tenant A cannot see or write tenant B's
+# rows in any table; this job must stay green through the rest of Phase 1.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pgtap:
+    name: pgTAP tenant isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase stack (applies migrations + seed)
+        run: supabase db start
+
+      - name: Run pgTAP tests
+        run: supabase test db

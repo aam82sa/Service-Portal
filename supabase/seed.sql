@@ -15,6 +15,13 @@
 do $$
 begin
   execute format('alter database %I set app.seed_demo = ''on''', current_database());
+exception when insufficient_privilege then
+  -- `supabase db start`/CI seeds as a role that cannot set database-level
+  -- parameters. That is fine: the flag only guards migration 00061 from
+  -- re-neutralising a dev database on later partial runs, and CI runs the
+  -- full migration set once. Local `supabase db reset` owns the database and
+  -- still sets it, keeping dev/e2e sign-in working.
+  raise notice 'seed: cannot set app.seed_demo (restricted role) — continuing';
 end $$;
 
 update auth.users
