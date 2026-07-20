@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DEPT_COLOR, type DeptCode } from '../lib/types'
+import { type DeptCode } from '../lib/types'
+import { useDeptStyle } from '../lib/departments'
 import { PriorityChip, StatusChip } from './ui'
 import { SlaRing } from './SlaRing'
 
@@ -13,7 +14,9 @@ export interface RequestRowData {
   id: string
   ref: string
   title: string
-  dept: DeptCode
+  dept: DeptCode | null
+  /** resolved department code from dept_id — preferred for dynamic streams */
+  dept_code?: string | null
   status: string
   priority: string
   created_at: string
@@ -42,6 +45,7 @@ export function RequestRow({
 }) {
   const [open, setOpen] = useState(false)
   const popRef = useRef<HTMLSpanElement>(null)
+  const styleForCode = useDeptStyle()
 
   useEffect(() => {
     if (!open) return
@@ -52,7 +56,7 @@ export function RequestRow({
     return () => document.removeEventListener('mousedown', close)
   }, [open])
 
-  const d = DEPT_COLOR[row.dept]
+  const d = styleForCode(row.dept_code ?? row.dept)
   return (
     <div className={`qrow${selected ? ' sel' : ''}`} role="row">
       <span className="rail-bar" style={{ background: d.rail }} aria-hidden="true" />

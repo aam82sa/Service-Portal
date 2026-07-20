@@ -1,4 +1,7 @@
-export type DeptCode = 'IT' | 'ADMIN' | 'PROC' | 'LOG'
+// Department codes are dynamic ("service streams" — migration 00076), so this
+// is a plain string. The known built-ins are still referenced by name for
+// theming (see DEPT_COLOR); any other value is a user-created stream.
+export type DeptCode = string
 
 export type Role =
   | 'requester'

@@ -21,7 +21,9 @@ interface WorkRow {
   id: string
   ref: string
   title: string
+  /** resolved department code (from dept_id for dynamic streams) */
   dept: DeptCode
+  dept_code: string
   status: string
   priority: string
   created_at: string
@@ -126,13 +128,17 @@ export function Work({ onOpen, initialView, onViewChange }: {
     supabase
       .from('requests')
       .select(
-        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at, assignee_id, team_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name)'
+        'id, ref, title, dept, status, priority, created_at, sla_resolution_due, sla_paused_at, escalated_at, assignee_id, team_id, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), dept_ref:departments!requests_dept_id_fk(code)'
       )
       .not('status', 'in', '(closed,cancelled)')
       .order('created_at')
       .then(({ data, error: e }) => {
         if (e) setError(e.message)
-        else setRows((data as unknown as WorkRow[]) ?? [])
+        else setRows(((data ?? []) as unknown as (WorkRow & { dept_ref: { code: string } | null })[])
+          .map((r) => {
+            const code = r.dept_ref?.code ?? r.dept ?? ''
+            return { ...r, dept: code, dept_code: code }
+          }))
         setLoaded(true)
       })
     supabase.from('teams').select('id, dept, name').order('name')
