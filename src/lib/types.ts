@@ -44,6 +44,19 @@ export interface Service {
   description: string | null
 }
 
+/** A department / "service stream" as stored in the departments table. */
+export interface Department {
+  id: string
+  code: string
+  name: string
+  name_ar: string | null
+  color: string | null
+  rail_color: string | null
+  icon: string | null
+  is_active: boolean
+  position: number | null
+}
+
 export const DEPT_COLOR: Record<DeptCode, { rail: string; soft: string; label: string }> = {
   IT: { rail: 'var(--it)', soft: 'var(--it-soft)', label: 'IT Services' },
   ADMIN: { rail: 'var(--admin)', soft: 'var(--admin-soft)', label: 'Administration' },

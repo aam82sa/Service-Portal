@@ -1,7 +1,7 @@
 import type { DeptCode, Role } from '../../lib/types'
 
 export type AdminSection =
-  | 'functions' | 'access' | 'email' | 'sla' | 'announcements'
+  | 'functions' | 'streams' | 'access' | 'email' | 'sla' | 'announcements'
   | 'services' | 'forms' | 'workflows' | 'teams' | 'users' | 'delegation' | 'doa' | 'audit'
 
 /** every admin section belongs to a fixed role scope (the sub-nav groups) */
@@ -34,6 +34,7 @@ export function getAdminSections(hasRole: HasRole): AdminSectionDef[] {
 
   if (isSys) {
     out.push({ id: 'functions', label: 'Functions', ico: 'Fn', scope: 'system' })
+    out.push({ id: 'streams', label: 'Service streams', ico: 'St', scope: 'system' })
     out.push({ id: 'access', label: 'Page access', ico: 'Pa', scope: 'system' })
     out.push({ id: 'email', label: 'Email studio', ico: 'Em', scope: 'system' })
     out.push({ id: 'sla', label: 'SLA & escalation', ico: 'Sl', scope: 'system' })
