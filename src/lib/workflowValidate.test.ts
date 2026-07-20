@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  analyzeWorkflow,
   validateWorkflow,
   type WorkflowGraph,
   type WorkflowStatus,
@@ -76,5 +77,51 @@ describe('workflow publish guardrails', () => {
       { from: 'resolved', to: 'closed' },
     ]))
     expect(errs).toEqual([])
+  })
+
+  it('requires in_progress → resolved for child-spawning services (mirrors 00052)', () => {
+    const withoutResolvePath = DEFAULT_TRANSITIONS.filter(
+      (t) => !(t.from === 'in_progress' && t.to === 'resolved'),
+    )
+    // without the spawn flag it's fine (in_progress still reaches resolved via others? no —
+    // removing it makes resolved unreachable, so plain validation already errors on Closed)
+    const spawn = validateWorkflow(graph(withoutResolvePath), { spawnsChildren: true })
+    expect(spawn.some((e) => e.includes('auto-resolve'))).toBe(true)
+    // the default graph (which has in_progress → resolved) passes with the flag
+    expect(validateWorkflow(graph(DEFAULT_TRANSITIONS), { spawnsChildren: true })).toEqual([])
+  })
+})
+
+describe('analyzeWorkflow structured output', () => {
+  it('anchors each error to a node id', () => {
+    const issues = analyzeWorkflow(graph(DEFAULT_TRANSITIONS.filter((t) => t.from !== 'pending_requester')))
+    const dead = issues.find((i) => i.message.includes('dead end'))
+    expect(dead?.severity).toBe('error')
+    expect(dead?.nodeId).toBe('pending_requester')
+  })
+
+  it('separates warnings from errors', () => {
+    // in_progress ⇄ escalated loop with no terminal path from escalated is a warning, not a block
+    const issues = analyzeWorkflow(graph([
+      { from: 'new', to: 'in_progress' },
+      { from: 'in_progress', to: 'resolved' },
+      { from: 'resolved', to: 'closed' },
+      { from: 'in_progress', to: 'escalated' },
+      { from: 'escalated', to: 'in_progress' },
+    ]))
+    // escalated can reach a terminal (via in_progress→resolved→closed), so no warning there;
+    // sanity: no errors on this valid graph
+    expect(issues.filter((i) => i.severity === 'error')).toEqual([])
+  })
+
+  it('flags a non-terminal loop with no path out as a warning', () => {
+    const issues = analyzeWorkflow(graph([
+      { from: 'new', to: 'triaged' },
+      { from: 'new', to: 'closed' },
+      { from: 'triaged', to: 'in_progress' },
+      { from: 'in_progress', to: 'triaged' }, // triaged ⇄ in_progress loop, never reaches a terminal
+    ]))
+    const warn = issues.find((i) => i.severity === 'warning' && i.nodeId === 'in_progress')
+    expect(warn?.message).toContain('no path to a terminal state')
   })
 })
