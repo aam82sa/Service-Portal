@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
+import { WorkflowCanvas } from './WorkflowCanvas'
 import { DEPT_COLOR, type Service } from '../../lib/types'
 import {
   validateWorkflow,
@@ -70,6 +71,9 @@ export function WorkflowDesigner() {
   const [dirty, setDirty] = useState(false)
   const [problems, setProblems] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // WORKFL1 branch 1: read-only status-node canvas, off by default, shown
+  // alongside the matrix. Editing/validation/properties land in branches 2–5.
+  const [showCanvas, setShowCanvas] = useState(false)
 
   useEffect(() => {
     supabase
@@ -190,13 +194,28 @@ export function WorkflowDesigner() {
             unpublished changes
           </span>
         )}
-        <button className="btn" style={{ marginLeft: 'auto' }} onClick={validate}>
+        <button
+          className={`btn${showCanvas ? ' primary' : ''}`}
+          style={{ marginLeft: 'auto' }}
+          onClick={() => setShowCanvas((v) => !v)}
+          aria-pressed={showCanvas}
+          title="Preview the new status-node canvas (beta)"
+        >
+          {showCanvas ? 'Canvas ✓' : 'Canvas (beta)'}
+        </button>
+        <button className="btn" onClick={validate}>
           Validate
         </button>
         <button className="btn primary" onClick={publish} disabled={!dirty}>
           Publish
         </button>
       </div>
+
+      {showCanvas && (
+        <div style={{ marginBottom: 14 }}>
+          <WorkflowCanvas graph={graph} requiresApproval={service?.requires_approval} />
+        </div>
+      )}
 
       <div className="card" style={{ padding: 16, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

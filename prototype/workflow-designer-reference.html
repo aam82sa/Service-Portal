@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ABC Services Hub — Workflow designer (redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens copied verbatim from src/styles/app.css :root ---- */
+:root{
+  --amber-ink:#A9741A;
+  --ink:#10192E; --ink-2:#1A2540; --ink-3:#243356;
+  --surface:#F4F5F8; --card:#FFFFFF; --line:#E4E7EE;
+  --text:#1B2437; --muted:#6B7280;
+  --accent:#D97757; --accent-soft:#FBEFE9;
+  --green:#2E9E6B; --green-soft:#E7F5EE;
+  --amber:#DE9B2D; --amber-soft:#FBF2DF;
+  --red:#D64545; --red-soft:#FBEAEA;
+  --it:#3E6DD8; --it-soft:#EAF0FC;
+  --admin:#8A5FC9; --admin-soft:#F2EDFA;
+  --log:#2E9E6B; --log-soft:#E7F5EE;
+  --radius:14px;
+  --font-head:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);background:var(--surface);color:var(--text);font-size:14px}
+h1,h2,h3{font-family:var(--font-head);color:var(--ink);margin:0}
+.mono{font-family:var(--font-mono)}
+.shell{display:flex;min-height:100vh}
+
+/* ---- primary dark sidebar (same shell as the queue reference) ---- */
+.sidebar{width:200px;background:var(--ink);color:#B9C2D6;padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;color:#fff;font-family:var(--font-head);font-weight:600;padding:0 8px 18px}
+.brand-badge{font-family:var(--font-mono);font-size:11px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 6px}
+.nav-group{font-size:11px;color:#5E6B85;margin:14px 8px 4px;font-weight:500}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:12.5px;color:#B9C2D6;background:none;border:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item.active::before{content:'';position:absolute;inset-inline-start:0;top:7px;bottom:7px;width:3px;background:var(--accent);border-radius:2px}
+.sidebar-foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--ink-3)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.foot-name{color:#fff;font-size:12px;font-weight:500}
+.foot-mail{font-family:var(--font-mono);font-size:9.5px;color:#5E6B85}
+
+.main{flex:1;padding:16px 22px;min-width:0;display:flex;flex-direction:column}
+
+/* ---- breadcrumb ---- */
+.crumb{font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.crumb-link{background:none;border:none;padding:0;cursor:pointer;color:var(--it);font-size:12px;font-family:var(--font-body)}
+.crumb-link:hover{text-decoration:underline}
+.crumb-sep{margin:0 6px;color:#C3CAD8}
+
+/* ---- shared builder toolbar (same as form builder) ---- */
+.builder-bar{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.builder-bar h2{font-size:18px}
+.scope-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:99px}
+.scope-dept{background:var(--it-soft);color:var(--it)}
+.svc-pick{display:inline-flex;align-items:center;gap:8px}
+.tile-code{font-family:var(--font-mono);font-size:12px;font-weight:500;border-radius:8px;padding:6px 8px}
+.tool-spacer{flex:1}
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.t-green{background:var(--green-soft);color:var(--green)}
+.t-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.t-red{background:var(--red-soft);color:var(--red)}
+.t-muted{background:var(--surface);color:var(--muted)}
+.t-accent{background:var(--accent-soft);color:var(--accent)}
+.btn{font-family:var(--font-body);font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#c9694b}
+.btn.ghost{border-color:transparent}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn[disabled]:hover{background:var(--card)}
+.input,select.input{font-family:var(--font-body);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+
+/* ---- version / diff bar ---- */
+.verbar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:9px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ver{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink)}
+.ver .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ver .when{font-family:var(--font-mono);font-size:10.5px;color:var(--muted)}
+.ver-sep{width:1px;height:22px;background:var(--line)}
+.diffs{display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap}
+.diff{font-family:var(--font-mono);font-size:10.5px;font-weight:500;padding:2px 8px;border-radius:99px}
+.d-add{background:var(--green-soft);color:var(--green)}
+.d-del{background:var(--red-soft);color:var(--red)}
+.verbar .note{flex-basis:100%;font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ---- three-pane builder: palette · canvas · properties ---- */
+.builder{display:grid;grid-template-columns:172px 1fr 272px;gap:16px;align-items:start;flex:1;min-height:0}
+.pane{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+
+/* palette */
+.palette{padding:10px}
+.pal-group{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:12px 6px 5px}
+.pal-group:first-child{margin-top:2px}
+.pal-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:1px dashed var(--line);border-radius:9px;background:var(--card);font-family:var(--font-body);font-size:11.5px;color:var(--text);cursor:grab;margin-bottom:5px;text-align:start}
+.pal-item:hover{border-color:var(--accent);background:var(--accent-soft)}
+.pal-item:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pal-item.used{border-style:solid;background:var(--surface);color:var(--muted);cursor:default}
+.pal-item.used:hover{border-color:var(--line);background:var(--surface)}
+.pal-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pal-ico{font-family:var(--font-mono);font-size:9px;width:20px;height:18px;border-radius:5px;background:var(--surface);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.pal-on{margin-inline-start:auto;font-family:var(--font-mono);font-size:9px;color:#AEB6C6}
+
+/* canvas */
+.valbar{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.vitem{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;background:none;font-family:var(--font-body);font-size:11.5px;border-radius:8px;padding:3px 8px;cursor:pointer;text-align:start}
+.vitem:hover{background:var(--card)}
+.vitem:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.vitem.err{color:var(--red);background:var(--red-soft);border-color:#F0CFCF}
+.vitem.warn{color:var(--amber-ink)}
+.vmark{width:14px;height:14px;border-radius:50%;font-family:var(--font-mono);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.vmark.e{background:var(--red)}
+.vmark.w{background:var(--amber)}
+
+.canvas-wrap{padding:16px 12px;background:var(--surface);overflow:auto}
+.flow{position:relative;width:700px;height:480px;margin-inline:auto}
+.flow svg{position:absolute;inset:0;overflow:visible}
+.node{position:absolute;width:124px;border:1.5px solid #C3CBDA;background:var(--card);border-radius:10px;padding:7px 8px 6px;text-align:start;font-family:var(--font-body);cursor:pointer;box-shadow:0 1px 2px rgba(16,25,46,.06)}
+.node:hover{border-color:var(--ink-3)}
+.node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.node.side{border-style:dashed;border-color:#D8DEE9;background:#FBFCFD;box-shadow:none}
+.node.terminal{border-color:#B4BDCE;background:var(--surface)}
+.node.sel{outline:2px solid var(--accent);outline-offset:2px}
+.node.err{border-color:var(--red);border-style:solid;background:#FFFDFD;box-shadow:0 0 0 3px var(--red-soft)}
+.n-top{display:flex;align-items:center;gap:6px}
+.ndot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.nname{font-size:12px;font-weight:600;color:var(--ink);font-family:var(--font-head);line-height:1.25}
+.node.side .nname{font-weight:500;color:var(--ink-3)}
+.nkey{font-family:var(--font-mono);font-size:8.5px;color:#A9B1C1;margin-top:1px;letter-spacing:-.2px}
+.badges{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
+.tb{font-family:var(--font-mono);font-size:8.5px;background:var(--surface);color:var(--muted);border-radius:5px;padding:1px 5px;line-height:1.5}
+.tb.act{background:var(--accent-soft);color:var(--accent)}
+.tb.pos{background:var(--green-soft);color:var(--green)}
+.tb.more{background:none;color:#AEB6C6}
+.n-flag{position:absolute;top:-8px;inset-inline-end:-8px;width:17px;height:17px;border-radius:50%;color:#fff;font-family:var(--font-mono);font-size:10px;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--card)}
+.n-flag.e{background:var(--red)}
+.n-flag.w{background:var(--amber)}
+.n-note{position:absolute;inset-inline-start:0;top:100%;margin-top:5px;font-size:10px;font-weight:600;color:var(--red);white-space:nowrap}
+.n-lock{margin-inline-start:auto;font-family:var(--font-mono);font-size:8.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:0 4px}
+
+.etag{position:absolute;font-family:var(--font-mono);font-size:9px;padding:1px 6px;border-radius:99px;white-space:nowrap;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.etag.add{background:var(--green-soft);border-color:#CBE7D8;color:var(--green)}
+.etag.del{background:var(--red-soft);border-color:#F0CFCF;color:var(--red)}
+.etag.req{background:var(--accent-soft);border-color:#F0D6C9;color:var(--accent)}
+.lane-lbl{position:absolute;font-family:var(--font-head);font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#B2BACA}
+
+.legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted)}
+.lg{display:inline-flex;align-items:center;gap:6px}
+.lg i{display:inline-block;width:18px;height:0;border-top-width:2px;border-top-style:solid}
+
+/* preview strip */
+.preview{border-top:1px solid var(--line);padding:11px 14px 13px;background:var(--card)}
+.pv-head{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.pv-title{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+.seg button{font-family:var(--font-body);font-size:11px;border:none;background:none;color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer}
+.seg button.on{background:var(--ink);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.life{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+.lstep{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 11px}
+.lstep.done{color:var(--green);background:var(--green-soft);border-color:#CBE7D8}
+.lstep.now{color:#fff;background:var(--ink);border-color:var(--ink);font-weight:600}
+.lsep{width:16px;height:0;border-top:1.5px solid var(--line);margin:0 3px}
+.pv-side{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.pv-side .lbl{font-size:10.5px;color:var(--muted)}
+.pv-cap{font-size:11px;color:var(--muted);margin-top:9px;line-height:1.5}
+
+/* properties */
+.props{padding:13px}
+.p-head{display:flex;align-items:center;gap:7px}
+.p-name{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--ink)}
+.p-key{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin:2px 0 12px}
+.callout{border-radius:10px;padding:9px 11px;font-size:11.5px;line-height:1.5;margin-bottom:13px}
+.callout.err{background:var(--red-soft);color:#8E2F2F;border:1px solid #F0CFCF}
+.callout .ct{font-weight:600;color:var(--red);display:block;margin-bottom:2px}
+.callout .btn{margin-top:8px;width:100%;justify-content:center;background:var(--card);border-color:#E4B6B6;color:var(--red)}
+.prop-sec{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px;display:flex;align-items:center;gap:6px}
+.prop-sec:first-of-type{margin-top:0}
+.prop-row{margin-bottom:11px}
+.prop-lbl{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.prop-row .input,.prop-row select.input{width:100%}
+.seg.full{width:100%}
+.seg.full button{flex:1}
+.tr{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:11.5px;color:var(--ink);margin-bottom:5px}
+.tr .arrow{color:var(--muted);font-family:var(--font-mono);font-size:11px}
+.tr .x{margin-inline-start:auto;border:none;background:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px}
+.tr .x:hover{color:var(--red)}
+.tr.empty{border-style:dashed;color:var(--red);background:#FFFDFD;border-color:#F0CFCF;font-style:italic}
+.tr.ghost{border-style:dashed;color:var(--muted);background:var(--card)}
+.toggle-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid #EDEFF4;font-size:12px;color:var(--ink)}
+.toggle-row .sub{font-size:10.5px;color:var(--muted);display:block;margin-top:1px}
+.toggle{width:36px;height:21px;border-radius:12px;background:#CBD2DE;border:none;position:relative;cursor:pointer;flex-shrink:0;margin-inline-start:auto}
+.toggle::after{content:'';position:absolute;top:2.5px;inset-inline-start:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:inset-inline-start .15s}
+.toggle.on{background:var(--green)}
+.toggle.on::after{inset-inline-start:17px}
+.toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toggle[disabled]{opacity:.45;cursor:not-allowed}
+.hint{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:6px}
+.dnote{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;font-size:11px;color:var(--muted)}
+.dnote .diff{margin-inline-end:4px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- primary sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-badge">ABC</span><span>Services Hub</span></div>
+    <div class="nav-group">Workspace</div>
+    <button class="nav-item"><span>Work</span></button>
+    <button class="nav-item"><span>Projects</span></button>
+    <button class="nav-item"><span>Correspondence</span></button>
+    <button class="nav-item"><span>Insights</span></button>
+    <button class="nav-item"><span>Assets</span></button>
+    <div class="nav-group">Administration</div>
+    <button class="nav-item"><span>PMO admin</span></button>
+    <button class="nav-item active"><span>Admin console</span></button>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="avatar">SA</span>
+        <div><div class="foot-name">Sara Al-Amri</div><div class="foot-mail">sara.alamri@abc.sa</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <button class="crumb-link">Admin console</button>
+      <span class="crumb-sep">/</span>
+      <span style="color:var(--muted)">Department admin</span>
+      <span class="crumb-sep">/</span>
+      <button class="crumb-link">Workflow designer</button>
+      <span class="crumb-sep">/</span>
+      <span style="color:var(--ink);font-weight:500">IT · IN-01 New laptop request</span>
+    </nav>
+
+    <!-- shared builder toolbar -->
+    <div class="builder-bar">
+      <h2>Workflow designer</h2>
+      <span class="scope-badge scope-dept">Department admin · IT</span>
+      <span class="svc-pick">
+        <select class="input" style="max-width:270px" aria-label="Service">
+          <option>IT · IN-01 — New laptop request</option>
+          <option>IT · IN-02 — Access request</option>
+          <option>ADMIN · AD-04 — Meeting room booking</option>
+        </select>
+        <span class="tile-code" style="background:var(--it-soft);color:var(--it)">IN-01</span>
+      </span>
+      <span class="tool-spacer"></span>
+      <span class="chip t-red">1 error blocks publish</span>
+      <button class="btn">Compare with v3</button>
+      <button class="btn primary" disabled aria-describedby="pub-hint">Publish v4</button>
+    </div>
+
+    <!-- version / diff bar -->
+    <div class="verbar">
+      <span class="ver"><span class="dot" style="background:var(--green)"></span><strong style="font-weight:600">v3 published</strong><span class="when">12 Jun 2026 · Sara Al-Amri</span></span>
+      <span class="ver-sep" role="presentation"></span>
+      <span class="ver"><span class="dot" style="background:var(--amber)"></span><strong style="font-weight:600">v4 draft</strong><span class="when">edited 4 min ago · autosaved</span></span>
+      <span class="diffs" aria-label="Changes against v3">
+        <span class="diff d-add">+2 transitions</span>
+        <span class="diff d-del">−1 transition</span>
+        <span class="diff d-del">−1 trigger</span>
+      </span>
+      <span class="tool-spacer"></span>
+      <button class="btn ghost">Revert to v3</button>
+      <button class="btn ghost" style="color:var(--red)">Discard draft</button>
+      <span class="note" id="pub-hint">14 in-flight requests keep running on v3 until they close — publishing v4 only affects requests raised from now on. Publish is blocked while the draft has errors.</span>
+    </div>
+
+    <!-- three-pane builder: palette · canvas · properties -->
+    <div class="builder">
+
+      <!-- palette -->
+      <aside class="pane" aria-label="Steps and triggers palette">
+        <div class="pane-head">Palette</div>
+        <div class="palette">
+          <div class="pal-group">Statuses</div>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--it)"></span>New<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--admin)"></span>Triaged<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--amber)"></span>In progress<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--accent)"></span>Pending approval<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--amber)"></span>Pending requester<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--red)"></span>Escalated<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--green)"></span>Resolved<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--muted)"></span>Closed<span class="pal-on">on canvas</span></button>
+          <button class="pal-item used"><span class="pal-dot" style="background:var(--muted)"></span>Cancelled<span class="pal-on">on canvas</span></button>
+
+          <div class="pal-group">Triggers</div>
+          <button class="pal-item"><span class="pal-ico">@</span>Send email</button>
+          <button class="pal-item"><span class="pal-ico">DoA</span>Request approval</button>
+          <button class="pal-item"><span class="pal-ico">As</span>Assign</button>
+          <button class="pal-item"><span class="pal-ico">&#9654;</span>Start SLA</button>
+          <button class="pal-item"><span class="pal-ico">&#10073;&#10073;</span>Pause SLA</button>
+          <button class="pal-item"><span class="pal-ico">&#10547;</span>Spawn children</button>
+          <button class="pal-item"><span class="pal-ico">%</span>CSAT survey</button>
+          <p class="hint" style="margin:8px 6px 2px">Drag a trigger onto a step, or drag from a step's edge handle to draw a transition.</p>
+        </div>
+      </aside>
+
+      <!-- canvas -->
+      <section class="pane" aria-label="Workflow canvas">
+        <div class="pane-head">
+          <span>Canvas — drag to connect · click a step to edit</span>
+          <span class="chip t-muted mono">9 steps · 13 transitions</span>
+        </div>
+
+        <!-- live validation, inline (not only at publish) -->
+        <div class="valbar" role="status" aria-label="Live validation">
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-inline-end:2px">Validation</span>
+          <button class="vitem err"><span class="vmark e">!</span>Pending requester is a dead end — requests entering it can never leave.</button>
+          <button class="vitem warn"><span class="vmark w">&#8226;</span>Triaged has no path to Cancelled.</button>
+          <span class="tool-spacer"></span>
+          <span class="chip t-green">Closed reachable from New</span>
+        </div>
+
+        <div class="canvas-wrap">
+          <div class="flow">
+            <svg viewBox="0 0 700 480" width="700" height="480" aria-hidden="true">
+              <defs>
+                <marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#3B4763"/></marker>
+                <marker id="a-mut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#AEB6C6"/></marker>
+                <marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#D97757"/></marker>
+                <marker id="a-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#2E9E6B"/></marker>
+                <marker id="a-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#D64545"/></marker>
+              </defs>
+
+              <!-- happy path: solid, weighted -->
+              <path d="M124,76 L138,76" stroke="#3B4763" stroke-width="2" fill="none" marker-end="url(#a-ink)"/>
+              <path d="M268,76 L282,76" stroke="#3B4763" stroke-width="2" fill="none" marker-end="url(#a-ink)"/>
+              <path d="M412,76 L426,76" stroke="#3B4763" stroke-width="2" fill="none" marker-end="url(#a-ink)"/>
+              <path d="M556,76 L570,76" stroke="#3B4763" stroke-width="2" fill="none" marker-end="url(#a-ink)"/>
+
+              <!-- approval loop: required by this service -->
+              <path d="M334,108 L334,192" stroke="#D97757" stroke-width="2" fill="none" marker-end="url(#a-acc)"/>
+              <path d="M366,200 L366,116" stroke="#D97757" stroke-width="2" fill="none" marker-end="url(#a-acc)"/>
+
+              <!-- side paths: dashed, de-emphasised -->
+              <path d="M300,108 C300,150 244,152 228,190" stroke="#AEB6C6" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#a-mut)"/>
+              <path d="M400,108 C414,142 468,150 478,190" stroke="#AEB6C6" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#a-mut)"/>
+              <path d="M534,200 C548,150 470,116 420,88" stroke="#AEB6C6" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#a-mut)"/>
+              <path d="M470,44 C470,8 352,8 352,36" stroke="#AEB6C6" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#a-mut)"/>
+
+              <!-- removed in this draft (ghost) -->
+              <path d="M248,200 C300,182 312,150 318,120" stroke="#D64545" stroke-width="1.5" stroke-dasharray="3 5" fill="none" opacity=".75" marker-end="url(#a-red)"/>
+
+              <!-- added in this draft -->
+              <path d="M494,200 L494,116" stroke="#2E9E6B" stroke-width="2" fill="none" marker-end="url(#a-grn)"/>
+              <path d="M40,108 L40,332" stroke="#2E9E6B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#a-grn)"/>
+            </svg>
+
+            <span class="lane-lbl" style="inset-inline-start:0;top:22px">Happy path</span>
+            <span class="lane-lbl" style="inset-inline-start:0;top:178px">Side paths</span>
+
+            <!-- row 1 — happy path -->
+            <button class="node" style="inset-inline-start:0;top:44px">
+              <span class="n-top"><span class="ndot" style="background:var(--it)"></span><span class="nname">New</span></span>
+              <span class="nkey mono">new · entry</span>
+              <span class="badges"><span class="tb">@ ack email</span><span class="tb pos">&#9654; SLA</span></span>
+            </button>
+
+            <button class="node" style="inset-inline-start:144px;top:44px">
+              <span class="n-flag w">&#8226;</span>
+              <span class="n-top"><span class="ndot" style="background:var(--admin)"></span><span class="nname">Triaged</span></span>
+              <span class="nkey mono">triaged</span>
+              <span class="badges"><span class="tb">As assign</span></span>
+            </button>
+
+            <button class="node" style="inset-inline-start:288px;top:44px">
+              <span class="n-top"><span class="ndot" style="background:var(--amber)"></span><span class="nname">In progress</span></span>
+              <span class="nkey mono">in_progress</span>
+              <span class="badges"><span class="tb act">&#10547; spawn 3</span><span class="tb">@ email</span></span>
+            </button>
+
+            <button class="node" style="inset-inline-start:432px;top:44px">
+              <span class="n-top"><span class="ndot" style="background:var(--green)"></span><span class="nname">Resolved</span></span>
+              <span class="nkey mono">resolved</span>
+              <span class="badges"><span class="tb">% CSAT</span><span class="tb more">+1</span></span>
+            </button>
+
+            <button class="node terminal" style="inset-inline-start:576px;top:44px">
+              <span class="n-top"><span class="ndot" style="background:var(--muted)"></span><span class="nname">Closed</span></span>
+              <span class="nkey mono">closed · terminal</span>
+              <span class="badges"><span class="tb">&#10073;&#10073; stop SLA</span></span>
+            </button>
+
+            <!-- row 2 — side paths -->
+            <button class="node side sel err" style="inset-inline-start:144px;top:200px" aria-current="true">
+              <span class="n-flag e">!</span>
+              <span class="n-top"><span class="ndot" style="background:var(--amber)"></span><span class="nname">Pending requester</span></span>
+              <span class="nkey mono">pending_requester</span>
+              <span class="badges"><span class="tb">&#10073;&#10073; pause SLA</span><span class="tb">@ email</span></span>
+              <span class="n-note">Dead end — no way out</span>
+            </button>
+
+            <button class="node side" style="inset-inline-start:288px;top:200px">
+              <span class="n-top"><span class="ndot" style="background:var(--accent)"></span><span class="nname">Pending approval</span><span class="n-lock">req</span></span>
+              <span class="nkey mono">pending_approval</span>
+              <span class="badges"><span class="tb act">DoA chain</span><span class="tb">&#10073;&#10073; pause</span></span>
+            </button>
+
+            <button class="node side" style="inset-inline-start:432px;top:200px">
+              <span class="n-top"><span class="ndot" style="background:var(--red)"></span><span class="nname">Escalated</span></span>
+              <span class="nkey mono">escalated</span>
+              <span class="badges"><span class="tb">@ notify lead</span></span>
+            </button>
+
+            <!-- row 3 -->
+            <button class="node side terminal" style="inset-inline-start:0;top:340px">
+              <span class="n-top"><span class="ndot" style="background:var(--muted)"></span><span class="nname">Cancelled</span></span>
+              <span class="nkey mono">cancelled · terminal</span>
+              <span class="badges"><span class="tb">@ email</span></span>
+            </button>
+
+            <!-- edge tags -->
+            <span class="etag req" style="inset-inline-start:296px;top:150px">required — service needs approval</span>
+            <span class="etag del" style="inset-inline-start:250px;top:158px">removed in v4</span>
+            <span class="etag add" style="inset-inline-start:500px;top:146px">+ added</span>
+            <span class="etag add" style="inset-inline-start:52px;top:210px">+ added</span>
+            <span class="etag" style="inset-inline-start:372px;top:2px">reopen</span>
+          </div>
+        </div>
+
+        <div class="legend">
+          <span class="lg"><i style="border-color:#3B4763"></i>Happy path</span>
+          <span class="lg"><i style="border-color:#AEB6C6;border-top-style:dashed"></i>Side path</span>
+          <span class="lg"><i style="border-color:var(--accent)"></i>Required by service settings</span>
+          <span class="lg"><i style="border-color:var(--green)"></i>Added in draft</span>
+          <span class="lg"><i style="border-color:var(--red);border-top-style:dashed"></i>Removed in draft</span>
+          <span class="tool-spacer"></span>
+          <span>Server enforces the published graph — a transition removed here is rejected on save, buttons or not.</span>
+        </div>
+
+        <!-- preview strip -->
+        <div class="preview">
+          <div class="pv-head">
+            <span class="pv-title">Preview — resulting lifecycle</span>
+            <div class="seg" role="tablist" aria-label="Preview audience">
+              <button class="on" role="tab" aria-selected="true">Agent</button>
+              <button role="tab" aria-selected="false">Requester</button>
+            </div>
+            <span class="chip t-amber">v4 draft</span>
+            <span class="tool-spacer"></span>
+            <span style="font-size:10.5px;color:var(--muted)">Rendered with the same LifecycleBar the request page uses</span>
+          </div>
+          <div class="life">
+            <span class="lstep done">New</span><span class="lsep"></span>
+            <span class="lstep done">Triaged</span><span class="lsep"></span>
+            <span class="lstep now">In progress</span><span class="lsep"></span>
+            <span class="lstep">Resolved</span><span class="lsep"></span>
+            <span class="lstep">Closed</span>
+          </div>
+          <div class="pv-side">
+            <span class="lbl">Off-path states shown as banners:</span>
+            <span class="chip t-accent">Pending approval</span>
+            <span class="chip t-amber">Pending requester</span>
+            <span class="chip t-red">Escalated</span>
+            <span class="chip t-muted">Cancelled</span>
+          </div>
+          <p class="pv-cap">Requester wording for the same graph: <span class="mono">Submitted &rarr; Being reviewed &rarr; In progress &rarr; Done &rarr; Closed</span>. With the draft as it stands, a request parked in <strong>Pending requester</strong> would show &ldquo;Waiting for your reply&rdquo; forever — the agent has no button to bring it back.</p>
+        </div>
+      </section>
+
+      <!-- properties -->
+      <aside class="pane" aria-label="Step properties">
+        <div class="pane-head"><span>Properties</span><span class="chip t-muted mono">step</span></div>
+        <div class="props">
+          <div class="p-head"><span class="ndot" style="background:var(--amber)"></span><span class="p-name">Pending requester</span></div>
+          <div class="p-key">pending_requester · side path</div>
+
+          <div class="callout err">
+            <span class="ct">Dead end</span>
+            This step has no outgoing transition, so a request that enters it can never leave. Publishing is blocked until it has a way out.
+            <button class="btn">Restore &rarr; In progress</button>
+          </div>
+
+          <div class="prop-sec">Role in the flow</div>
+          <div class="seg full" role="group" aria-label="Role in the flow">
+            <button>Happy path</button><button class="on">Side path</button>
+          </div>
+          <p class="hint">Side paths are drawn de-emphasised on the canvas and appear as a banner, not a lifecycle step, for the requester.</p>
+
+          <div class="prop-sec">Transitions</div>
+          <div class="prop-row">
+            <span class="prop-lbl">Incoming</span>
+            <div class="tr"><span class="arrow">&rarr;</span>In progress<button class="x" aria-label="Remove transition">&times;</button></div>
+          </div>
+          <div class="prop-row">
+            <span class="prop-lbl">Outgoing</span>
+            <div class="tr empty">none — dead end</div>
+            <div class="tr ghost"><span class="arrow">&rarr;</span>In progress<span style="margin-inline-start:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--red)">removed in v4</span></div>
+            <button class="btn" style="width:100%;justify-content:center;border-style:dashed;margin-top:5px">+ Add outgoing transition</button>
+          </div>
+
+          <div class="prop-sec">Triggers <span class="chip t-muted mono" style="font-size:9px">on entry</span></div>
+          <div class="toggle-row"><span>Pause SLA<span class="sub">Clock stops while waiting</span></span><button class="toggle on" role="switch" aria-checked="true" aria-label="Pause SLA"></button></div>
+          <div class="toggle-row"><span>Send email<span class="sub">&ldquo;We need more information&rdquo;</span></span><button class="toggle on" role="switch" aria-checked="true" aria-label="Send email"></button></div>
+          <div class="toggle-row"><span>Assign<span class="sub">Route to a team or agent</span></span><button class="toggle" role="switch" aria-checked="false" aria-label="Assign"></button></div>
+          <div class="toggle-row"><span>Request approval<span class="sub">Start the DoA chain</span></span><button class="toggle" role="switch" aria-checked="false" aria-label="Request approval"></button></div>
+          <div class="toggle-row"><span style="color:var(--muted)">Spawn children<span class="sub">Only valid on In progress</span></span><button class="toggle" role="switch" aria-checked="false" disabled aria-label="Spawn children"></button></div>
+
+          <div class="prop-sec">Requester wording</div>
+          <div class="prop-row">
+            <input class="input" value="Waiting for your reply" aria-label="Requester-visible label" />
+            <p class="hint">Shown in the requester portal instead of the raw status key.</p>
+          </div>
+
+          <div class="dnote">
+            <span class="diff d-del">−1 transition</span><span class="diff d-del">−1 trigger</span>
+            <div style="margin-top:6px">Changed against <strong>v3</strong> by you, 4 min ago. <button class="crumb-link">Show v3 side by side</button></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>
