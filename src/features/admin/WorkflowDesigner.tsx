@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { DEPT_COLOR, type Service } from '../../lib/types'
 import {
-  validateWorkflow,
+  analyzeWorkflow,
   type WorkflowGraph,
   type WorkflowStatus,
   type WorkflowStepDef,
@@ -69,7 +69,6 @@ export function WorkflowDesigner() {
   const [graph, setGraph] = useState<Graph>(defaultGraph())
   const [version, setVersion] = useState<number | null>(null)
   const [dirty, setDirty] = useState(false)
-  const [problems, setProblems] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   // WORKFL1 branch 1: read-only status-node canvas, off by default, shown
   // alongside the matrix. Editing/validation/properties land in branches 2–5.
@@ -95,10 +94,26 @@ export function WorkflowDesigner() {
 
   const service = useMemo(() => services.find((s) => s.id === serviceId), [services, serviceId])
 
+  // WORKFL1 branch 2: validation runs on every edit, not on a button.
+  const spawnsChildren = useMemo(
+    () => graph.steps.some((s) => s.triggers.some((t) => /spawn/i.test(t))),
+    [graph],
+  )
+  const issues = useMemo(
+    () => analyzeWorkflow(graph, { requiresApproval: service?.requires_approval, spawnsChildren }),
+    [graph, service, spawnsChildren],
+  )
+  const errors = issues.filter((i) => i.severity === 'error')
+  const warnings = issues.filter((i) => i.severity === 'warning')
+  const errorSteps = useMemo(
+    () => new Set(errors.map((e) => e.nodeId).filter(Boolean) as WorkflowStatus[]),
+    [errors],
+  )
+  const closedReachable = !errors.some((e) => e.message.startsWith('Closed is not reachable'))
+
   const loadWorkflow = async (id: string) => {
     setServiceId(id)
     setDirty(false)
-    setProblems(null)
     setError(null)
     const { data } = await supabase
       .from('workflow_definitions')
@@ -127,7 +142,6 @@ export function WorkflowDesigner() {
         : [...g.transitions, { from, to }],
     }))
     setDirty(true)
-    setProblems(null)
   }
 
   const toggleTrigger = (step: Status, trig: string) => {
@@ -147,14 +161,8 @@ export function WorkflowDesigner() {
     setDirty(true)
   }
 
-  const validate = (): string[] => {
-    const errs = validateWorkflow(graph, { requiresApproval: service?.requires_approval })
-    setProblems(errs)
-    return errs
-  }
-
   const publish = async () => {
-    if (validate().length > 0) return
+    if (errors.length > 0) return
     setError(null)
     const { data, error: e } = await supabase.rpc('publish_workflow', {
       p_service: serviceId,
@@ -164,7 +172,6 @@ export function WorkflowDesigner() {
     else {
       setVersion(data as number)
       setDirty(false)
-      setProblems([])
     }
   }
 
@@ -203,17 +210,42 @@ export function WorkflowDesigner() {
         >
           {showCanvas ? 'Canvas ✓' : 'Canvas (beta)'}
         </button>
-        <button className="btn" onClick={validate}>
-          Validate
-        </button>
-        <button className="btn primary" onClick={publish} disabled={!dirty}>
+        {errors.length > 0 && (
+          <span className="chip t-red">{errors.length} error{errors.length === 1 ? '' : 's'} block publish</span>
+        )}
+        <button
+          className="btn primary"
+          onClick={publish}
+          disabled={!dirty || errors.length > 0}
+          title={errors.length > 0 ? 'Fix the validation errors before publishing' : undefined}
+        >
           Publish
         </button>
       </div>
 
+      {/* live validation — runs on every edit, not on a button */}
+      <div className="wfd" style={{ marginBottom: 14 }}>
+        <div className="valbar" role="status" aria-label="Live validation" style={{ borderRadius: 'var(--radius)', border: '1px solid var(--line)' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: 'var(--muted)', marginInlineEnd: 2 }}>
+            Validation
+          </span>
+          {errors.map((e, i) => (
+            <span className="vitem err" key={`e${i}`}><span className="vmark e">!</span>{e.message}</span>
+          ))}
+          {warnings.map((w, i) => (
+            <span className="vitem warn" key={`w${i}`}><span className="vmark w">•</span>{w.message}</span>
+          ))}
+          {errors.length === 0 && warnings.length === 0 && (
+            <span className="vitem" style={{ color: 'var(--green)' }}>All guardrails satisfied.</span>
+          )}
+          <span className="tool-spacer" />
+          {closedReachable && <span className="chip t-green">Closed reachable from New</span>}
+        </div>
+      </div>
+
       {showCanvas && (
         <div style={{ marginBottom: 14 }}>
-          <WorkflowCanvas graph={graph} requiresApproval={service?.requires_approval} />
+          <WorkflowCanvas graph={graph} requiresApproval={service?.requires_approval} errorSteps={errorSteps} />
         </div>
       )}
 
@@ -254,19 +286,6 @@ export function WorkflowDesigner() {
         </div>
       </div>
 
-      {problems !== null && (
-        <div
-          style={{
-            background: problems.length === 0 ? 'var(--green-soft)' : 'var(--red-soft)',
-            color: problems.length === 0 ? 'var(--green)' : 'var(--red)',
-            borderRadius: 10, padding: '10px 14px', fontSize: 12.5, marginBottom: 14,
-          }}
-        >
-          {problems.length === 0
-            ? 'Workflow is valid — system guardrails satisfied.'
-            : problems.map((p, i) => <div key={i}>{p}</div>)}
-        </div>
-      )}
 
       <div className="card">
         {STATUSES.map((from) => {
