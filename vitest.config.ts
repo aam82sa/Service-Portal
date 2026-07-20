@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'supabase/functions/**/*.test.ts', 'services/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'supabase/functions/**/*.test.ts', 'supabase/tests/**/*.test.ts', 'services/**/*.test.ts'],
     environment: 'node',
     env: { TZ: 'UTC' },
     coverage: {
