@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { layoutWorkflow, transitionKey, type EdgeKind } from '../../lib/workflowLayout'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { isApprovalPair, layoutWorkflow, transitionKey, NODE_H, NODE_W, type EdgeKind } from '../../lib/workflowLayout'
 import { triggerBadge } from '../../lib/workflowTriggers'
 import type { GraphDiff } from '../../lib/workflowDiff'
 import type { WorkflowGraph, WorkflowIssue, WorkflowStatus } from '../../lib/workflowValidate'
@@ -41,15 +41,63 @@ export interface CanvasProps {
   draftVersion?: number
   selected?: WorkflowStatus | null
   onSelect?: (id: WorkflowStatus) => void
+  /** drag-from-handle target (WORKFL1 branch 5) — canvas is read-only without it */
+  onAddTransition?: (from: WorkflowStatus, to: WorkflowStatus) => void
+  /** click-edge-to-delete — the approval pair is locked when required */
+  onRemoveTransition?: (from: WorkflowStatus, to: WorkflowStatus) => void
+}
+
+interface DragState {
+  from: WorkflowStatus
+  x1: number
+  y1: number
+  x2: number
+  y2: number
 }
 
 /**
- * Read-only status-node canvas (WORKFL1 branch 1). Happy path on the weighted
- * top lane, side paths dashed and muted below, approval loop in accent when the
- * service requires it. Live-validation markers and editing arrive in branches
- * 2–5; this renders the graph faithfully to the reference.
+ * Status-node canvas: happy path on the weighted top lane, side paths dashed
+ * and muted below, approval loop in accent when the service requires it.
+ * Editing: drag from a node's edge handle to draw a transition, click an edge
+ * to delete it (the required approval pair is locked), click a node to edit it
+ * in the properties pane. Live validation anchors errors to nodes.
  */
-export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, diff, draftVersion, selected, onSelect }: CanvasProps) {
+export function WorkflowCanvas({
+  graph, requiresApproval, errorSteps, issues, diff, draftVersion, selected, onSelect,
+  onAddTransition, onRemoveTransition,
+}: CanvasProps) {
+  const flowRef = useRef<HTMLDivElement>(null)
+  const [drag, setDrag] = useState<DragState | null>(null)
+
+  // while dragging: follow the pointer; on release, drop onto a node
+  useEffect(() => {
+    if (!drag) return
+    const move = (e: PointerEvent) => {
+      const r = flowRef.current?.getBoundingClientRect()
+      if (!r) return
+      setDrag((d) => (d ? { ...d, x2: e.clientX - r.left, y2: e.clientY - r.top } : d))
+    }
+    const up = (e: PointerEvent) => {
+      const target = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest('[data-node]')
+      const to = target?.getAttribute('data-node') as WorkflowStatus | null
+      if (to && to !== drag.from && !graph.transitions.some((t) => t.from === drag.from && t.to === to)) {
+        onAddTransition?.(drag.from, to)
+      }
+      setDrag(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+  }, [drag, graph, onAddTransition])
+
+  const startDrag = (from: WorkflowStatus, x: number, y: number) => (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDrag({ from, x1: x, y1: y, x2: x, y2: y })
+  }
   const layout = useMemo(
     () => layoutWorkflow(graph, {
       requiresApproval,
@@ -66,8 +114,10 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, di
   return (
     <section className="pane wfd" aria-label="Workflow canvas">
       <div className="pane-head">
-        <span>Canvas — click a step to edit</span>
-        <span className="chip t-muted mono">{layout.nodes.length} steps · {layout.edges.length} transitions</span>
+        <span>{onAddTransition ? 'Canvas — drag to connect · click a step to edit' : 'Canvas — click a step to edit'}</span>
+        <span className="chip t-muted mono">
+          {layout.nodes.length} steps · {graph.transitions.length} transitions
+        </span>
       </div>
 
       {issues && (
@@ -94,7 +144,7 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, di
       )}
 
       <div className="canvas-wrap">
-        <div className="flow" style={{ width: layout.width, height: layout.height }}>
+        <div className="flow" ref={flowRef} style={{ width: layout.width, height: layout.height }}>
           <svg viewBox={`0 0 ${layout.width} ${layout.height}`} width={layout.width} height={layout.height} aria-hidden="true">
             <defs>
               {(['a-ink', 'a-mut', 'a-acc', 'a-grn', 'a-red'] as const).map((id) => {
@@ -113,6 +163,33 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, di
                   strokeDasharray={s.dash} fill="none" markerEnd={`url(#${s.marker})`} opacity={s.opacity} />
               )
             })}
+            {/* click-to-delete hit areas over the real (non-ghost) edges */}
+            {onRemoveTransition && layout.edges.filter((e) => e.kind !== 'removed').map((e, i) => {
+              const locked = Boolean(requiresApproval) && isApprovalPair(e.from, e.to)
+              return (
+                <path
+                  key={`hit-${e.from}-${e.to}-${i}`}
+                  d={e.d}
+                  stroke="transparent"
+                  strokeWidth={12}
+                  fill="none"
+                  pointerEvents="stroke"
+                  style={{ cursor: locked ? 'not-allowed' : 'pointer' }}
+                  onClick={() => { if (!locked) onRemoveTransition(e.from, e.to) }}
+                >
+                  <title>
+                    {locked
+                      ? 'Required — this service needs approval; the pair cannot be removed'
+                      : `Delete transition ${label(e.from)} → ${label(e.to)}`}
+                  </title>
+                </path>
+              )
+            })}
+            {/* temp line while drawing a transition */}
+            {drag && (
+              <line x1={drag.x1} y1={drag.y1} x2={drag.x2} y2={drag.y2}
+                stroke="var(--accent)" strokeWidth={2} strokeDasharray="6 4" markerEnd="url(#a-acc)" />
+            )}
           </svg>
 
           {layout.edges.filter((e) => e.kind === 'added' || e.kind === 'removed').map((e, i) => (
@@ -124,6 +201,14 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, di
               {e.kind === 'added' ? '+ added' : `removed in v${draftVersion ?? '?'}`}
             </span>
           ))}
+          {requiresApproval && (() => {
+            const appr = layout.edges.find((e) => e.from === 'in_progress' && e.to === 'pending_approval')
+            return appr ? (
+              <span className="etag req" style={{ insetInlineStart: appr.mid.x - 60, top: appr.mid.y - 8 }}>
+                required — service needs approval
+              </span>
+            ) : null
+          })()}
 
           <span className="lane-lbl" style={{ insetInlineStart: 0, top: 22 }}>Happy path</span>
           <span className="lane-lbl" style={{ insetInlineStart: 0, top: 178 }}>Side paths</span>
@@ -140,31 +225,43 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, di
             if (isErr) cls.push('err')
             const showLock = n.id === 'pending_approval' && requiresApproval
             return (
-              <button
-                key={n.id}
-                className={cls.join(' ')}
-                style={{ insetInlineStart: n.x, top: n.y }}
-                onClick={() => onSelect?.(n.id)}
-                aria-current={selected === n.id ? 'true' : undefined}
-              >
-                {isErr && <span className="n-flag e">!</span>}
-                <span className="n-top">
-                  <span className="ndot" style={{ background: STATUS_DOT[n.id] }} />
-                  <span className="nname">{label(n.id)}</span>
-                  {showLock && <span className="n-lock">req</span>}
-                </span>
-                <span className="nkey mono">{n.id}{keySuffix(n.id)}</span>
-                {trigs.length > 0 && (
-                  <span className="badges">
-                    {shown.map((t) => {
-                      const b = triggerBadge(t)
-                      return <span key={t} className={`tb${b.cls ? ' ' + b.cls : ''}`}>{b.text}</span>
-                    })}
-                    {extra > 0 && <span className="tb more">+{extra}</span>}
+              <span key={n.id}>
+                <button
+                  data-node={n.id}
+                  className={cls.join(' ')}
+                  style={{ insetInlineStart: n.x, top: n.y }}
+                  onClick={() => onSelect?.(n.id)}
+                  aria-current={selected === n.id ? 'true' : undefined}
+                >
+                  {isErr && <span className="n-flag e">!</span>}
+                  <span className="n-top">
+                    <span className="ndot" style={{ background: STATUS_DOT[n.id] }} />
+                    <span className="nname">{label(n.id)}</span>
+                    {showLock && <span className="n-lock">req</span>}
                   </span>
+                  <span className="nkey mono">{n.id}{keySuffix(n.id)}</span>
+                  {trigs.length > 0 && (
+                    <span className="badges">
+                      {shown.map((t) => {
+                        const b = triggerBadge(t)
+                        return <span key={t} className={`tb${b.cls ? ' ' + b.cls : ''}`}>{b.text}</span>
+                      })}
+                      {extra > 0 && <span className="tb more">+{extra}</span>}
+                    </span>
+                  )}
+                  {isErr && <span className="n-note">Dead end — no way out</span>}
+                </button>
+                {onAddTransition && (
+                  <span
+                    className="nhandle"
+                    role="button"
+                    aria-label={`Draw a transition from ${label(n.id)}`}
+                    title={`Drag to draw a transition from ${label(n.id)}`}
+                    style={{ insetInlineStart: n.x + NODE_W - 7, top: n.y + NODE_H / 2 - 7 }}
+                    onPointerDown={startDrag(n.id, n.x + NODE_W, n.y + NODE_H / 2)}
+                  />
                 )}
-                {isErr && <span className="n-note">Dead end — no way out</span>}
-              </button>
+              </span>
             )
           })}
         </div>

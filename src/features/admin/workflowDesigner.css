@@ -29,6 +29,9 @@
 .wfd .n-note { position: absolute; inset-inline-start: 0; top: 100%; margin-top: 5px; font-size: 10px; font-weight: 600; color: var(--red); white-space: nowrap; }
 .wfd .n-lock { margin-inline-start: auto; font-family: var(--font-mono); font-size: 8.5px; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 4px; }
 
+.wfd .nhandle { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--card); border: 1.5px solid #C3CBDA; cursor: crosshair; z-index: 2; touch-action: none; }
+.wfd .nhandle:hover { border-color: var(--accent); background: var(--accent-soft); }
+
 .wfd .etag { position: absolute; font-family: var(--font-mono); font-size: 9px; padding: 1px 6px; border-radius: 99px; white-space: nowrap; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
 .wfd .etag.add { background: var(--green-soft); border-color: #CBE7D8; color: var(--green); }
 .wfd .etag.del { background: var(--red-soft); border-color: #F0CFCF; color: var(--red); }

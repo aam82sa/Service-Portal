@@ -5,6 +5,7 @@ import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowProperties } from './WorkflowProperties'
 import { type Service } from '../../lib/types'
 import { diffChips, diffGraphs } from '../../lib/workflowDiff'
+import { isApprovalPair } from '../../lib/workflowLayout'
 import { TRIGGER_CATALOG, triggerAllowedOn } from '../../lib/workflowTriggers'
 import {
   analyzeWorkflow,
@@ -219,6 +220,9 @@ export function WorkflowDesigner() {
   }
 
   const removeTransition = (from: Status, to: Status) => {
+    // required-edge lock: the approval pair cannot be removed on services that
+    // require approval (the server would reject the publish anyway)
+    if (service?.requires_approval && isApprovalPair(from, to)) return
     setGraph((g) => ({
       ...g,
       transitions: g.transitions.filter((t) => !(t.from === from && t.to === to)),
@@ -351,11 +355,14 @@ export function WorkflowDesigner() {
           draftVersion={draftVersion}
           selected={selected}
           onSelect={setSelected}
+          onAddTransition={addTransition}
+          onRemoveTransition={removeTransition}
         />
         <WorkflowProperties
           graph={graph}
           step={selected}
           issues={issues}
+          requiresApproval={service?.requires_approval}
           onAddTransition={addTransition}
           onRemoveTransition={removeTransition}
           onToggleTrigger={toggleTrigger}
@@ -413,8 +420,8 @@ function Palette({
           )
         })}
         <p className="hint" style={{ margin: '8px 6px 2px' }}>
-          Click a trigger to toggle it on the selected step. Transitions are edited in the
-          step's properties.
+          Click a trigger to toggle it on the selected step, or drag from a step's edge
+          handle to draw a transition.
         </p>
       </div>
     </aside>
