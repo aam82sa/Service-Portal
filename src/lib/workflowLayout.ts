@@ -119,6 +119,15 @@ export interface LayoutOpts {
 
 export const transitionKey = (t: WorkflowTransition) => `${t.from}→${t.to}`
 
+/** The approval loop pair — locked (undeletable) when the service requires
+ *  approval; the server rejects publishing without it (00008/00077). */
+export function isApprovalPair(from: WorkflowStatus, to: WorkflowStatus): boolean {
+  return (
+    (from === 'in_progress' && to === 'pending_approval') ||
+    (from === 'pending_approval' && to === 'in_progress')
+  )
+}
+
 export function layoutWorkflow(graph: WorkflowGraph, opts: LayoutOpts = {}): WorkflowLayout {
   const requiresApproval = Boolean(opts.requiresApproval)
   const nodes: NodeLayout[] = graph.steps.map((s) => {

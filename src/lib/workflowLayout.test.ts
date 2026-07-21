@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { layoutWorkflow, NODE_W } from './workflowLayout'
+import { isApprovalPair, layoutWorkflow, NODE_W } from './workflowLayout'
 import type { WorkflowGraph } from './workflowValidate'
 
 const graph: WorkflowGraph = {
@@ -95,6 +95,13 @@ describe('layoutWorkflow', () => {
     expect(ghost?.d.startsWith('M')).toBe(true)
     // the draft's own edges are all still present
     expect(edges.length).toBe(graph.transitions.length + 1)
+  })
+
+  it('identifies exactly the approval pair as lockable', () => {
+    expect(isApprovalPair('in_progress', 'pending_approval')).toBe(true)
+    expect(isApprovalPair('pending_approval', 'in_progress')).toBe(true)
+    expect(isApprovalPair('in_progress', 'resolved')).toBe(false)
+    expect(isApprovalPair('new', 'pending_approval')).toBe(false)
   })
 
   it('gives every edge a midpoint inside the canvas', () => {

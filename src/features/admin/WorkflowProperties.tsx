@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isApprovalPair } from '../../lib/workflowLayout'
 import { TRIGGER_CATALOG, triggerAllowedOn } from '../../lib/workflowTriggers'
 import type { WorkflowGraph, WorkflowIssue, WorkflowStatus } from '../../lib/workflowValidate'
 import './workflowDesigner.css'
@@ -24,6 +25,8 @@ export interface PropertiesProps {
   graph: WorkflowGraph
   step: WorkflowStatus
   issues: WorkflowIssue[]
+  /** the approval pair is locked (undeletable) when the service requires it */
+  requiresApproval?: boolean
   onAddTransition: (from: WorkflowStatus, to: WorkflowStatus) => void
   onRemoveTransition: (from: WorkflowStatus, to: WorkflowStatus) => void
   onToggleTrigger: (step: WorkflowStatus, trigger: string) => void
@@ -37,8 +40,10 @@ export interface PropertiesProps {
  * the JSONB, ignored by the engine).
  */
 export function WorkflowProperties({
-  graph, step, issues, onAddTransition, onRemoveTransition, onToggleTrigger, onSetLabel,
+  graph, step, issues, requiresApproval, onAddTransition, onRemoveTransition, onToggleTrigger, onSetLabel,
 }: PropertiesProps) {
+  const locked = (from: WorkflowStatus, to: WorkflowStatus) =>
+    Boolean(requiresApproval) && isApprovalPair(from, to)
   const [adding, setAdding] = useState(false)
   const def = graph.steps.find((s) => s.id === step)
   const incoming = graph.transitions.filter((t) => t.to === step)
@@ -94,7 +99,11 @@ export function WorkflowProperties({
           {incoming.map((t) => (
             <div className="tr" key={t.from}>
               <span className="arrow">→</span>{label(t.from)}
-              <button className="x" aria-label={`Remove transition from ${label(t.from)}`} onClick={() => onRemoveTransition(t.from, step)}>×</button>
+              {locked(t.from, step) ? (
+                <span className="n-lock" style={{ marginInlineStart: 'auto' }} title="Required — this service needs approval">req</span>
+              ) : (
+                <button className="x" aria-label={`Remove transition from ${label(t.from)}`} onClick={() => onRemoveTransition(t.from, step)}>×</button>
+              )}
             </div>
           ))}
           {incoming.length === 0 && (
@@ -108,7 +117,11 @@ export function WorkflowProperties({
           {outgoing.map((t) => (
             <div className="tr" key={t.to}>
               <span className="arrow">→</span>{label(t.to)}
-              <button className="x" aria-label={`Remove transition to ${label(t.to)}`} onClick={() => onRemoveTransition(step, t.to)}>×</button>
+              {locked(step, t.to) ? (
+                <span className="n-lock" style={{ marginInlineStart: 'auto' }} title="Required — this service needs approval">req</span>
+              ) : (
+                <button className="x" aria-label={`Remove transition to ${label(t.to)}`} onClick={() => onRemoveTransition(step, t.to)}>×</button>
+              )}
             </div>
           ))}
           {outgoing.length === 0 && (
