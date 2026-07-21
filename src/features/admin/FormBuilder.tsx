@@ -228,6 +228,7 @@ export function FormBuilder() {
       setDirty(false)
       setNote('Saved — new requests use this form immediately')
       setServices((ss) => ss.map((s) => (s.id === serviceId ? { ...s, form_schema: fields } : s)))
+      loadVersions(serviceId) // the save minted a new form version (00080)
     }
   }
 
@@ -559,14 +560,19 @@ export function FormBuilder() {
       <CostCenterAdmin onError={setError} />
       {error && <p className="error-note">{error}</p>}
 
-      {impactVersion && service && (
-        <ImpactDialog
-          kind="form"
-          target={{ id: impactVersion.id, code: `${service.code}-v${impactVersion.version}`, label: `${service.name} form v${impactVersion.version}` }}
-          onClose={() => setImpactVersion(null)}
-          onDone={(msg) => { setNote(msg); loadVersions(serviceId) }}
-        />
-      )}
+      {impactVersion && service && (() => {
+        // migrate target: the newest live version other than the one being retired
+        const newer = versions.find((v) => !v.retired_at && v.status === 'published' && v.id !== impactVersion.id)
+        return (
+          <ImpactDialog
+            kind="form"
+            target={{ id: impactVersion.id, code: `${service.code}-v${impactVersion.version}`, label: `${service.name} form v${impactVersion.version}` }}
+            migrationTarget={newer ? { id: newer.id, label: `v${newer.version}` } : null}
+            onClose={() => setImpactVersion(null)}
+            onDone={(msg) => { setNote(msg); loadVersions(serviceId) }}
+          />
+        )
+      })()}
     </>
   )
 }
