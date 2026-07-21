@@ -102,17 +102,21 @@ begin
       order by w.version desc limit 1)
   );
   -- pin the form as submitted: the service's own current version, or the
-  -- parent's when the child has no form of its own (inheritance)
-  if jsonb_typeof(svc.form_schema) = 'array' and svc.form_schema <> '[]'::jsonb then
-    new.form_version_id = (
-      select fv.id from form_versions fv
-       where fv.service_id = new.service_id and fv.status = 'published' and fv.retired_at is null
-       order by fv.version desc limit 1);
-  else
-    new.form_version_id = (
-      select fv.id from form_versions fv
-       where fv.service_id = svc.parent_id and fv.status = 'published' and fv.retired_at is null
-       order by fv.version desc limit 1);
+  -- parent's when the child has no form of its own (inheritance). An
+  -- explicitly supplied form_version_id (FK-checked) is respected — imports
+  -- and backfills know which version their payload was captured on.
+  if new.form_version_id is null then
+    if jsonb_typeof(svc.form_schema) = 'array' and svc.form_schema <> '[]'::jsonb then
+      new.form_version_id = (
+        select fv.id from form_versions fv
+         where fv.service_id = new.service_id and fv.status = 'published' and fv.retired_at is null
+         order by fv.version desc limit 1);
+    else
+      new.form_version_id = (
+        select fv.id from form_versions fv
+         where fv.service_id = svc.parent_id and fv.status = 'published' and fv.retired_at is null
+         order by fv.version desc limit 1);
+    end if;
   end if;
   select o_response, o_resolution into resp, reso from sla_minutes_for(new.service_id, new.priority);
   if resp is not null then new.sla_response_due = add_business_minutes(now(), resp); end if;
