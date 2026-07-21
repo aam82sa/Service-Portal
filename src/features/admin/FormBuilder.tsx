@@ -4,6 +4,15 @@ import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode, type Service } from '../../lib/types'
 import type { FormField } from '../catalog/RequestForm'
 import type { FieldRule } from '../../lib/formRules'
+import { ImpactDialog } from './ImpactDialog'
+
+interface FormVersion {
+  id: string
+  version: number
+  status: 'draft' | 'published' | 'retired'
+  published_at: string | null
+  retired_at: string | null
+}
 
 /**
  * Three-pane no-code form builder (matches
@@ -97,6 +106,24 @@ export function FormBuilder() {
   const [dirty, setDirty] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [versions, setVersions] = useState<FormVersion[]>([])
+  const [impactVersion, setImpactVersion] = useState<FormVersion | null>(null)
+
+  const loadVersions = (svcId: string) => {
+    if (!svcId) { setVersions([]); return }
+    supabase.from('form_versions')
+      .select('id, version, status, published_at, retired_at')
+      .eq('service_id', svcId)
+      .order('version', { ascending: false })
+      .then(({ data }) => setVersions((data as FormVersion[]) ?? []))
+  }
+
+  const restoreVersion = async (v: FormVersion) => {
+    const { error: e } = await supabase.from('form_versions')
+      .update({ retired_at: null, retired_by: null, retire_reason: null, status: 'published' }).eq('id', v.id)
+    if (e) setError(e.message)
+    else { setNote(`Form v${v.version} restored.`); loadVersions(serviceId) }
+  }
 
   useEffect(() => {
     supabase
@@ -115,6 +142,7 @@ export function FormBuilder() {
         if (editable.length > 0) {
           setServiceId(editable[0].id)
           setFields(editable[0].form_schema ?? [])
+          loadVersions(editable[0].id)
         }
       })
   }, [hasRole])
@@ -129,6 +157,7 @@ export function FormBuilder() {
     setDirty(false)
     setNote(null)
     setError(null)
+    loadVersions(id)
   }
 
   const patch = (i: number, p: Partial<FormField>) => {
@@ -265,6 +294,30 @@ export function FormBuilder() {
           </div>
         )
       })()}
+
+      {versions.length > 0 && (
+        <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 8 }}>
+            Published form versions
+          </div>
+          {versions.map((v) => (
+            <div className="row" key={v.id} style={{ opacity: v.retired_at ? 0.6 : 1 }}>
+              <span className="chip mono" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>v{v.version}</span>
+              <div style={{ flex: 1 }}>
+                <div className="row-title" style={{ fontSize: 12.5 }}>
+                  {v.retired_at ? 'Retired' : v.status === 'published' ? 'Published' : v.status === 'draft' ? 'Draft' : v.status}
+                </div>
+                <div className="row-desc">
+                  {v.published_at ? `Published ${new Date(v.published_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Not yet published'}
+                </div>
+              </div>
+              {v.retired_at
+                ? <button className="btn" onClick={() => restoreVersion(v)}>Restore</button>
+                : <button className="card-link" style={{ color: 'var(--red)', fontSize: 11.5 }} onClick={() => setImpactVersion(v)}>Retire / Delete</button>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="builder" style={preview ? { gridTemplateColumns: '1fr' } : undefined}>
         {!preview && (
@@ -505,6 +558,15 @@ export function FormBuilder() {
 
       <CostCenterAdmin onError={setError} />
       {error && <p className="error-note">{error}</p>}
+
+      {impactVersion && service && (
+        <ImpactDialog
+          kind="form"
+          target={{ id: impactVersion.id, code: `${service.code}-v${impactVersion.version}`, label: `${service.name} form v${impactVersion.version}` }}
+          onClose={() => setImpactVersion(null)}
+          onDone={(msg) => { setNote(msg); loadVersions(serviceId) }}
+        />
+      )}
     </>
   )
 }

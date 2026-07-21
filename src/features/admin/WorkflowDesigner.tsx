@@ -4,8 +4,9 @@ import { useAuth } from '../auth/AuthProvider'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowPreview } from './WorkflowPreview'
 import { WorkflowProperties } from './WorkflowProperties'
+import { WorkflowPublishDialog } from './WorkflowPublishDialog'
 import { type Service } from '../../lib/types'
-import { diffChips, diffGraphs } from '../../lib/workflowDiff'
+import { diffChips, diffGraphs, removedFromStates } from '../../lib/workflowDiff'
 import { isApprovalPair } from '../../lib/workflowLayout'
 import { TRIGGER_CATALOG, triggerAllowedOn } from '../../lib/workflowTriggers'
 import {
@@ -96,6 +97,7 @@ export function WorkflowDesigner() {
   const [inFlight, setInFlight] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Status>('new')
+  const [confirmPublish, setConfirmPublish] = useState(false)
   // suppress the autosave that would fire from setGraph during a load
   const skipSave = useRef(true)
 
@@ -255,15 +257,24 @@ export function WorkflowDesigner() {
     }))
   }
 
-  const publish = async () => {
-    if (errors.length > 0) return
+  const doPublish = async () => {
     setError(null)
     const { error: e } = await supabase.rpc('publish_workflow', {
       p_service: serviceId,
       p_graph: graph,
     })
+    setConfirmPublish(false)
     if (e) setError(e.message)
     else await loadWorkflow(serviceId) // reload: draft consumed, new published version
+  }
+
+  // Removing a published transition is the breaking case — surface the affected
+  // in-flight requests in the shared impact dialog before committing. Purely
+  // additive changes publish straight through.
+  const publish = async () => {
+    if (errors.length > 0) return
+    if (diff.removedTransitions.length > 0) setConfirmPublish(true)
+    else await doPublish()
   }
 
   if (services.length === 0) return <p className="page-sub">{error ?? 'No services you can edit.'}</p>
@@ -389,6 +400,18 @@ export function WorkflowDesigner() {
         take effect when the notification module goes live.
       </p>
       {error && <p className="error-note">{error}</p>}
+
+      {confirmPublish && (
+        <WorkflowPublishDialog
+          serviceId={serviceId}
+          fromVersion={published?.version ?? null}
+          toVersion={draftVersion}
+          removed={diff.removedTransitions}
+          fromStates={removedFromStates(diff)}
+          onCancel={() => setConfirmPublish(false)}
+          onConfirm={doPublish}
+        />
+      )}
     </>
   )
 }

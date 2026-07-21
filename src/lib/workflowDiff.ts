@@ -56,6 +56,18 @@ export function diffGraphs(published: WorkflowGraph | null, draft: WorkflowGraph
   return { addedTransitions, removedTransitions, addedTriggers, removedTriggers, labelChanges, empty }
 }
 
+/**
+ * The distinct `from` states of removed transitions — the steps an in-flight
+ * request could be sitting on when its outgoing path is taken away. Drives the
+ * Publish impact dialog (which in-flight requests to surface). Version pinning
+ * (00077) means those requests actually finish on their pinned graph; the
+ * dialog is the transparency step before the published rules change for NEW
+ * requests.
+ */
+export function removedFromStates(d: GraphDiff): WorkflowStatus[] {
+  return [...new Set(d.removedTransitions.map((t) => t.from))]
+}
+
 /** Compact chips for the version bar: [["+2 transitions","add"], ["−1 trigger","del"]] */
 export function diffChips(d: GraphDiff): Array<[string, 'add' | 'del']> {
   const chips: Array<[string, 'add' | 'del']> = []
