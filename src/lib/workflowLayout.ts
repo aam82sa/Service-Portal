@@ -7,7 +7,7 @@
  * de-emphasised "side paths" lane (dashed, muted), and the approval loop drawn
  * in accent when the service requires approval. No React, no DOM — unit-tested.
  */
-import type { WorkflowGraph, WorkflowStatus } from './workflowValidate'
+import type { WorkflowGraph, WorkflowStatus, WorkflowTransition } from './workflowValidate'
 
 export const NODE_W = 124
 export const NODE_H = 52
@@ -15,7 +15,7 @@ const COL = 144 // x stride between columns
 const LANE_Y = { happy: 44, side: 200, terminal: 340 } as const
 
 export type Lane = keyof typeof LANE_Y
-export type EdgeKind = 'happy' | 'approval' | 'side'
+export type EdgeKind = 'happy' | 'approval' | 'side' | 'added' | 'removed'
 
 export interface NodeLayout {
   id: WorkflowStatus
@@ -30,6 +30,8 @@ export interface EdgeLayout {
   to: WorkflowStatus
   d: string
   kind: EdgeKind
+  /** midpoint of the edge, for diff tags */
+  mid: { x: number; y: number }
 }
 
 export interface WorkflowLayout {
@@ -74,15 +76,17 @@ function edgeKind(from: WorkflowStatus, to: WorkflowStatus, requiresApproval: bo
 }
 
 /** Build an SVG path between two node boxes, choosing sensible anchors. */
-function pathBetween(a: NodeLayout, b: NodeLayout, kind: EdgeKind): string {
+function pathBetween(a: NodeLayout, b: NodeLayout, kind: EdgeKind): { d: string; mid: { x: number; y: number } } {
   const A = anchors(a)
   const B = anchors(b)
+  const mid = (s: { x: number; y: number }, e: { x: number; y: number }) =>
+    ({ x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 })
   // same lane, left→right: straight horizontal segment (the happy path)
   if (a.lane === b.lane && b.x > a.x) {
-    return `M${A.right.x},${A.right.y} L${B.left.x},${B.left.y}`
+    return { d: `M${A.right.x},${A.right.y} L${B.left.x},${B.left.y}`, mid: mid(A.right, B.left) }
   }
   if (a.lane === b.lane && b.x < a.x) {
-    return `M${A.left.x},${A.left.y} L${B.right.x},${B.right.y}`
+    return { d: `M${A.left.x},${A.left.y} L${B.right.x},${B.right.y}`, mid: mid(A.left, B.right) }
   }
   // vertical-ish between lanes: bezier from the lower/upper anchor
   const down = b.y > a.y
@@ -92,15 +96,30 @@ function pathBetween(a: NodeLayout, b: NodeLayout, kind: EdgeKind): string {
   if (kind === 'approval') {
     // near-vertical, slight offset so the two directions don't overlap
     const dx = down ? -8 : 8
-    return `M${start.x + dx},${start.y} L${end.x + dx},${end.y}`
+    return {
+      d: `M${start.x + dx},${start.y} L${end.x + dx},${end.y}`,
+      mid: { x: (start.x + end.x) / 2 + dx, y: midY },
+    }
   }
-  return `M${start.x},${start.y} C${start.x},${midY} ${end.x},${midY} ${end.x},${end.y}`
+  return {
+    d: `M${start.x},${start.y} C${start.x},${midY} ${end.x},${midY} ${end.x},${end.y}`,
+    mid: mid(start, end),
+  }
 }
 
-export function layoutWorkflow(
-  graph: WorkflowGraph,
-  opts: { requiresApproval?: boolean } = {},
-): WorkflowLayout {
+export interface LayoutOpts {
+  requiresApproval?: boolean
+  /** transition keys ("from→to") present in the draft but not the published
+   *  graph — drawn green */
+  added?: Set<string>
+  /** transitions removed in the draft (present in published only) — drawn as
+   *  red ghosts alongside the draft's real edges */
+  ghosts?: WorkflowTransition[]
+}
+
+export const transitionKey = (t: WorkflowTransition) => `${t.from}→${t.to}`
+
+export function layoutWorkflow(graph: WorkflowGraph, opts: LayoutOpts = {}): WorkflowLayout {
   const requiresApproval = Boolean(opts.requiresApproval)
   const nodes: NodeLayout[] = graph.steps.map((s) => {
     const { lane, col } = place(s.id)
@@ -113,8 +132,18 @@ export function layoutWorkflow(
     const a = byId.get(t.from)
     const b = byId.get(t.to)
     if (!a || !b) continue
-    const kind = edgeKind(t.from, t.to, requiresApproval)
-    edges.push({ from: t.from, to: t.to, kind, d: pathBetween(a, b, kind) })
+    const kind: EdgeKind = opts.added?.has(transitionKey(t))
+      ? 'added'
+      : edgeKind(t.from, t.to, requiresApproval)
+    const p = pathBetween(a, b, kind)
+    edges.push({ from: t.from, to: t.to, kind, d: p.d, mid: p.mid })
+  }
+  for (const t of opts.ghosts ?? []) {
+    const a = byId.get(t.from)
+    const b = byId.get(t.to)
+    if (!a || !b) continue
+    const p = pathBetween(a, b, 'removed')
+    edges.push({ from: t.from, to: t.to, kind: 'removed', d: p.d, mid: p.mid })
   }
 
   const maxCol = Math.max(0, ...nodes.map((n) => n.x)) + NODE_W

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowProperties } from './WorkflowProperties'
 import { type Service } from '../../lib/types'
+import { diffChips, diffGraphs } from '../../lib/workflowDiff'
 import { TRIGGER_CATALOG, triggerAllowedOn } from '../../lib/workflowTriggers'
 import {
   analyzeWorkflow,
@@ -57,7 +58,23 @@ function defaultGraph(): Graph {
 
 const label = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, ' ')
 
+/** "4 min ago" for the autosave note */
+function ago(ts: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000))
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const h = Math.round(mins / 60)
+  return `${h} h ago`
+}
+
 interface SvcRow extends Service { requires_approval: boolean }
+
+interface PublishedInfo {
+  version: number
+  graph: WorkflowGraph
+  publishedAt: string | null
+  author: string | null
+}
 
 /**
  * Workflow designer — three-pane builder (palette · canvas · properties) per
@@ -71,10 +88,14 @@ export function WorkflowDesigner() {
   const [services, setServices] = useState<SvcRow[]>([])
   const [serviceId, setServiceId] = useState('')
   const [graph, setGraph] = useState<Graph>(defaultGraph())
-  const [version, setVersion] = useState<number | null>(null)
-  const [dirty, setDirty] = useState(false)
+  const [published, setPublished] = useState<PublishedInfo | null>(null)
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [hasDraftRow, setHasDraftRow] = useState(false)
+  const [inFlight, setInFlight] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Status>('new')
+  // suppress the autosave that would fire from setGraph during a load
+  const skipSave = useRef(true)
 
   useEffect(() => {
     supabase
@@ -113,23 +134,80 @@ export function WorkflowDesigner() {
 
   const loadWorkflow = async (id: string) => {
     setServiceId(id)
-    setDirty(false)
     setError(null)
     setSelected('new')
+    skipSave.current = true
     const { data } = await supabase
       .from('workflow_definitions')
-      .select('version, graph')
+      .select('version, graph, status, published_at, updated_at, author:profiles!workflow_definitions_created_by_fkey(display_name)')
       .eq('service_id', id)
-      .eq('status', 'published')
+      .in('status', ['published', 'draft'])
       .order('version', { ascending: false })
-      .limit(1)
-    if (data && data.length > 0) {
-      setVersion(data[0].version as number)
-      setGraph(data[0].graph as Graph)
-    } else {
-      setVersion(null)
-      setGraph(defaultGraph())
+    type Row = {
+      version: number; graph: Graph; status: string
+      published_at: string | null; updated_at: string | null
+      author: { display_name: string } | { display_name: string }[] | null
     }
+    const rows = ((data ?? []) as unknown as Row[])
+    const pub = rows.find((r) => r.status === 'published')
+    const draft = rows.find((r) => r.status === 'draft')
+    const authorName = (r?: Row) =>
+      (Array.isArray(r?.author) ? r?.author[0]?.display_name : r?.author?.display_name) ?? null
+    setPublished(pub ? { version: pub.version, graph: pub.graph, publishedAt: pub.published_at, author: authorName(pub) } : null)
+    setHasDraftRow(Boolean(draft))
+    setDraftSavedAt(draft?.updated_at ?? null)
+    setGraph(draft?.graph ?? pub?.graph ?? defaultGraph())
+
+    const { count } = await supabase
+      .from('requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('service_id', id)
+      .not('status', 'in', '(closed,cancelled)')
+    setInFlight(count ?? 0)
+  }
+
+  // diff against the published graph drives the version bar + edge styling
+  const diff = useMemo(() => diffGraphs(published?.graph ?? null, graph), [published, graph])
+  const chips = diffChips(diff)
+  const draftVersion = (published?.version ?? 0) + 1
+  const showDraft = hasDraftRow || !diff.empty
+
+  // autosave the draft ~800ms after the last edit (WORKFL1 branch 4)
+  useEffect(() => {
+    if (skipSave.current) { skipSave.current = false; return }
+    if (!serviceId) return
+    if (diff.empty && !hasDraftRow) return // nothing worth persisting
+    const t = setTimeout(async () => {
+      const { data, error: e } = await supabase.rpc('save_workflow_draft', {
+        p_service: serviceId, p_graph: graph,
+      })
+      if (e) { setError(e.message); return }
+      setHasDraftRow(true)
+      setDraftSavedAt(data as string)
+    }, 800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph])
+
+  /** local editor back to the published graph (autosave then syncs the draft) */
+  const revert = () => {
+    if (!published) return
+    setGraph(published.graph)
+  }
+
+  /** delete the draft row and return to the published graph */
+  const discardDraft = async () => {
+    setError(null)
+    const { error: e } = await supabase
+      .from('workflow_definitions')
+      .delete()
+      .eq('service_id', serviceId)
+      .eq('status', 'draft')
+    if (e) { setError(e.message); return }
+    skipSave.current = true
+    setHasDraftRow(false)
+    setDraftSavedAt(null)
+    setGraph(published?.graph ?? defaultGraph())
   }
 
   const addTransition = (from: Status, to: Status) => {
@@ -138,7 +216,6 @@ export function WorkflowDesigner() {
         ? g
         : { ...g, transitions: [...g.transitions, { from, to }] },
     )
-    setDirty(true)
   }
 
   const removeTransition = (from: Status, to: Status) => {
@@ -146,7 +223,6 @@ export function WorkflowDesigner() {
       ...g,
       transitions: g.transitions.filter((t) => !(t.from === from && t.to === to)),
     }))
-    setDirty(true)
   }
 
   const toggleTrigger = (step: Status, trig: string) => {
@@ -163,7 +239,6 @@ export function WorkflowDesigner() {
           : s
       ),
     }))
-    setDirty(true)
   }
 
   const setStepLabel = (step: Status, text: string) => {
@@ -173,21 +248,17 @@ export function WorkflowDesigner() {
         s.id === step ? { ...s, label: text || undefined } : s
       ),
     }))
-    setDirty(true)
   }
 
   const publish = async () => {
     if (errors.length > 0) return
     setError(null)
-    const { data, error: e } = await supabase.rpc('publish_workflow', {
+    const { error: e } = await supabase.rpc('publish_workflow', {
       p_service: serviceId,
       p_graph: graph,
     })
     if (e) setError(e.message)
-    else {
-      setVersion(data as number)
-      setDirty(false)
-    }
+    else await loadWorkflow(serviceId) // reload: draft consumed, new published version
   }
 
   if (services.length === 0) return <p className="page-sub">{error ?? 'No services you can edit.'}</p>
@@ -207,14 +278,6 @@ export function WorkflowDesigner() {
             </option>
           ))}
         </select>
-        <span className="chip" style={{ background: version ? 'var(--green-soft)' : 'var(--surface)', color: version ? 'var(--green)' : 'var(--muted)' }}>
-          {version ? `v${version} published` : 'platform defaults'}
-        </span>
-        {dirty && (
-          <span className="chip" style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}>
-            unpublished changes
-          </span>
-        )}
         <span style={{ flex: 1 }} />
         {errors.length > 0 && (
           <span className="chip t-red">{errors.length} error{errors.length === 1 ? '' : 's'} block publish</span>
@@ -222,11 +285,59 @@ export function WorkflowDesigner() {
         <button
           className="btn primary"
           onClick={publish}
-          disabled={!dirty || errors.length > 0}
-          title={errors.length > 0 ? 'Fix the validation errors before publishing' : undefined}
+          disabled={diff.empty || errors.length > 0}
+          title={errors.length > 0 ? 'Fix the validation errors before publishing' : diff.empty ? 'No changes against the published version' : undefined}
         >
-          Publish
+          Publish v{draftVersion}
         </button>
+      </div>
+
+      {/* version / diff bar (WORKFL1 branch 4) */}
+      <div className="wfd">
+        <div className="verbar">
+          <span className="ver">
+            <span className="dot" style={{ background: published ? 'var(--green)' : 'var(--muted)' }} />
+            <strong style={{ fontWeight: 600 }}>{published ? `v${published.version} published` : 'platform defaults'}</strong>
+            {published?.publishedAt && (
+              <span className="when">
+                {new Date(published.publishedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                {published.author ? ` · ${published.author}` : ''}
+              </span>
+            )}
+          </span>
+          {showDraft && (
+            <>
+              <span className="ver-sep" role="presentation" />
+              <span className="ver">
+                <span className="dot" style={{ background: 'var(--amber)' }} />
+                <strong style={{ fontWeight: 600 }}>v{draftVersion} draft</strong>
+                <span className="when">
+                  {draftSavedAt ? `edited ${ago(draftSavedAt)} · autosaved` : 'unsaved changes'}
+                </span>
+              </span>
+              {chips.length > 0 && (
+                <span className="diffs" aria-label={`Changes against v${published?.version ?? 0}`}>
+                  {chips.map(([text, kind]) => (
+                    <span key={text} className={`diff d-${kind}`}>{text}</span>
+                  ))}
+                </span>
+              )}
+            </>
+          )}
+          <span className="tool-spacer" />
+          {showDraft && published && (
+            <button className="btn ghost" onClick={revert}>Revert to v{published.version}</button>
+          )}
+          {hasDraftRow && (
+            <button className="btn ghost" style={{ color: 'var(--red)' }} onClick={discardDraft}>Discard draft</button>
+          )}
+          <span className="note">
+            {inFlight > 0
+              ? `${inFlight} in-flight request${inFlight === 1 ? '' : 's'} keep${inFlight === 1 ? 's' : ''} running on ${published ? `v${published.version}` : 'the platform defaults'} until they close — publishing v${draftVersion} only affects requests raised from now on. `
+              : `No requests are in flight on this service. `}
+            Publish is blocked while the draft has errors.
+          </span>
+        </div>
       </div>
 
       <div className="wfd builder">
@@ -236,6 +347,8 @@ export function WorkflowDesigner() {
           requiresApproval={service?.requires_approval}
           errorSteps={errorSteps}
           issues={issues}
+          diff={diff}
+          draftVersion={draftVersion}
           selected={selected}
           onSelect={setSelected}
         />

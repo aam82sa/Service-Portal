@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
-import { layoutWorkflow, type EdgeKind } from '../../lib/workflowLayout'
+import { layoutWorkflow, transitionKey, type EdgeKind } from '../../lib/workflowLayout'
 import { triggerBadge } from '../../lib/workflowTriggers'
+import type { GraphDiff } from '../../lib/workflowDiff'
 import type { WorkflowGraph, WorkflowIssue, WorkflowStatus } from '../../lib/workflowValidate'
 import './workflowDesigner.css'
 
@@ -13,10 +14,12 @@ const STATUS_DOT: Record<WorkflowStatus, string> = {
 
 const label = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, ' ')
 
-const EDGE_STROKE: Record<EdgeKind, { color: string; width: number; dash?: string; marker: string }> = {
+const EDGE_STROKE: Record<EdgeKind, { color: string; width: number; dash?: string; marker: string; opacity?: number }> = {
   happy: { color: '#3B4763', width: 2, marker: 'a-ink' },
   approval: { color: 'var(--accent)', width: 2, marker: 'a-acc' },
   side: { color: '#AEB6C6', width: 1.5, dash: '5 4', marker: 'a-mut' },
+  added: { color: '#2E9E6B', width: 2, marker: 'a-grn' },
+  removed: { color: '#D64545', width: 1.5, dash: '3 5', marker: 'a-red', opacity: 0.75 },
 }
 
 function keySuffix(id: WorkflowStatus): string {
@@ -32,6 +35,10 @@ export interface CanvasProps {
   errorSteps?: Set<WorkflowStatus>
   /** live validation issues — rendered as the strip above the canvas */
   issues?: WorkflowIssue[]
+  /** diff against the published graph — added edges green, removed as ghosts */
+  diff?: GraphDiff
+  /** draft version number, for the "removed in vN" tag */
+  draftVersion?: number
   selected?: WorkflowStatus | null
   onSelect?: (id: WorkflowStatus) => void
 }
@@ -42,8 +49,15 @@ export interface CanvasProps {
  * service requires it. Live-validation markers and editing arrive in branches
  * 2–5; this renders the graph faithfully to the reference.
  */
-export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, selected, onSelect }: CanvasProps) {
-  const layout = useMemo(() => layoutWorkflow(graph, { requiresApproval }), [graph, requiresApproval])
+export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, diff, draftVersion, selected, onSelect }: CanvasProps) {
+  const layout = useMemo(
+    () => layoutWorkflow(graph, {
+      requiresApproval,
+      added: diff ? new Set(diff.addedTransitions.map(transitionKey)) : undefined,
+      ghosts: diff?.removedTransitions,
+    }),
+    [graph, requiresApproval, diff],
+  )
   const triggersOf = (id: WorkflowStatus) => graph.steps.find((s) => s.id === id)?.triggers ?? []
   const errors = (issues ?? []).filter((i) => i.severity === 'error')
   const warnings = (issues ?? []).filter((i) => i.severity === 'warning')
@@ -96,10 +110,20 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, se
               const s = EDGE_STROKE[e.kind]
               return (
                 <path key={`${e.from}-${e.to}-${i}`} d={e.d} stroke={s.color} strokeWidth={s.width}
-                  strokeDasharray={s.dash} fill="none" markerEnd={`url(#${s.marker})`} />
+                  strokeDasharray={s.dash} fill="none" markerEnd={`url(#${s.marker})`} opacity={s.opacity} />
               )
             })}
           </svg>
+
+          {layout.edges.filter((e) => e.kind === 'added' || e.kind === 'removed').map((e, i) => (
+            <span
+              key={`tag-${e.from}-${e.to}-${i}`}
+              className={`etag ${e.kind === 'added' ? 'add' : 'del'}`}
+              style={{ insetInlineStart: e.mid.x + 6, top: e.mid.y - 8 }}
+            >
+              {e.kind === 'added' ? '+ added' : `removed in v${draftVersion ?? '?'}`}
+            </span>
+          ))}
 
           <span className="lane-lbl" style={{ insetInlineStart: 0, top: 22 }}>Happy path</span>
           <span className="lane-lbl" style={{ insetInlineStart: 0, top: 178 }}>Side paths</span>
@@ -150,6 +174,12 @@ export function WorkflowCanvas({ graph, requiresApproval, errorSteps, issues, se
         <span className="lg"><i style={{ borderColor: '#3B4763' }} />Happy path</span>
         <span className="lg"><i style={{ borderColor: '#AEB6C6', borderTopStyle: 'dashed' }} />Side path</span>
         <span className="lg"><i style={{ borderColor: 'var(--accent)' }} />Required by service settings</span>
+        {diff && !diff.empty && (
+          <>
+            <span className="lg"><i style={{ borderColor: 'var(--green)' }} />Added in draft</span>
+            <span className="lg"><i style={{ borderColor: 'var(--red)', borderTopStyle: 'dashed' }} />Removed in draft</span>
+          </>
+        )}
         <span className="tool-spacer" />
         <span>Server enforces the published graph — a transition removed here is rejected on save, buttons or not.</span>
       </div>
