@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { ImpactDialog } from './ImpactDialog'
 
 interface SlaProfile {
   id: string
@@ -8,6 +9,7 @@ interface SlaProfile {
   description: string | null
   response_minutes: number
   resolution_minutes: number
+  retired_at: string | null
 }
 
 interface Svc {
@@ -45,6 +47,15 @@ export function SlaCalendar() {
   const [newName, setNewName] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [impactFor, setImpactFor] = useState<SlaProfile | null>(null)
+
+  const restoreProfile = async (p: SlaProfile) => {
+    const { error: e } = await supabase.from('sla_profiles')
+      .update({ retired_at: null, retired_by: null, retire_reason: null }).eq('id', p.id)
+    if (e) setError(e.message)
+    else setNote(`${p.name} restored.`)
+    load()
+  }
 
   const load = useCallback(() => {
     supabase.from('sla_profiles').select('*').order('response_minutes')
@@ -109,7 +120,7 @@ export function SlaCalendar() {
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 14 }}>
-        {profiles.map((p, i) => {
+        {profiles.filter((p) => !p.retired_at).map((p, i) => {
           const color = PROFILE_COLOR[i % PROFILE_COLOR.length]
           const linked = services.filter((s) => s.sla_profile_id === p.id)
           return (
@@ -120,6 +131,8 @@ export function SlaCalendar() {
                 <span className="chip" style={{ background: 'var(--surface)', color: 'var(--muted)', marginLeft: 'auto' }}>
                   {linked.length} process{linked.length === 1 ? '' : 'es'}
                 </span>
+                <button className="card-link" style={{ color: 'var(--red)', fontSize: 11.5 }}
+                        onClick={() => setImpactFor(p)}>Retire / Delete</button>
               </div>
               <div className="row-desc" style={{ margin: '2px 0 12px' }}>{p.description ?? '—'}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
@@ -230,9 +243,35 @@ export function SlaCalendar() {
           </div>
         </div>
       </div>
+      {profiles.some((p) => p.retired_at) && (
+        <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 8 }}>
+            Retired profiles
+          </div>
+          {profiles.filter((p) => p.retired_at).map((p) => (
+            <div className="row" key={p.id} style={{ opacity: 0.7 }}>
+              <div style={{ flex: 1 }}>
+                <div className="row-title">{p.name}</div>
+                <div className="row-desc">{fmt(p.response_minutes)} response · {fmt(p.resolution_minutes)} resolution</div>
+              </div>
+              <button className="btn" onClick={() => restoreProfile(p)}>Restore</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <PriorityMatrixEditor onError={setError} />
       <EscalationRulesAdmin services={services} onError={setError} />
       {error && <p className="error-note">{error}</p>}
+
+      {impactFor && (
+        <ImpactDialog
+          kind="sla"
+          target={{ id: impactFor.id, code: impactFor.name, label: impactFor.name }}
+          onClose={() => setImpactFor(null)}
+          onDone={(msg) => { setNote(msg); load() }}
+        />
+      )}
     </>
   )
 }
