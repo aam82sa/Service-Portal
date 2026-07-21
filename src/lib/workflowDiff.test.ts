@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffChips, diffGraphs } from './workflowDiff'
+import { diffChips, diffGraphs, removedFromStates } from './workflowDiff'
 import type { WorkflowGraph } from './workflowValidate'
 
 const g = (over: Partial<WorkflowGraph> = {}): WorkflowGraph => ({
@@ -70,5 +70,30 @@ describe('diffGraphs', () => {
     expect(d.addedTransitions.length).toBe(2)
     expect(d.removedTransitions).toEqual([])
     expect(d.addedTriggers).toEqual([{ step: 'new', key: 'ack email' }])
+  })
+})
+
+describe('removedFromStates', () => {
+  it('lists the distinct from-states of removed transitions', () => {
+    const draft = g({
+      transitions: [{ from: 'new', to: 'in_progress' }], // removed in_progress→closed
+    })
+    expect(removedFromStates(diffGraphs(g(), draft))).toEqual(['in_progress'])
+  })
+
+  it('de-duplicates when several removed edges share a from-state', () => {
+    const published = g({
+      transitions: [
+        { from: 'new', to: 'in_progress' },
+        { from: 'in_progress', to: 'closed' },
+        { from: 'in_progress', to: 'new' },
+      ],
+    })
+    const draft = g({ transitions: [{ from: 'new', to: 'in_progress' }] })
+    expect(removedFromStates(diffGraphs(published, draft))).toEqual(['in_progress'])
+  })
+
+  it('is empty when nothing was removed', () => {
+    expect(removedFromStates(diffGraphs(g(), g()))).toEqual([])
   })
 })
