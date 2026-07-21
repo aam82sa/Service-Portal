@@ -45,6 +45,8 @@ export interface CanvasProps {
   onAddTransition?: (from: WorkflowStatus, to: WorkflowStatus) => void
   /** click-edge-to-delete — the approval pair is locked when required */
   onRemoveTransition?: (from: WorkflowStatus, to: WorkflowStatus) => void
+  /** rendered inside the pane after the legend (the preview strip) */
+  footer?: React.ReactNode
 }
 
 interface DragState {
@@ -64,7 +66,7 @@ interface DragState {
  */
 export function WorkflowCanvas({
   graph, requiresApproval, errorSteps, issues, diff, draftVersion, selected, onSelect,
-  onAddTransition, onRemoveTransition,
+  onAddTransition, onRemoveTransition, footer,
 }: CanvasProps) {
   const flowRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
@@ -280,6 +282,8 @@ export function WorkflowCanvas({
         <span className="tool-spacer" />
         <span>Server enforces the published graph — a transition removed here is rejected on save, buttons or not.</span>
       </div>
+
+      {footer}
     </section>
   )
 }

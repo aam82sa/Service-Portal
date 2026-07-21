@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { WorkflowCanvas } from './WorkflowCanvas'
+import { WorkflowPreview } from './WorkflowPreview'
 import { WorkflowProperties } from './WorkflowProperties'
 import { type Service } from '../../lib/types'
 import { diffChips, diffGraphs } from '../../lib/workflowDiff'
@@ -357,6 +358,19 @@ export function WorkflowDesigner() {
           onSelect={setSelected}
           onAddTransition={addTransition}
           onRemoveTransition={removeTransition}
+          footer={
+            <WorkflowPreview
+              graph={graph}
+              issues={issues}
+              versionChip={
+                showDraft
+                  ? { text: `v${draftVersion} draft`, tone: 'amber' }
+                  : published
+                    ? { text: `v${published.version} published`, tone: 'green' }
+                    : { text: 'platform defaults', tone: 'muted' }
+              }
+            />
+          }
         />
         <WorkflowProperties
           graph={graph}
