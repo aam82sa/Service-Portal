@@ -28,6 +28,8 @@ interface Detail {
   rating: number | null
   rating_comment: string | null
   service: { code: string; name: string; form_schema: FormField[] } | null
+  /** the form version this request was submitted on (00080) — wins over the live schema */
+  form_version: { schema: FormField[] } | null
   requester: { display_name: string } | null
   assignee: { display_name: string } | null
   approvals: ApprovalStep[]
@@ -96,7 +98,7 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
     supabase
       .from('requests')
       .select(
-        '*, service:services(code, name, form_schema), resolved_at, rating, rating_comment, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), approvals(id, request_id, step_order, approver_hint, decision, comment, assigned:profiles!approvals_assigned_approver_id_fkey(display_name))'
+        '*, service:services(code, name, form_schema), form_version:form_versions(schema), resolved_at, rating, rating_comment, requester:profiles!requests_requester_id_fkey(display_name), assignee:profiles!requests_assignee_id_fkey(display_name), approvals(id, request_id, step_order, approver_hint, decision, comment, assigned:profiles!approvals_assigned_approver_id_fkey(display_name))'
       )
       .eq('id', requestId)
       .single()
@@ -193,7 +195,9 @@ export function RequestDetail({ requestId, onBack }: { requestId: string; onBack
 
   if (!req) return <p className="page-sub">{error ?? 'Loading…'}</p>
   const c = DEPT_COLOR[req.dept]
-  const fields = (req.service?.form_schema ?? []).filter((f) => req.payload?.[f.key])
+  // render answers against the form as SUBMITTED (pinned version, 00080);
+  // requests predating versioning fall back to the live schema
+  const fields = (req.form_version?.schema ?? req.service?.form_schema ?? []).filter((f) => req.payload?.[f.key])
   const chain = [...(req.approvals ?? [])].sort((a, b) => a.step_order - b.step_order)
   const isDeptStaff =
     hasRole('agent', req.dept) || hasRole('team_lead', req.dept) || hasRole('dept_head', req.dept)
