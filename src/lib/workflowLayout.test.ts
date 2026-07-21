@@ -80,4 +80,30 @@ describe('layoutWorkflow', () => {
     const { nodes, width } = layoutWorkflow(graph)
     expect(nodes.every((n) => n.x + NODE_W <= width)).toBe(true)
   })
+
+  it('marks draft-added transitions as added edges', () => {
+    const { edges } = layoutWorkflow(graph, { added: new Set(['new→triaged']) })
+    expect(edges.find((e) => e.from === 'new' && e.to === 'triaged')?.kind).toBe('added')
+    // others keep their normal kind
+    expect(edges.find((e) => e.from === 'triaged' && e.to === 'in_progress')?.kind).toBe('happy')
+  })
+
+  it('draws removed transitions as ghost edges alongside the draft', () => {
+    const { edges } = layoutWorkflow(graph, { ghosts: [{ from: 'escalated', to: 'resolved' }] })
+    const ghost = edges.find((e) => e.kind === 'removed')
+    expect(ghost).toMatchObject({ from: 'escalated', to: 'resolved' })
+    expect(ghost?.d.startsWith('M')).toBe(true)
+    // the draft's own edges are all still present
+    expect(edges.length).toBe(graph.transitions.length + 1)
+  })
+
+  it('gives every edge a midpoint inside the canvas', () => {
+    const { edges, width, height } = layoutWorkflow(graph)
+    for (const e of edges) {
+      expect(e.mid.x).toBeGreaterThanOrEqual(0)
+      expect(e.mid.x).toBeLessThanOrEqual(width)
+      expect(e.mid.y).toBeGreaterThanOrEqual(0)
+      expect(e.mid.y).toBeLessThanOrEqual(height)
+    }
+  })
 })
