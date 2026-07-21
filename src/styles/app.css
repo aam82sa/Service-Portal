@@ -706,3 +706,41 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 @media (max-width: 1000px) {
   .detail-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- config lifecycle: impact dialog (WORKFL1 Part 2) ---- */
+.cfg-overlay {
+  position: fixed; inset: 0; z-index: 60; background: rgba(16, 25, 46, .38);
+  display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px;
+  overflow-y: auto;
+}
+.cfg-modal {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(16, 25, 46, .22); width: 100%; max-width: 540px;
+  padding: 20px 22px; display: flex; flex-direction: column; gap: 12px;
+}
+.cfg-head { display: flex; align-items: center; gap: 10px; }
+.cfg-head h3 { margin: 0; font-size: 15.5px; flex: 1; }
+.cfg-sub { font-size: 12.5px; color: var(--muted); margin: 0; }
+.cfg-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--surface); }
+.cfg-block-head { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.cfg-block-head strong { color: var(--ink); font-size: 15px; }
+.cfg-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.cfg-count { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.cfg-refs { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.cfg-note-line { font-size: 11.5px; color: var(--amber-ink); margin: 8px 0 0; }
+.cfg-opts { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cfg-opts legend { font-size: 12px; font-weight: 600; color: var(--ink); padding: 0; margin-bottom: 4px; }
+.cfg-opt { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: 9px; cursor: pointer; }
+.cfg-opt:hover { border-color: var(--accent); }
+.cfg-opt.off { opacity: .5; cursor: not-allowed; }
+.cfg-opt.danger.off { opacity: .4; }
+.cfg-opt input { margin-top: 2px; accent-color: var(--accent); }
+.cfg-opt-label { display: block; font-size: 12.5px; color: var(--ink); font-weight: 500; }
+.cfg-opt-desc { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.cfg-opt.danger .cfg-opt-label { color: var(--red); }
+.cfg-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.cfg-field code { background: var(--surface); padding: 1px 5px; border-radius: 5px; color: var(--ink); }
+.cfg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.danger:disabled { opacity: .5; }
