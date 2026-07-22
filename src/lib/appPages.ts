@@ -17,19 +17,19 @@ export interface AppPage {
   parentKey?: string
 }
 
-/** top-level pages — MUST match App.tsx's `type Page` exactly */
+/** top-level pages — keys AND routes must match App.tsx (type Page + PATH) */
 export const NAV_PAGES: AppPage[] = [
   { key: 'home', route: '/' },
-  { key: 'portal', route: '/portal' },
+  { key: 'portal', route: '/new' },
   { key: 'requests', route: '/requests' },
   { key: 'work', route: '/work' },
   { key: 'pmo', route: '/projects' },
-  { key: 'letters', route: '/correspondence' },
+  { key: 'letters', route: '/letters' },
   { key: 'insights', route: '/insights' },
   { key: 'reports', route: '/reports' },
   { key: 'assets', route: '/assets' },
   { key: 'admin', route: '/admin' },
-  { key: 'pmoadmin', route: '/pmoadmin' },
+  { key: 'pmoadmin', route: '/pmo-admin' },
 ]
 
 /** detail sub-pages the old model could never gate */

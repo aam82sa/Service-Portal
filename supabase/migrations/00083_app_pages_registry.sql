@@ -34,3 +34,9 @@ drop trigger if exists app_pages_audit_t on app_pages;
 create trigger app_pages_audit_t
   after insert or update or delete on app_pages
   for each row execute function log_app_page_change();
+
+-- correct three seeded routes to the router's REAL paths (App.tsx PATH map);
+-- the parity gate now compares routes as well as keys
+update app_pages set route = '/new'       where key = 'portal'   and route <> '/new';
+update app_pages set route = '/letters'   where key = 'letters'  and route <> '/letters';
+update app_pages set route = '/pmo-admin' where key = 'pmoadmin' and route <> '/pmo-admin';

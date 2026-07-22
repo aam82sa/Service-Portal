@@ -35,6 +35,18 @@ describe('app pages — router ⇄ registry ⇄ seed parity', () => {
     expect(nav).toEqual(router)
   })
 
+  it('registry routes match the router PATH map', () => {
+    const src = read('src/App.tsx')
+    const m = src.match(/const PATH: Record<Page, string> = \{([\s\S]*?)\n\}/)
+    if (!m) throw new Error('PATH map not found in App.tsx')
+    const paths = Object.fromEntries(
+      [...m[1].matchAll(/([a-z_]+):\s*'([^']*)'/g)].map((x) => [x[1], x[2]]),
+    )
+    for (const p of NAV_PAGES) {
+      expect(p.route, `route for '${p.key}'`).toBe(paths[p.key])
+    }
+  })
+
   it('every registry entry is seeded in app_pages, and vice versa', () => {
     const seeded = seededPageKeys().sort()
     expect(APP_PAGES.map((p) => p.key).sort()).toEqual(seeded)
