@@ -71,29 +71,24 @@ export default function App() {
   const [workBadge, setWorkBadge] = useState(0)
   const [isCommittee, setIsCommittee] = useState(false)
   const isStaff = hasRole('agent') || hasRole('team_lead') || hasRole('dept_admin')
-  const isApprover = hasRole('approver')
-  const canAdmin = isAdmin || hasRole('dept_admin')
-  const isSys = hasRole('system_admin')
 
+  // One page id, one lookup (ACCESS1 branch 5). No `??` chains, no hardcoded
+  // role fallbacks — the group model resolves everything, and the parity gate
+  // guarantees every id here exists in app_pages. The single exception is the
+  // committee arm of Projects: committee membership is a data relationship,
+  // not a role, so it cannot be a group grant.
   const see: Record<Page, boolean> = {
-    home: canSee('home') ?? true,
-    portal: canSee('portal') ?? !isSys,
-    requests: canSee('requests') ?? !isSys,
-    work: canSee('mywork') ?? canSee('queue') ?? canSee('approvals') ?? (isStaff || isApprover),
-    pmo:
-      canSee('pmo') ??
-      (hasRole('project_manager') || hasRole('pmo_admin') || hasRole('executive') ||
-        hasRole('dept_head') || isStaff || isSys || isCommittee),
-    letters:
-      canSee('letters') ??
-      (isStaff || hasRole('dept_head') || isSys),
-    insights: canSee('insights') ?? (hasRole('team_lead') || hasRole('executive') || isSys),
-    reports: canSee('reports') ?? (isStaff || hasRole('team_lead') || hasRole('dept_head') || hasRole('executive') || isSys),
-    assets:
-      canSee('assets') ??
-      (hasRole('agent', 'IT') || hasRole('team_lead', 'IT') || hasRole('dept_admin', 'IT') || isSys),
-    admin: canSee('admin') ?? canAdmin,
-    pmoadmin: canSee('pmoadmin') ?? (hasRole('pmo_admin') || isSys),
+    home: canSee('home'),
+    portal: canSee('portal'),
+    requests: canSee('requests'),
+    work: canSee('work'),
+    pmo: canSee('pmo') || isCommittee,
+    letters: canSee('letters'),
+    insights: canSee('insights'),
+    reports: canSee('reports'),
+    assets: canSee('assets'),
+    admin: canSee('admin'),
+    pmoadmin: canSee('pmoadmin'),
   }
   const adminSections = getAdminSections(hasRole)
   const firstVisible: Page = NAV.find((n) => see[n.id])?.id ?? 'home'
@@ -254,9 +249,13 @@ export default function App() {
       </aside>
       <main className="main">
         <Suspense fallback={<p className="page-sub">Loading…</p>}>
-        {detailParam && detailId ? (
+        {/* detail routes respect the page gate (ACCESS1 branch 5) — they used
+            to render before any see[...] check, bypassing page access entirely.
+            request_detail / project_detail inherit their parent's visibility
+            unless a group grants them explicitly. */}
+        {detailParam && detailId && canSee('request_detail') ? (
           <RequestDetail requestId={detailId} onBack={goBack} />
-        ) : projectParam && projectId ? (
+        ) : projectParam && projectId && (canSee('project_detail') || isCommittee) ? (
           <ProjectDetail projectId={projectId} onBack={goBack} />
         ) : (
           <>
