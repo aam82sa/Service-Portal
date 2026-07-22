@@ -9,6 +9,20 @@ import {
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import type { DeptCode, Profile, Role, RoleAssignment } from '../../lib/types'
+import {
+  relevantGroupIds,
+  resolveVisibility,
+  type GroupDef,
+  type PageDef,
+  type PageGrant,
+} from '../../lib/pageVisibility'
+
+interface AccessModel {
+  pages: PageDef[]
+  groups: GroupDef[]
+  grants: PageGrant[]
+  memberGroupIds: string[]
+}
 
 interface AuthState {
   session: Session | null
@@ -16,9 +30,11 @@ interface AuthState {
   roles: RoleAssignment[]
   loading: boolean
   hasRole: (role: Role, dept?: DeptCode) => boolean
-  /** Page access from the admin panel; null while unknown (fall back to role checks). */
-  canSee: (page: string) => boolean | null
-  /** Re-read the page access matrix (called after admin edits it). */
+  /** Group-model page visibility (ACCESS1 branch 5). One page id, one lookup,
+   *  no hardcoded fallbacks — an unknown id is false, and the parity gate
+   *  makes an unknown id a CI failure. */
+  canSee: (page: string) => boolean
+  /** Re-read the access model (called after admin edits groups/pages). */
   refreshAccess: () => Promise<void>
   isAdmin: boolean
   signInDev: (email: string, password: string) => Promise<string | null>
@@ -28,11 +44,28 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null)
 
+async function loadAccessModel(userId: string): Promise<AccessModel> {
+  const [{ data: pages }, { data: groups }, { data: grants }, { data: memberships }] =
+    await Promise.all([
+      supabase.from('app_pages').select('key, parent_key, backed_by_role'),
+      supabase.from('role_groups').select('id, key, role_group_roles(role)'),
+      supabase.from('role_group_pages').select('group_id, page_key, visibility'),
+      supabase.from('profile_role_groups').select('group_id').eq('profile_id', userId),
+    ])
+  return {
+    pages: (pages as PageDef[]) ?? [],
+    groups: ((groups as { id: string; key: string; role_group_roles: { role: string }[] }[]) ?? [])
+      .map((g) => ({ id: g.id, key: g.key, roles: (g.role_group_roles ?? []).map((r) => r.role) })),
+    grants: (grants as PageGrant[]) ?? [],
+    memberGroupIds: ((memberships as { group_id: string }[]) ?? []).map((m) => m.group_id),
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [roles, setRoles] = useState<RoleAssignment[]>([])
-  const [pageAccess, setPageAccess] = useState<Record<string, string[]> | null>(null)
+  const [access, setAccess] = useState<AccessModel | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -60,22 +93,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     setLoading(true) // landing decisions must wait until roles + access are known
     ;(async () => {
-      const [{ data: prof }, { data: ras }, { data: pa }] = await Promise.all([
+      const [{ data: prof }, { data: ras }, model] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', session.user.id).single(),
         supabase
           .from('role_assignments')
           .select('role, dept, source_ad_group')
           .eq('profile_id', session.user.id),
-        supabase.from('page_access').select('page, allowed'),
+        loadAccessModel(session.user.id),
       ])
       if (cancelled) return
       setProfile((prof as Profile) ?? null)
       setRoles((ras as RoleAssignment[]) ?? [])
-      if (pa && pa.length > 0) {
-        const map: Record<string, string[]> = {}
-        for (const row of pa as { page: string; allowed: string[] }[]) map[row.page] = row.allowed
-        setPageAccess(map)
-      }
+      setAccess(model)
       setLoading(false)
     })()
     return () => {
@@ -111,13 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshAccess = useCallback(async () => {
-    const { data } = await supabase.from('page_access').select('page, allowed')
-    if (data && data.length > 0) {
-      const map: Record<string, string[]> = {}
-      for (const row of data as { page: string; allowed: string[] }[]) map[row.page] = row.allowed
-      setPageAccess(map)
-    }
-  }, [])
+    if (!session) return
+    setAccess(await loadAccessModel(session.user.id))
+  }, [session])
 
   useEffect(() => {
     const onFocus = () => {
@@ -128,17 +153,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, refreshAccess])
 
   const canSee = useCallback(
-    (page: string): boolean | null => {
-      if (!pageAccess) return null
-      const allowed = pageAccess[page]
-      if (!allowed) return null
-      const mine = new Set<string>(roles.map((r) => r.role))
-      // Every signed-in user is implicitly a requester — except system admins,
-      // who manage the platform and never participate in requests.
-      if (!mine.has('system_admin')) mine.add('requester')
-      return allowed.some((a) => mine.has(a))
+    (page: string): boolean => {
+      if (!access) return false // resolved only after loading completes; App waits on `loading`
+      const relevant = relevantGroupIds(
+        access.groups,
+        access.memberGroupIds,
+        roles.map((r) => r.role),
+      )
+      return resolveVisibility(page, access.pages, access.grants, relevant)
     },
-    [pageAccess, roles]
+    [access, roles]
   )
 
   const isAdmin = hasRole('user_admin') || hasRole('system_admin')
