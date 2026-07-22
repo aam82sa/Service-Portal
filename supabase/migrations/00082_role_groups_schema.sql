@@ -153,11 +153,17 @@ create trigger role_group_roles_sync_t
 -- ─────────────────────────────────────────────────────────────────────────
 -- 3) RLS — read for all signed-in users (nav needs it), writes admin-gated
 -- ─────────────────────────────────────────────────────────────────────────
+-- literal per-table enables (the S0 guardrail scans migrations for these)
+alter table role_groups enable row level security;
+alter table role_group_roles enable row level security;
+alter table app_pages enable row level security;
+alter table role_group_pages enable row level security;
+alter table profile_role_groups enable row level security;
+
 do $$
 declare t text;
 begin
   foreach t in array array['role_groups','role_group_roles','app_pages','role_group_pages','profile_role_groups'] loop
-    execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists %I on %I', t || '_read', t);
     execute format('create policy %I on %I for select to authenticated using (true)', t || '_read', t);
     execute format('drop policy if exists tenant_isolation on %I', t);
