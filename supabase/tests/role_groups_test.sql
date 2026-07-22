@@ -12,8 +12,10 @@ select plan(10);
 -- ── seeds ────────────────────────────────────────────────────────────────
 select is((select count(*)::int from role_groups where is_system), 7,
   'the 7 system groups are seeded');
-select is((select count(*)::int from app_pages), 13,
-  'app_pages holds the 11 router pages + 2 detail sub-pages');
+select is(
+  (select string_agg(key, ',' order by key) from app_pages),
+  'admin,assets,home,insights,letters,pmo,pmoadmin,portal,project_detail,reports,request_detail,requests,work',
+  'app_pages holds exactly the router''s 11 pages + 2 detail sub-pages (parity with src/lib/appPages.ts)');
 select is(
   (select count(*)::int from role_group_pages rgp
     join role_groups g on g.id = rgp.group_id
