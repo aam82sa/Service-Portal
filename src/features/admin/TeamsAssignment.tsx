@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { DEPT_COLOR, type DeptCode } from '../../lib/types'
+import { useDepartments } from '../../lib/departments'
 import { PersonPicker } from '../../components/PersonPicker'
 
 interface Team {
@@ -37,6 +38,7 @@ const STRATEGY_HINT: Record<Team['assignment_strategy'], string> = {
 
 export function TeamsAssignment() {
   const { hasRole } = useAuth()
+  const { byCode } = useDepartments()
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [rules, setRules] = useState<RoutingRule[]>([])
@@ -67,7 +69,10 @@ export function TeamsAssignment() {
   }, [])
   useEffect(reload, [reload])
 
-  const canEdit = (d: DeptCode) => hasRole('system_admin') || hasRole('dept_admin', d) || hasRole('user_admin')
+  // user_admin manages people, not queues: the rr_write/teams policies accept
+  // only system_admin or the owning dept_admin, so offering these controls to
+  // user_admin produced writes that failed with a raw Postgres error.
+  const canEdit = (d: DeptCode) => hasRole('system_admin') || hasRole('dept_admin', d)
   const depts = useMemo(() => [...new Set(teams.map((t) => t.dept))], [teams])
   const teamName = useMemo(() => new Map(teams.map((t) => [t.id, t.name])), [teams])
 
@@ -163,7 +168,7 @@ export function TeamsAssignment() {
             <input className="input" style={{ flex: 1 }} placeholder="New team name"
               value={newTeam.name} onChange={(e) => setNewTeam((s) => ({ ...s, name: e.target.value }))} />
             <button className="btn primary" disabled={!newTeam.name.trim()}
-              onClick={() => { run(supabase.from('teams').insert({ dept: newTeam.dept, name: newTeam.name.trim() })); setNewTeam((s) => ({ ...s, name: '' })) }}>
+              onClick={() => { run(supabase.from('teams').insert({ dept: newTeam.dept, dept_id: byCode[newTeam.dept]?.id ?? null, name: newTeam.name.trim() })); setNewTeam((s) => ({ ...s, name: '' })) }}>
               Add team
             </button>
           </div>
@@ -214,7 +219,8 @@ export function TeamsAssignment() {
             disabled={!newRule.team_id || (newRule.match_type !== 'default' && !newRule.match_value.trim())}
             onClick={() => {
               run(supabase.from('routing_rules').insert({
-                dept: newRule.dept, match_type: newRule.match_type,
+                dept: newRule.dept, dept_id: byCode[newRule.dept]?.id ?? null,
+                match_type: newRule.match_type,
                 match_value: newRule.match_type === 'default' ? null : newRule.match_value.trim(),
                 team_id: newRule.team_id, position: 1,
               }))
