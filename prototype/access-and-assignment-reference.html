@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ABC Services Hub — Admin · Access &amp; assignment (redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens copied verbatim from src/styles/app.css :root ---- */
+:root{
+  --amber-ink:#A9741A;
+  --ink:#10192E; --ink-2:#1A2540; --ink-3:#243356;
+  --surface:#F4F5F8; --card:#FFFFFF; --line:#E4E7EE;
+  --text:#1B2437; --muted:#6B7280;
+  --accent:#D97757; --accent-soft:#FBEFE9;
+  --green:#2E9E6B; --green-soft:#E7F5EE;
+  --amber:#DE9B2D; --amber-soft:#FBF2DF;
+  --red:#D64545; --red-soft:#FBEAEA;
+  --it:#3E6DD8; --it-soft:#EAF0FC;
+  --admin:#8A5FC9; --admin-soft:#F2EDFA;
+  --log:#2E9E6B; --log-soft:#E7F5EE;
+  --radius:14px;
+  --font-head:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);background:var(--surface);color:var(--text);font-size:14px}
+h1,h2,h3{font-family:var(--font-head);color:var(--ink);margin:0}
+.mono{font-family:var(--font-mono)}
+.shell{display:flex;min-height:100vh}
+
+/* ---- primary dark sidebar (same shell as the queue / workflow references) ---- */
+.sidebar{width:200px;background:var(--ink);color:#B9C2D6;padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;color:#fff;font-family:var(--font-head);font-weight:600;padding:0 8px 18px}
+.brand-badge{font-family:var(--font-mono);font-size:11px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 6px}
+.nav-group{font-size:11px;color:#5E6B85;margin:14px 8px 4px;font-weight:500}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:12.5px;color:#B9C2D6;background:none;border:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item.active::before{content:'';position:absolute;inset-inline-start:0;top:7px;bottom:7px;width:3px;background:var(--accent);border-radius:2px}
+.nav-item.sub{padding:5px 10px 5px 26px;font-size:11.5px}
+.nav-item.sub.active{background:var(--ink-2)}
+.nav-item.sub.active::before{display:none}
+.sidebar-foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--ink-3)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.foot-name{color:#fff;font-size:12px;font-weight:500}
+.foot-mail{font-family:var(--font-mono);font-size:9.5px;color:#5E6B85}
+
+.main{flex:1;padding:16px 22px 28px;min-width:0;display:flex;flex-direction:column}
+
+/* ---- breadcrumb ---- */
+.crumb{font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.crumb-link{background:none;border:none;padding:0;cursor:pointer;color:var(--it);font-size:12px;font-family:var(--font-body)}
+.crumb-link:hover{text-decoration:underline}
+.crumb-sep{margin:0 6px;color:#C3CAD8}
+
+/* ---- shared builder toolbar ---- */
+.builder-bar{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.builder-bar h2{font-size:18px}
+.scope-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:99px}
+.scope-dept{background:var(--it-soft);color:var(--it)}
+.scope-global{background:var(--admin-soft);color:var(--admin)}
+.tool-spacer{flex:1}
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.t-green{background:var(--green-soft);color:var(--green)}
+.t-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.t-red{background:var(--red-soft);color:var(--red)}
+.t-muted{background:var(--surface);color:var(--muted)}
+.t-accent{background:var(--accent-soft);color:var(--accent)}
+.t-it{background:var(--it-soft);color:var(--it)}
+.t-admin{background:var(--admin-soft);color:var(--admin)}
+.btn{font-family:var(--font-body);font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#c9694b}
+.btn.ghost{border-color:transparent}
+.btn.sm{font-size:11.5px;padding:4px 9px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn[disabled]:hover{background:var(--card)}
+.input,select.input,textarea.input{font-family:var(--font-body);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+textarea.input{resize:vertical;line-height:1.5}
+
+/* ---- section tabs ---- */
+.tabs{display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{font-family:var(--font-body);font-size:12.5px;font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;padding:8px 14px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;margin-bottom:-1px}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px 6px 0 0}
+
+/* ---- panes ---- */
+.pane{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.three{display:grid;grid-template-columns:236px minmax(0,1fr) 292px;gap:16px;align-items:start}
+
+/* ---- validation strip (same as workflow designer) ---- */
+.valbar{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.vlabel{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-inline-end:2px}
+.vitem{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;background:none;font-family:var(--font-body);font-size:11.5px;border-radius:8px;padding:3px 8px;cursor:pointer;text-align:start}
+.vitem:hover{background:var(--card)}
+.vitem:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.vitem.err{color:var(--red);background:var(--red-soft);border-color:#F0CFCF}
+.vitem.warn{color:var(--amber-ink)}
+.vmark{width:14px;height:14px;border-radius:50%;font-family:var(--font-mono);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.vmark.e{background:var(--red)}
+.vmark.w{background:var(--amber)}
+
+/* ---- left: role groups list ---- */
+.glist{padding:8px}
+.gitem{display:block;width:100%;text-align:start;background:var(--card);border:1px solid transparent;border-radius:10px;padding:8px 9px 9px;cursor:pointer;font-family:var(--font-body);margin-bottom:3px}
+.gitem:hover{background:var(--surface)}
+.gitem:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.gitem.on{background:var(--accent-soft);border-color:#F0D6C9}
+.g-top{display:flex;align-items:center;gap:7px}
+.g-name{font-family:var(--font-head);font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.3}
+.g-count{margin-inline-start:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--muted);flex-shrink:0}
+.g-roles{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.rchip{font-family:var(--font-mono);font-size:8.5px;line-height:1.6;padding:1px 5px;border-radius:5px;background:var(--surface);color:var(--muted);white-space:nowrap}
+.rchip.hi{background:var(--it-soft);color:var(--it)}
+.rchip.sys{background:var(--admin-soft);color:var(--admin)}
+.rchip.more{background:none;color:#AEB6C6}
+.glist-foot{padding:6px 8px 4px;border-top:1px solid var(--line);margin-top:6px}
+
+/* ---- centre: page matrix ---- */
+.mx{width:100%;border-collapse:collapse}
+.mx th{font-size:9.5px;font-weight:700;letter-spacing:.45px;text-transform:uppercase;color:var(--muted);text-align:start;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0}
+.mx td{padding:8px 12px;border-bottom:1px solid #EDEFF4;vertical-align:middle}
+.mx tr:last-child td{border-bottom:none}
+.mx tr.sub td{background:#FBFCFD}
+.mx tr:hover td{background:var(--surface)}
+.mx tr.sub:hover td{background:var(--surface)}
+.p-cell{display:flex;align-items:center;gap:8px}
+.p-name2{font-size:12.5px;color:var(--ink);font-weight:500}
+.p-route{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:1px;display:block}
+.sub .p-cell{padding-inline-start:16px;position:relative}
+.sub .p-cell::before{content:'';position:absolute;inset-inline-start:2px;top:-9px;bottom:50%;width:8px;border-inline-start:1px solid #D6DBE5;border-bottom:1px solid #D6DBE5;border-end-start-radius:5px}
+.sub .p-name2{font-weight:400;color:var(--ink-3);font-size:12px}
+.lock{font-family:var(--font-mono);font-size:8.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px;display:inline-flex;align-items:center;gap:3px}
+
+/* three-state control */
+.tri{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+.tri button{font-family:var(--font-body);font-size:10.5px;border:none;background:none;color:var(--muted);padding:3px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.tri button:hover{color:var(--ink)}
+.tri button[aria-pressed="true"]{background:var(--ink);color:#fff;font-weight:500}
+.tri button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.tri.dis{opacity:.6}
+.tri.dis button{cursor:not-allowed}
+.tri.dis button[aria-pressed="true"]{background:var(--ink-3)}
+
+/* RLS column */
+.rls{display:flex;align-items:flex-start;gap:7px;max-width:330px}
+.rmark{width:15px;height:15px;border-radius:50%;font-family:var(--font-mono);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;margin-top:1px}
+.rmark.ok{background:var(--green)}
+.rmark.w{background:var(--amber)}
+.rmark.n{background:#C3CAD8}
+.rtext{font-size:11px;line-height:1.45;color:var(--muted)}
+.rtext strong{display:block;font-weight:600;color:var(--green);font-size:11px}
+.warnrow .rtext strong{color:var(--amber-ink)}
+.rrole{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);background:var(--surface);border-radius:5px;padding:1px 5px}
+tr.warnrow td{background:#FFFCF4}
+tr.warnrow:hover td{background:#FDF7E9}
+tr.lockedrow td{background:#FFFCFA}
+
+.mx-foot{padding:9px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);line-height:1.5;background:var(--card);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+
+/* ---- right: properties ---- */
+.props{padding:13px}
+.p-head{display:flex;align-items:center;gap:7px}
+.p-title{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--ink)}
+.p-key{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin:2px 0 12px}
+.prop-sec{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px;display:flex;align-items:center;gap:6px}
+.prop-sec:first-of-type{margin-top:0}
+.prop-row{margin-bottom:11px}
+.prop-lbl{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.prop-row .input,.prop-row select.input,.prop-row textarea.input{width:100%}
+.hint{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:6px}
+.grant{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;margin-bottom:5px}
+.grant .rn{font-family:var(--font-mono);font-size:11px;color:var(--ink)}
+.grant .sc{font-size:10.5px;color:var(--muted)}
+.grant .x{margin-inline-start:auto;border:none;background:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:2px}
+.grant .x:hover{color:var(--red)}
+.grant .x:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:4px}
+.addrole{display:flex;gap:5px;margin-top:6px}
+.addrole select.input{flex:1;min-width:0;font-size:11.5px;padding:5px 7px}
+.callout{border-radius:10px;padding:9px 11px;font-size:11.5px;line-height:1.5}
+.callout .ct{font-weight:600;display:block;margin-bottom:2px}
+.callout.amber{background:var(--amber-soft);color:#7A5412;border:1px solid #EBD9AC}
+.callout.amber .ct{color:var(--amber-ink)}
+.callout.err{background:var(--red-soft);color:#8E2F2F;border:1px solid #F0CFCF}
+.callout.err .ct{color:var(--red)}
+.callout.info{background:var(--surface);color:var(--ink-3);border:1px solid var(--line)}
+.callout.green{background:var(--green-soft);color:#1F6B49;border:1px solid #CBE7D8}
+.callout.green .ct{color:var(--green)}
+.memrow{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid #EDEFF4}
+.memnum{font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--ink);line-height:1}
+.stack{display:inline-flex}
+.stack .avatar{width:22px;height:22px;font-size:8.5px;border:2px solid var(--card);margin-inline-start:-7px;background:var(--ink-3)}
+.stack .avatar:first-child{margin-inline-start:0}
+
+/* ---- tab divider ---- */
+.tabdiv{display:flex;align-items:center;gap:12px;margin:30px 0 16px}
+.tabdiv i{flex:1;height:0;border-top:1px dashed #CFD5E0}
+.tabdiv span{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#98A1B3}
+
+/* ---- screen 2 ---- */
+.dist{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.body{padding:14px}
+.modes{display:flex;flex-direction:column;gap:8px}
+.mode{display:flex;gap:11px;align-items:flex-start;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);cursor:pointer;text-align:start;font-family:var(--font-body);width:100%}
+.mode:hover{border-color:#C3CBDA;background:var(--surface)}
+.mode:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.mode.on{border-color:var(--accent);background:var(--accent-soft)}
+.mode input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex-shrink:0}
+.mode .mt{font-family:var(--font-head);font-size:12.5px;font-weight:600;color:var(--ink)}
+.mode .md{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:2px}
+.mode .mk{font-family:var(--font-mono);font-size:9.5px;color:#98A1B3;margin-inline-start:auto;flex-shrink:0}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.rt{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:start;font-family:var(--font-body);background:var(--card)}
+.rt.on{border-color:var(--it);background:var(--it-soft)}
+.rt input{margin-top:2px;accent-color:var(--it);width:15px;height:15px;flex-shrink:0}
+.rt .mt{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--ink)}
+.rt .md{font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+.subhead{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+.subhead:first-child{margin-top:0}
+
+.impact .body{padding:13px}
+.imp-row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid #EDEFF4}
+.imp-row:first-of-type{border-top:none;padding-top:2px}
+.imp-num{font-family:var(--font-head);font-size:17px;font-weight:700;color:var(--ink);line-height:1.15;flex-shrink:0;min-width:34px}
+.imp-txt{font-size:11.5px;color:var(--ink-3);line-height:1.5}
+.imp-txt b{font-weight:600;color:var(--ink)}
+.who{margin-top:4px;border-top:1px solid var(--line);padding-top:9px}
+.who-row{display:flex;align-items:baseline;gap:9px;padding:5px 0;font-size:11.5px;line-height:1.45}
+.who-role{font-weight:600;color:var(--ink);min-width:88px;flex-shrink:0}
+.who-eff{color:var(--muted)}
+.who-row .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;align-self:center}
+
+.tt{width:100%;border-collapse:collapse}
+.tt th{font-size:9.5px;font-weight:700;letter-spacing:.45px;text-transform:uppercase;color:var(--muted);text-align:start;padding:9px 12px;border-bottom:1px solid var(--line)}
+.tt td{padding:9px 12px;border-bottom:1px solid #EDEFF4;font-size:12px;color:var(--ink)}
+.tt tr:last-child td{border-bottom:none}
+.tt tr:hover td{background:var(--surface)}
+.tt td.num,.tt th.num{text-align:end;font-family:var(--font-mono);font-size:11.5px}
+.bar{display:inline-flex;align-items:center;gap:7px;justify-content:flex-end;width:100%}
+.bar i{display:block;height:6px;border-radius:99px;background:var(--it)}
+.bar i.hot{background:var(--amber)}
+.bar i.red{background:var(--red)}
+.tname{font-weight:500}
+.tkey{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);display:block;margin-top:1px}
+.rednote{margin-top:14px;background:var(--red-soft);border:1px solid #F0CFCF;border-radius:var(--radius);padding:11px 14px;display:flex;gap:11px;align-items:flex-start}
+.rednote .rm{width:17px;height:17px;border-radius:50%;background:var(--red);color:#fff;font-family:var(--font-mono);font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.rednote .rt2{font-size:11.5px;color:#8E2F2F;line-height:1.55}
+.rednote .rt2 b{display:block;font-weight:600;color:var(--red);margin-bottom:2px}
+.rednote .btn{margin-inline-start:auto;flex-shrink:0;border-color:#E4B6B6;color:var(--red)}
+.savebar{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- primary sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-badge">ABC</span><span>Services Hub</span></div>
+    <div class="nav-group">Workspace</div>
+    <button class="nav-item"><span>Work</span></button>
+    <button class="nav-item"><span>Projects</span></button>
+    <button class="nav-item"><span>Correspondence</span></button>
+    <button class="nav-item"><span>Insights</span></button>
+    <button class="nav-item"><span>Assets</span></button>
+    <div class="nav-group">Administration</div>
+    <button class="nav-item"><span>PMO admin</span></button>
+    <button class="nav-item active"><span>Admin console</span></button>
+    <button class="nav-item sub"><span>Service catalogue</span></button>
+    <button class="nav-item sub"><span>Workflow designer</span></button>
+    <button class="nav-item sub active"><span>Access &amp; assignment</span></button>
+    <button class="nav-item sub"><span>Audit log</span></button>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="avatar">SA</span>
+        <div><div class="foot-name">Sara Al-Amri</div><div class="foot-mail">sara.alamri@abc.sa</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <button class="crumb-link">Admin console</button>
+      <span class="crumb-sep">/</span>
+      <span style="color:var(--muted)">Platform administration</span>
+      <span class="crumb-sep">/</span>
+      <span style="color:var(--ink);font-weight:500">Access &amp; assignment</span>
+    </nav>
+
+    <!-- shared builder toolbar -->
+    <div class="builder-bar">
+      <h2>Access &amp; assignment</h2>
+      <span class="scope-badge scope-global">System admin</span>
+      <span class="tool-spacer"></span>
+      <span class="chip t-red">1 error</span>
+      <span class="chip t-amber">1 warning</span>
+      <button class="btn">View change history</button>
+      <button class="btn primary">Save changes</button>
+    </div>
+
+    <!-- section tabs -->
+    <div class="tabs" role="tablist" aria-label="Access and assignment">
+      <button role="tab" aria-selected="true" id="tab-groups" aria-controls="panel-groups">Role groups &amp; access <span class="chip t-muted mono" style="font-size:9px">7 groups</span></button>
+      <button role="tab" aria-selected="false" id="tab-dist" aria-controls="panel-dist">Work distribution</button>
+    </div>
+
+    <!-- =========================================================
+         SCREEN 1 — Role groups & access
+         ========================================================= -->
+    <section id="panel-groups" role="tabpanel" aria-labelledby="tab-groups">
+      <div class="three">
+
+        <!-- LEFT — role groups -->
+        <aside class="pane" aria-label="Role groups">
+          <div class="pane-head"><span>Role groups</span><span class="chip t-muted mono">7</span></div>
+          <div class="glist">
+
+            <button class="gitem">
+              <span class="g-top"><span class="g-name">Requester (everyone)</span><span class="g-count">1,284</span></span>
+              <span class="g-roles"><span class="rchip">requester</span></span>
+            </button>
+
+            <button class="gitem on" aria-current="true">
+              <span class="g-top"><span class="g-name">IT Officer</span><span class="g-count">34</span></span>
+              <span class="g-roles"><span class="rchip hi">agent&nbsp;·&nbsp;IT</span><span class="rchip hi">approver&nbsp;·&nbsp;IT</span></span>
+            </button>
+
+            <button class="gitem">
+              <span class="g-top"><span class="g-name">Team Lead</span><span class="g-count">9</span></span>
+              <span class="g-roles"><span class="rchip">team_lead</span><span class="rchip">agent</span><span class="rchip">approver</span></span>
+            </button>
+
+            <button class="gitem">
+              <span class="g-top"><span class="g-name">Department Head</span><span class="g-count">6</span></span>
+              <span class="g-roles"><span class="rchip">dept_head</span><span class="rchip">approver</span><span class="rchip">executive</span></span>
+            </button>
+
+            <button class="gitem">
+              <span class="g-top"><span class="g-name">Cybersecurity Reviewer</span><span class="g-count">4</span></span>
+              <span class="g-roles"><span class="rchip">cybersecurity</span><span class="rchip">approver</span></span>
+            </button>
+
+            <button class="gitem">
+              <span class="g-top"><span class="g-name">PMO Manager</span><span class="g-count">5</span></span>
+              <span class="g-roles"><span class="rchip">project_manager</span><span class="rchip">pmo_admin</span></span>
+            </button>
+
+            <button class="gitem">
+              <span class="g-top"><span class="g-name">System Administrator</span><span class="g-count">3</span></span>
+              <span class="g-roles"><span class="rchip sys">system_admin</span><span class="rchip sys">user_admin</span><span class="rchip sys">dept_admin</span></span>
+            </button>
+
+            <div class="glist-foot">
+              <button class="btn sm" style="width:100%;justify-content:center;border-style:dashed">+ New group</button>
+              <p class="hint">A group grants platform roles <em>and</em> page access in one place, so the two can never drift apart.</p>
+            </div>
+          </div>
+        </aside>
+
+        <!-- CENTRE — page matrix -->
+        <section class="pane" aria-label="Page access matrix for IT Officer">
+          <div class="pane-head">
+            <span>Page access — IT Officer</span>
+            <span class="chip t-muted mono">11 pages · 2 sub-pages</span>
+          </div>
+
+          <!-- live validation, same pattern as the workflow designer -->
+          <div class="valbar" role="status" aria-label="Validation">
+            <span class="vlabel">Validation</span>
+            <button class="vitem err"><span class="vmark e">!</span>Reports has no access rule — currently visible to everyone with a hardcoded check.</button>
+            <button class="vitem warn"><span class="vmark w">&#8226;</span>3 pages are hidden by nav only — RLS still returns their rows to the API.</button>
+          </div>
+
+          <div style="overflow:auto">
+          <table class="mx">
+            <thead>
+              <tr>
+                <th style="width:34%">Page</th>
+                <th style="width:24%">Nav visibility</th>
+                <th>Backed by RLS</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">Home</span><span class="p-route">/</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="Home visibility"><button aria-pressed="true">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Any signed-in user. <span class="rrole">authenticated</span></span></span></td>
+              </tr>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">Service portal</span><span class="p-route">/portal</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="Service portal visibility"><button aria-pressed="true">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Catalogue rows filtered by department. <span class="rrole">requester · all</span></span></span></td>
+              </tr>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">My requests</span><span class="p-route">/requests</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="My requests visibility"><button aria-pressed="true">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Own rows only. <span class="rrole">requester · all</span></span></span></td>
+              </tr>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">Work</span><span class="p-route">/work</span></span><span class="chip t-muted mono" style="font-size:9px">no row today</span></span></td>
+                <td><span class="tri" role="group" aria-label="Work visibility"><button aria-pressed="true">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Queue is scoped to the officer's department. <span class="rrole">agent · IT</span></span></span></td>
+              </tr>
+
+              <tr class="sub warnrow">
+                <td><span class="p-cell"><span><span class="p-name2">Request detail</span><span class="p-route">/requests/:id</span></span></span></td>
+                <td><span class="tri dis" role="group" aria-label="Request detail visibility"><button aria-pressed="false" disabled>Visible</button><button aria-pressed="false" disabled>Hidden</button><button aria-pressed="true" disabled>Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark w">!</span><span class="rtext"><strong>Not gated today</strong>Detail routes bypass page access entirely — anyone with the id reaches the route. Only RLS on <span class="rrole">requests</span> stops them seeing data.</span></span></td>
+              </tr>
+
+              <tr class="warnrow">
+                <td><span class="p-cell"><span><span class="p-name2">Projects</span><span class="p-route">/projects</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="Projects visibility"><button aria-pressed="false">Visible</button><button aria-pressed="true">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark w">!</span><span class="rtext"><strong>Cosmetic only — data still readable via API</strong>Hidden in the nav, but no <span class="rrole">project_manager</span> check exists on read. An IT Officer can still fetch every project row.</span></span></td>
+              </tr>
+
+              <tr class="sub warnrow">
+                <td><span class="p-cell"><span><span class="p-name2">Project detail</span><span class="p-route">/projects/:id</span></span></span></td>
+                <td><span class="tri dis" role="group" aria-label="Project detail visibility"><button aria-pressed="false" disabled>Visible</button><button aria-pressed="false" disabled>Hidden</button><button aria-pressed="true" disabled>Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark w">!</span><span class="rtext"><strong>Not gated today</strong>Sub-route of a hidden page, but reachable directly by URL.</span></span></td>
+              </tr>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">Correspondence</span><span class="p-route">/correspondence</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="Correspondence visibility"><button aria-pressed="true">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Letters addressed to or from the officer's department. <span class="rrole">agent · IT</span></span></span></td>
+              </tr>
+
+              <tr class="warnrow">
+                <td><span class="p-cell"><span><span class="p-name2">Insights</span><span class="p-route">/insights</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="Insights visibility"><button aria-pressed="false">Visible</button><button aria-pressed="true">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark w">!</span><span class="rtext"><strong>Cosmetic only — data still readable via API</strong>The aggregate views run as owner. Hiding the tile does not stop the query. Grant <span class="rrole">team_lead</span> or restrict the view.</span></span></td>
+              </tr>
+
+              <tr class="warnrow">
+                <td><span class="p-cell"><span><span class="p-name2">Reports</span><span class="p-route">/reports</span></span><span class="chip t-red" style="font-size:9px">no row today</span></span></td>
+                <td><span class="tri" role="group" aria-label="Reports visibility"><button aria-pressed="false">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="true">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark w">!</span><span class="rtext"><strong>Cosmetic only — data still readable via API</strong>No <span class="rrole">page_access</span> row exists; the page falls back to a hardcoded check in the router and is effectively open to everyone signed in.</span></span></td>
+              </tr>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">Assets</span><span class="p-route">/assets</span></span></span></td>
+                <td><span class="tri" role="group" aria-label="Assets visibility"><button aria-pressed="true">Visible</button><button aria-pressed="false">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Assets owned by the department. <span class="rrole">agent · IT</span></span></span></td>
+              </tr>
+
+              <tr class="lockedrow">
+                <td><span class="p-cell"><span><span class="p-name2">Admin console</span><span class="p-route">/admin</span></span><span class="lock">locked</span></span></td>
+                <td><span class="tri dis" role="group" aria-label="Admin console visibility"><button aria-pressed="false" disabled>Visible</button><button aria-pressed="true" disabled>Hidden</button><button aria-pressed="false" disabled>Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Only <span class="rrole">system_admin</span> may grant this page, and it cannot be removed there — would lock you out. IT Officer grants no admin role, so the API refuses regardless of the nav.</span></span></td>
+              </tr>
+
+              <tr>
+                <td><span class="p-cell"><span><span class="p-name2">PMO admin</span><span class="p-route">/pmoadmin</span></span><span class="chip t-muted mono" style="font-size:9px">no row today</span></span></td>
+                <td><span class="tri" role="group" aria-label="PMO admin visibility"><button aria-pressed="false">Visible</button><button aria-pressed="true">Hidden</button><button aria-pressed="false">Inherited</button></span></td>
+                <td><span class="rls"><span class="rmark ok">&#10003;</span><span class="rtext"><strong>Enforced</strong>Writes require <span class="rrole">pmo_admin</span>, which this group does not grant.</span></span></td>
+              </tr>
+
+            </tbody>
+          </table>
+          </div>
+
+          <div class="mx-foot">
+            <span><span class="rmark ok" style="display:inline-flex;vertical-align:-3px;margin-inline-end:5px">&#10003;</span>A platform role enforces this in the database.</span>
+            <span><span class="rmark w" style="display:inline-flex;vertical-align:-3px;margin-inline-end:5px">!</span>Nav only — tidiness, not security.</span>
+            <span class="tool-spacer"></span>
+            <span>Two <span class="mono">page_access</span> rows (<span class="mono">queue</span>, <span class="mono">approvals</span>) point at routes that no longer exist and are not shown.</span>
+          </div>
+        </section>
+
+        <!-- RIGHT — group properties -->
+        <aside class="pane" aria-label="Group properties">
+          <div class="pane-head"><span>Group properties</span><span class="chip t-muted mono">group</span></div>
+          <div class="props">
+            <div class="p-head"><span class="p-title">IT Officer</span></div>
+            <div class="p-key">role_group · it_officer</div>
+
+            <div class="prop-sec">Identity</div>
+            <div class="prop-row">
+              <label class="prop-lbl" for="gname">Name</label>
+              <input class="input" id="gname" value="IT Officer" />
+            </div>
+            <div class="prop-row">
+              <label class="prop-lbl" for="gdesc">Description</label>
+              <textarea class="input" id="gdesc" rows="2">Front-line IT staff who work the department queue and approve low-value requests.</textarea>
+            </div>
+
+            <div class="prop-sec">Platform roles granted <span class="chip t-green" style="font-size:9px">RLS honours these</span></div>
+            <div class="grant"><span class="rn">agent</span><span class="sc">· IT</span><button class="x" aria-label="Remove agent role">&times;</button></div>
+            <div class="grant"><span class="rn">approver</span><span class="sc">· IT</span><button class="x" aria-label="Remove approver role">&times;</button></div>
+            <div class="addrole">
+              <select class="input" aria-label="Role to add">
+                <option>Add role&hellip;</option>
+                <option>requester</option><option>agent</option><option>team_lead</option>
+                <option>approver</option><option>dept_admin</option><option>dept_head</option>
+                <option>executive</option><option>user_admin</option><option>system_admin</option>
+                <option>project_manager</option><option>pmo_admin</option><option>cybersecurity</option>
+              </select>
+              <select class="input" aria-label="Department scope" style="max-width:88px">
+                <option>IT</option><option>Admin</option><option>Logistics</option><option>All depts</option>
+              </select>
+              <button class="btn sm">Add</button>
+            </div>
+            <p class="hint">Roles are stored per user per department. Adding one here writes a <span class="mono">platform_role</span> row for all 34 members in the chosen department.</p>
+
+            <div class="prop-sec">Members</div>
+            <div class="memrow">
+              <span class="memnum">34</span>
+              <span class="stack"><span class="avatar">MK</span><span class="avatar">RA</span><span class="avatar">HZ</span><span class="avatar">+31</span></span>
+              <button class="crumb-link" style="margin-inline-start:auto">View 34 members</button>
+            </div>
+
+            <div class="prop-sec">Impact</div>
+            <div class="callout amber">
+              <span class="ct">Changing this affects 34 people</span>
+              They will see the change on their next page load. Role grants apply immediately at the database layer — an open tab loses access to data before the nav updates.
+            </div>
+
+            <div class="prop-sec">Coverage</div>
+            <div class="callout info">
+              <strong style="font-weight:600;color:var(--ink)">7 of 13 rows</strong> are backed by a platform role. 3 are nav-only, 2 sub-routes are ungated, and 1 page has no rule at all.
+              <button class="btn sm" style="width:100%;justify-content:center;margin-top:8px">Fix the 3 nav-only pages</button>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         Tab 2 — shown below the divider for this reference
+         ========================================================= -->
+    <div class="tabdiv" role="presentation"><i></i><span>Second tab of the same section — shown here for reference</span><i></i></div>
+
+    <div class="tabs" role="tablist" aria-label="Access and assignment (second tab shown)">
+      <button role="tab" aria-selected="false">Role groups &amp; access</button>
+      <button role="tab" aria-selected="true" id="tab-dist2" aria-controls="panel-dist">Work distribution</button>
+    </div>
+
+    <section id="panel-dist" role="tabpanel" aria-labelledby="tab-dist2">
+
+      <div class="builder-bar" style="margin-bottom:12px">
+        <h2 style="font-size:16px">Work distribution</h2>
+        <span class="scope-badge scope-dept">Department · IT</span>
+        <select class="input" style="max-width:200px" aria-label="Department">
+          <option>IT — Information Technology</option>
+          <option>ADMIN — Administration</option>
+          <option>LOG — Logistics</option>
+        </select>
+        <span class="tool-spacer"></span>
+        <span class="chip t-muted">Set per department, not globally</span>
+      </div>
+
+      <div class="dist">
+
+        <!-- LEFT — mode + routing + teams -->
+        <section class="pane" aria-label="Distribution settings">
+          <div class="pane-head"><span>How requests reach officers</span><span class="chip t-it mono">IT · 6 teams</span></div>
+          <div class="body">
+
+            <div class="subhead">Mode</div>
+            <div class="modes" role="radiogroup" aria-label="Distribution mode">
+              <label class="mode on">
+                <input type="radio" name="mode" checked />
+                <span>
+                  <span class="mt">Pull — officers claim their own work</span>
+                  <span class="md">Requests land unassigned in the team queue. Officers pick what they take. Nothing is pushed to anyone.</span>
+                </span>
+                <span class="mk">none</span>
+              </label>
+              <label class="mode">
+                <input type="radio" name="mode" />
+                <span>
+                  <span class="mt">Push — round robin</span>
+                  <span class="md">Each new request goes to the next officer in the rotation, skipping anyone marked out of office.</span>
+                </span>
+                <span class="mk">round_robin</span>
+              </label>
+              <label class="mode">
+                <input type="radio" name="mode" />
+                <span>
+                  <span class="mt">Push — least loaded</span>
+                  <span class="md">Each new request goes to the officer with the fewest open requests. Ties break by longest idle.</span>
+                </span>
+                <span class="mk">load_based</span>
+              </label>
+            </div>
+
+            <div class="subhead">Routing — which tray a request lands in first</div>
+            <div class="split" role="radiogroup" aria-label="Routing">
+              <label class="rt on">
+                <input type="radio" name="routing" checked />
+                <span>
+                  <span class="mt">Route to a team using rules</span>
+                  <span class="md">Category and service decide the team; 4 rules are active for IT.</span>
+                </span>
+              </label>
+              <label class="rt">
+                <input type="radio" name="routing" />
+                <span>
+                  <span class="mt">Send everything to the department tray</span>
+                  <span class="md">One shared tray. Team leads triage by hand.</span>
+                </span>
+              </label>
+            </div>
+
+            <div class="subhead">Teams in IT</div>
+            <table class="tt">
+              <thead>
+                <tr>
+                  <th style="width:30%">Team</th>
+                  <th class="num" style="width:11%">Members</th>
+                  <th style="width:22%">Current mode</th>
+                  <th class="num" style="width:22%">Open load</th>
+                  <th class="num" style="width:15%">Out of office</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="tname">Service desk</span><span class="tkey">it.servicedesk</span></td>
+                  <td class="num">11</td>
+                  <td><span class="chip t-muted">Pull</span></td>
+                  <td class="num"><span class="bar"><i style="width:74px"></i>12</span></td>
+                  <td class="num">1</td>
+                </tr>
+                <tr>
+                  <td><span class="tname">Field support</span><span class="tkey">it.field</span></td>
+                  <td class="num">7</td>
+                  <td><span class="chip t-it">Round robin</span></td>
+                  <td class="num"><span class="bar"><i style="width:37px"></i>6</span></td>
+                  <td class="num" style="color:var(--amber-ink);font-weight:600">3</td>
+                </tr>
+                <tr>
+                  <td><span class="tname">Network &amp; infrastructure</span><span class="tkey">it.network</span></td>
+                  <td class="num">6</td>
+                  <td><span class="chip t-it">Least loaded</span></td>
+                  <td class="num"><span class="bar"><i class="hot" style="width:43px"></i>7</span></td>
+                  <td class="num">0</td>
+                </tr>
+                <tr>
+                  <td><span class="tname">Applications</span><span class="tkey">it.apps</span></td>
+                  <td class="num">5</td>
+                  <td><span class="chip t-muted">Pull</span></td>
+                  <td class="num"><span class="bar"><i style="width:25px"></i>4</span></td>
+                  <td class="num">0</td>
+                </tr>
+                <tr>
+                  <td><span class="tname">Information security</span><span class="tkey">it.infosec</span></td>
+                  <td class="num">3</td>
+                  <td><span class="chip t-it">Round robin</span></td>
+                  <td class="num"><span class="bar"><i style="width:12px"></i>2</span></td>
+                  <td class="num" style="color:var(--amber-ink);font-weight:600">2</td>
+                </tr>
+                <tr>
+                  <td><span class="tname">Procurement liaison</span><span class="tkey">it.procure</span></td>
+                  <td class="num">2</td>
+                  <td><span class="chip t-muted">Pull</span></td>
+                  <td class="num"><span class="bar"><i class="red" style="width:19px"></i>3</span></td>
+                  <td class="num">1</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="hint" style="padding:0 12px 2px">Field support and Information security are running round robin with 3 and 2 officers away — the rotation is skipping them, so the remaining officers are taking every request in turn.</p>
+
+          </div>
+        </section>
+
+        <!-- RIGHT — impact -->
+        <aside class="pane impact" aria-label="What happens if I change this">
+          <div class="pane-head"><span>What happens if I change this</span><span class="chip t-amber mono">preview</span></div>
+          <div class="body">
+
+            <div class="callout info" style="margin-bottom:10px">
+              Previewing a switch from <strong style="font-weight:600;color:var(--ink)">Pull</strong> to <strong style="font-weight:600;color:var(--ink)">Push — least loaded</strong> for IT. Nothing is saved until you press Apply.
+            </div>
+
+            <div class="imp-row">
+              <span class="imp-num">34</span>
+              <span class="imp-txt"><b>officers across 6 teams</b> start receiving requests automatically instead of choosing them.</span>
+            </div>
+            <div class="imp-row">
+              <span class="imp-num">34</span>
+              <span class="imp-txt"><b>currently-open requests keep their assignee.</b> Nothing is reshuffled, reassigned or re-queued.</span>
+            </div>
+            <div class="imp-row">
+              <span class="imp-num">&rarr;</span>
+              <span class="imp-txt"><b>New requests only.</b> The rule applies from the moment you apply it, to requests raised after that point.</span>
+            </div>
+            <div class="imp-row">
+              <span class="imp-num">7</span>
+              <span class="imp-txt"><b>officers are out of office</b> and will be skipped until they return.</span>
+            </div>
+
+            <div class="who">
+              <div class="prop-sec" style="margin:0 0 4px">Who is affected</div>
+              <div class="who-row"><span class="dot" style="background:#C3CAD8"></span><span class="who-role">Requesters</span><span class="who-eff">No visible change. They still submit the same way.</span></div>
+              <div class="who-row"><span class="dot" style="background:var(--accent)"></span><span class="who-role">Officers</span><span class="who-eff">Work is pushed instead of pulled. The &ldquo;Claim&rdquo; button disappears from the team queue.</span></div>
+              <div class="who-row"><span class="dot" style="background:var(--it)"></span><span class="who-role">Team leads</span><span class="who-eff">Can still reassign within their team, exactly as today.</span></div>
+              <div class="who-row"><span class="dot" style="background:#C3CAD8"></span><span class="who-role">Dept heads</span><span class="who-eff">Unchanged. Reporting and approvals are not affected.</span></div>
+              <div class="who-row"><span class="dot" style="background:var(--green)"></span><span class="who-role">Admins</span><span class="who-eff">Can switch back at any time. The previous mode is kept in the audit log.</span></div>
+            </div>
+
+            <div class="callout green" style="margin-top:12px">
+              <span class="ct">Reversible</span>
+              Switching back to Pull leaves every assignment already made in place — it only stops new ones being pushed.
+            </div>
+
+            <div class="savebar">
+              <button class="btn primary">Apply to IT</button>
+              <button class="btn">Cancel</button>
+              <span class="tool-spacer"></span>
+              <button class="crumb-link">See the last 5 changes</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="rednote">
+        <span class="rm">&times;</span>
+        <span class="rt2">
+          <b>The global &ldquo;Auto-assignment&rdquo; feature flag is being removed</b>
+          It has been on since launch and nothing in the codebase ever read it, so turning it off changed nothing and turning it on promised something the product did not do. Distribution is decided per department and per team by the settings above. The flag will disappear from Feature flags on the next release; no migration is needed.
+        </span>
+        <button class="btn sm">Show where it was referenced</button>
+      </div>
+
+    </section>
+  </main>
+</div>
+</body>
+</html>
