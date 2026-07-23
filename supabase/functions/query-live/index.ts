@@ -38,7 +38,10 @@ Deno.serve(async (req) => {
     global: { headers: { authorization: auth } },
     auth: { persistSession: false },
   })
-  const { data: userData, error: userErr } = await caller.auth.getUser()
+  // getUser() with NO argument looks for a stored session — an edge function
+  // never has one, so it fails before ever asking the auth server. Validate
+  // the incoming bearer token explicitly.
+  const { data: userData, error: userErr } = await caller.auth.getUser(auth.slice(7).trim())
   if (userErr || !userData?.user) return json({ error: 'sign in required' }, 401)
 
   let body: { source?: string; config?: ReportConfig; params?: Record<string, unknown> }
