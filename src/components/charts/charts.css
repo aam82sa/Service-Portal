@@ -1,0 +1,36 @@
+/* Chart + widget chrome, verbatim from prototype/reporting-rebuild-reference.html.
+   The SVG primitives in this folder assume these classes; the dashboard and
+   builder (branches 4–5) reuse the same chrome. */
+
+/* ---- widget card ---- */
+.widget{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative}
+.widget.drilled{outline:2px solid var(--accent);outline-offset:-1px}
+.w-head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px}
+.w-title{font-family:var(--font-head);font-size:12.5px;font-weight:600;color:var(--ink)}
+.w-sub{font-family:var(--font-mono);font-size:9.5px;color:#AEB6C6}
+.kebab{margin-inline-start:auto;width:24px;height:24px;border:none;background:none;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.kebab:hover{background:var(--surface)}
+.kebab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.kebab i{display:block;width:3px;height:3px;border-radius:50%;background:var(--muted);box-shadow:0 -5px 0 var(--muted),0 5px 0 var(--muted)}
+.w-body{padding:2px 12px 10px}
+.w-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:0 12px 9px;font-size:10.5px;color:var(--muted)}
+.w-legend .lg{display:inline-flex;align-items:center;gap:5px}
+.w-legend .lg i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.w-legend .lg i.ln{width:16px;height:0;border-radius:0;border-top:2.5px solid}
+.w-hint{position:absolute;inset-inline-end:10px;bottom:8px;font-size:9.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:2px 9px;opacity:0;transition:opacity .12s;pointer-events:none}
+.widget:hover .w-hint,.widget:focus-within .w-hint{opacity:1}
+.widget.drilled .w-hint{opacity:1;color:var(--accent);background:var(--accent-soft);border-color:#F0D6C9}
+
+/* ---- SVG chart text + grid ---- */
+.chart{display:block;width:100%;height:auto}
+.chart text{font-family:var(--font-mono);font-size:9px;fill:#A9B1C1}
+.chart text.cat{font-family:var(--font-body);font-size:10px;fill:var(--muted)}
+.chart text.val{fill:var(--muted);font-size:9.5px}
+.chart text.big{font-family:var(--font-head);font-size:22px;font-weight:700;fill:var(--ink)}
+.chart text.biglbl{font-family:var(--font-body);font-size:9px;fill:var(--muted)}
+.chart .grid{stroke:#EDEFF4;stroke-width:1}
+.chart .bar{cursor:pointer}
+.chart .bar:hover{opacity:.85}
+
+/* ---- KPI sparkline ---- */
+.spark{flex-shrink:0}
