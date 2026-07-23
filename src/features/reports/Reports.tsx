@@ -7,9 +7,9 @@ import { EmailReportDialog, ScheduleDialog } from './reportDialogs'
 import { DashboardBuilder } from './DashboardBuilder'
 import './reports.css'
 import {
-  artifactSignedUrl, createSchedule, deleteSchedule, emailReport, listDefinitions, listRuns, listSchedules,
-  previewReport, runReport, setScheduleEnabled,
-  type Format, type Preview, type ReportDefinition, type ReportRun, type ReportSchedule,
+  artifactSignedUrl, createSchedule, deleteSchedule, listDefinitions, listRuns, listSchedules,
+  previewReport, reportingDiagnostics, runReport, setScheduleEnabled,
+  type Format, type Preview, type ReportDefinition, type ReportingGates, type ReportRun, type ReportSchedule,
 } from './api'
 import { artifactFilename, previewable, saveUrl } from './artifact'
 import { cadenceToCron, describeCadence, WEEKDAYS, type Preset } from './cron'
@@ -99,9 +99,16 @@ export function Reports() {
   )
 }
 
-/** Zone 3 — the exportable/scheduled documents (the v1 report library). */
+/**
+ * Zone 3 — the exportable/scheduled documents. Since 00089 the old builtin
+ * templates render as dashboard widgets (Analytics), so the static
+ * "Built-in" library is retired: this tab lists only YOUR definitions —
+ * dashboard exports and custom documents — with their runs and schedules.
+ * Builtin definition rows still exist in the database (their schedules keep
+ * running); they just aren't a parallel library any more.
+ */
 function ReportsLibrary() {
-  const { profile } = useAuth()
+  const { profile, hasRole } = useAuth()
   const ownerId = profile?.id ?? ''
   const [defs, setDefs] = useState<ReportDefinition[]>([])
   const [selId, setSelId] = useState<string | null>(null)
@@ -109,25 +116,66 @@ function ReportsLibrary() {
 
   useEffect(() => {
     listDefinitions().then((d) => {
-      setDefs(d)
-      setSelId((cur) => cur ?? d[0]?.id ?? null)
+      const custom = d.filter((x) => x.kind === 'custom')
+      setDefs(custom)
+      setSelId((cur) => cur ?? custom[0]?.id ?? null)
     }).catch((e) => setErr(e.message))
   }, [])
 
   const sel = useMemo(() => defs.find((d) => d.id === selId) ?? null, [defs, selId])
-  const builtins = defs.filter((d) => d.kind === 'builtin')
-  const saved = defs.filter((d) => d.kind === 'custom')
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
       <div>
         <p style={{ color: 'var(--muted)', margin: '0 0 16px', fontSize: 13 }}>Run, download, email, and schedule reports — always under your own access.</p>
         {err && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>{err}</div>}
-        <Library title="Built-in" defs={builtins} selId={selId} onSelect={setSelId} />
-        <Library title="Saved" defs={saved} selId={selId} onSelect={setSelId} />
-        {defs.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 13 }}>No reports available to you yet.</div>}
+        <Library title="Your documents" defs={defs} selId={selId} onSelect={setSelId} />
+        {defs.length === 0 && (
+          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+            No documents yet — exporting a dashboard from <b>Analytics</b> creates one here,
+            with its run history and schedules.
+          </div>
+        )}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '9px 11px', fontSize: 11, lineHeight: 1.5, color: 'var(--muted)', marginTop: 14 }}>
+          <b style={{ color: 'var(--ink)', display: 'block', marginBottom: 2, fontSize: 11 }}>Where did the built-in reports go?</b>
+          They became live dashboard widgets — open <b>Analytics</b> and pick a builtin dashboard.
+          Their scheduled deliveries keep running unchanged.
+        </div>
+        {hasRole('system_admin') && <DiagnosticsPanel />}
       </div>
       {sel ? <ReportPanel key={sel.id} def={sel} ownerId={ownerId} /> : <div />}
+    </div>
+  )
+}
+
+/**
+ * The three gates that make the module look dead when off — on screen for
+ * admins instead of silently dark (brief: "in-UI diagnostics").
+ */
+function DiagnosticsPanel() {
+  const [gates, setGates] = useState<ReportingGates | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => { reportingDiagnostics().then(setGates).catch((e) => setErr((e as Error).message)) }, [])
+  const row = (ok: boolean | undefined, label: string, detail: string) => (
+    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 11.5 }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: ok === undefined ? 'var(--line)' : ok ? 'var(--green)' : 'var(--red)' }} />
+      <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{label}</span>
+      <span style={{ color: 'var(--muted)' }}>{detail}</span>
+    </div>
+  )
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', marginTop: 10 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 4 }}>
+        Reporting gates
+      </div>
+      {err && <div style={{ color: 'var(--red)', fontSize: 11.5 }}>{err}</div>}
+      {!err && (
+        <>
+          {row(gates?.reporting, 'reporting', 'feature flag — opens this page')}
+          {row(gates?.reporting_scheduled, 'reporting_scheduled', 'feature flag — lets schedules dispatch')}
+          {row(gates?.hook_secret, 'hook_secret', 'vault secret — signs dispatcher calls')}
+        </>
+      )}
     </div>
   )
 }

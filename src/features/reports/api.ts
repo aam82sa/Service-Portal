@@ -168,6 +168,19 @@ export async function createSchedule(input: {
   if (error) throw error
 }
 
+export interface ReportingGates { reporting: boolean; reporting_scheduled: boolean; hook_secret: boolean }
+
+/**
+ * The three gates that make the module look "dark" when off (00089 RPC,
+ * admin-only): the reporting flag, the reporting_scheduled flag, and the
+ * vault hook_secret the dispatcher signs its calls with.
+ */
+export async function reportingDiagnostics(): Promise<ReportingGates> {
+  const { data, error } = await supabase.rpc('reporting_diagnostics')
+  if (error) throw error
+  return data as ReportingGates
+}
+
 /** one run row by id (for the email dialog after an on-demand export) */
 export async function getRun(runId: string): Promise<ReportRun | null> {
   const { data, error } = await supabase
