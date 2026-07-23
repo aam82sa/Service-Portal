@@ -7,7 +7,7 @@ describe('compileQuery — free-column sources', () => {
     expect(sql).toBe(
       'select r.ref as "ref", r.title as "title", r.dept::text as "dept", ' +
         'r.status::text as "status", r.priority::text as "priority", r.created_at as "created_at" ' +
-        'from requests r',
+        'from requests r join services s on s.id = r.service_id',
     )
     expect(columns).toEqual(['ref', 'title', 'dept', 'status', 'priority', 'created_at'])
   })
@@ -27,7 +27,7 @@ describe('compileQuery — free-column sources', () => {
     })
     expect(sql).toBe(
       'select r.dept::text as "dept", r.status::text as "status", count(*) as "count_all" ' +
-        'from requests r group by r.dept::text, r.status::text',
+        'from requests r join services s on s.id = r.service_id group by r.dept::text, r.status::text',
     )
     expect(columns).toEqual(['dept', 'status', 'count_all'])
   })
@@ -109,7 +109,7 @@ describe('compileQuery — allowlist rejection', () => {
 
 describe('compileQuery — every free source has a sane default', () => {
   it.each([
-    ['sla', 'from requests r'],
+    ['sla', 'from requests r join services s on s.id = r.service_id'],
     ['assets', 'from assets a'],
     ['letters', 'from letters l'],
     ['pmo_projects', 'from projects p'],
@@ -187,5 +187,40 @@ describe('mergeRunParams — run params win over the definition config', () => {
     const config = { group_by: ['dept'] }
     expect(mergeRunParams(config as never, null)).toEqual(config)
     expect(mergeRunParams(config as never, { filters: undefined })).toEqual(config)
+  })
+})
+
+describe('compileQuery — service columns (analytics dashboard, branch 4)', () => {
+  it('selects, filters and groups by the joined catalog columns', () => {
+    const { sql, columns } = compileQuery('requests', {
+      columns: ['ref', 'service_code', 'service_name'],
+      filters: [{ col: 'service_code', op: 'eq', value: 'HW' }],
+    })
+    expect(sql).toContain('s.code as "service_code"')
+    expect(sql).toContain('s.name as "service_name"')
+    expect(sql).toContain(`s.code = 'HW'`)
+    expect(columns).toEqual(['ref', 'service_code', 'service_name'])
+
+    const grouped = compileQuery('requests', {
+      group_by: ['service_code'],
+      aggregations: [{ fn: 'count' }],
+    })
+    expect(grouped.sql).toContain('group by s.code')
+  })
+
+  it('the dashboard live-fetch shape compiles: 2x period + neq-cancelled + service slice', () => {
+    const { sql } = compileQuery('requests', {
+      columns: ['ref', 'title', 'dept', 'service_code', 'service_name', 'status', 'priority',
+        'created_at', 'resolved_at', 'updated_at', 'sla_resolution_due', 'sla_met', 'breached'],
+      filters: [
+        { col: 'dept', op: 'eq', value: 'IT' },
+        { col: 'status', op: 'neq', value: 'cancelled' },
+      ],
+      period: { from: '2026-05-23T12:00:00Z' },
+    })
+    expect(sql).toContain('from requests r join services s on s.id = r.service_id')
+    expect(sql).toContain(`r.dept::text = 'IT'`)
+    expect(sql).toContain(`r.status::text <> 'cancelled'`)
+    expect(sql).toContain(`r.created_at >= '2026-05-23T12:00:00Z'::timestamptz`)
   })
 })

@@ -25,6 +25,8 @@ const requestCols: Record<string, string> = {
   ref: 'r.ref',
   title: 'r.title',
   dept: 'r.dept::text',
+  service_code: 's.code',
+  service_name: 's.name',
   status: 'r.status::text',
   priority: 'r.priority::text',
   amount: 'r.amount',
@@ -39,20 +41,28 @@ const requestCols: Record<string, string> = {
   breached: "(r.sla_resolution_due is not null and r.status not in ('resolved','closed','cancelled') and r.sla_resolution_due < now())",
 }
 
+/**
+ * Both request-shaped sources join the catalog so widgets can slice by
+ * service ("Volume by service" in the analytics dashboard). service_id is a
+ * NOT NULL FK, so the inner join never drops or duplicates a row and every
+ * pre-existing definition compiles to the same result set.
+ */
+const requestFrom = 'requests r join services s on s.id = r.service_id'
+
 export const SOURCES: Record<string, SourceSpec> = {
   requests: {
-    from: 'requests r',
+    from: requestFrom,
     columns: requestCols,
-    filterable: { dept: 'ident', status: 'ident', priority: 'ident', created_at: 'date', amount: 'number' },
-    groupable: ['dept', 'status', 'priority'],
+    filterable: { dept: 'ident', service_code: 'ident', status: 'ident', priority: 'ident', created_at: 'date', amount: 'number' },
+    groupable: ['dept', 'service_code', 'status', 'priority'],
     defaults: ['ref', 'title', 'dept', 'status', 'priority', 'created_at'],
   },
   // SLA reporting is the same base table, exposing the compliance-oriented columns
   sla: {
-    from: 'requests r',
+    from: requestFrom,
     columns: requestCols,
-    filterable: { dept: 'ident', status: 'ident', priority: 'ident', created_at: 'date' },
-    groupable: ['dept', 'status', 'priority'],
+    filterable: { dept: 'ident', service_code: 'ident', status: 'ident', priority: 'ident', created_at: 'date' },
+    groupable: ['dept', 'service_code', 'status', 'priority'],
     defaults: ['ref', 'dept', 'priority', 'sla_resolution_due', 'sla_met', 'breached'],
   },
   assets: {

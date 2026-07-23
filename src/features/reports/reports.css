@@ -1,0 +1,82 @@
+/* Reporting rebuild Zone 1, verbatim from prototype/reporting-rebuild-reference.html.
+   Widget chrome + .chart/.spark styles live in components/charts/charts.css;
+   .builder-bar/.scope-badge/.chip/.btn/.input are app-wide (app.css). */
+
+/* ---- zone tabs ---- */
+.zonebar{display:flex;align-items:flex-end;gap:2px;border-bottom:1.5px solid var(--line);margin:26px 0 16px}
+.zonebar.first{margin-top:2px}
+.ztab{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--muted);background:none;border:none;padding:7px 14px 9px;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.ztab:hover{color:var(--ink)}
+.ztab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px}
+.ztab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.ztab .zk{font-family:var(--font-mono);font-size:9.5px;font-weight:400;color:#AEB6C6}
+.zone-note{margin-inline-start:auto;font-size:10.5px;color:var(--muted);padding-bottom:9px}
+
+/* ---- Zone 1 · run-time filter bar ---- */
+.filterbar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:11px 14px 12px;margin-bottom:14px}
+.f-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.f-group{display:flex;flex-direction:column;gap:4px}
+.f-lbl{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.f-group select.input{min-width:132px}
+.f-applied{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:11px;padding-top:10px;border-top:1px dashed var(--line)}
+.f-applied .lbl{font-size:10.5px;color:var(--muted);margin-inline-end:2px}
+.fchip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;background:var(--it-soft);color:var(--it);border:1px solid #D3DFF6;border-radius:99px;padding:3px 5px 3px 10px}
+.fchip .k{font-family:var(--font-mono);font-size:9.5px;opacity:.75}
+.fchip .x{border:none;background:none;color:inherit;opacity:.65;cursor:pointer;font-size:12px;line-height:1;padding:1px 4px;border-radius:99px}
+.fchip .x:hover{opacity:1;background:rgba(62,109,216,.14)}
+.fchip .x:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.f-note{margin-inline-start:auto;font-size:10.5px;color:var(--green);display:inline-flex;align-items:center;gap:6px}
+.f-note::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green)}
+
+/* ---- KPI row ---- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px 10px;display:flex;flex-direction:column;gap:2px}
+.kpi .k-lbl{font-size:11px;font-weight:600;color:var(--muted)}
+.kpi .k-row{display:flex;align-items:baseline;gap:8px}
+.kpi .k-val{font-family:var(--font-head);font-size:24px;font-weight:700;color:var(--ink);line-height:1.15}
+.kpi .k-unit{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.delta{font-family:var(--font-mono);font-size:10.5px;font-weight:500;border-radius:99px;padding:1px 7px}
+.delta.up{background:var(--green-soft);color:var(--green)}
+.delta.down{background:var(--red-soft);color:var(--red)}
+.delta.good{background:var(--green-soft);color:var(--green)}
+.kpi .k-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:5px}
+.kpi .k-sub{font-size:10px;color:var(--muted)}
+
+/* ---- dashboard grid ---- */
+.dash{display:grid;grid-template-columns:1fr 292px;gap:14px;align-items:start}
+.dash.nodrill{grid-template-columns:1fr}
+.widgets{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ---- drill-down slide-over ---- */
+.drill{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:-8px 12px 28px rgba(16,25,46,.10);overflow:hidden;position:sticky;top:14px}
+.drill-head{padding:12px 14px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+.drill-head .t{display:flex;align-items:center;gap:8px}
+.drill-head h3{font-size:13.5px;margin:0}
+.drill-head .x{margin-inline-start:auto;border:none;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:3px 6px;border-radius:7px}
+.drill-head .x:hover{background:var(--surface);color:var(--ink)}
+.drill-path{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;font-size:10.5px;color:var(--muted)}
+.drill-path .seg-chip{font-family:var(--font-mono);font-size:9.5px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 7px;color:var(--ink)}
+.drill-path .seg-chip.hi{background:var(--accent-soft);border-color:#F0D6C9;color:var(--accent)}
+.rec{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid #EDEFF4;background:none;border-inline:none;border-top:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.rec:hover{background:var(--surface)}
+.rec:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.rec .ring{flex-shrink:0}
+.rec .rid{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--ink)}
+.rec .rsum{font-size:10.5px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:132px}
+.rec .chip{margin-inline-start:auto;flex-shrink:0;font-size:9.5px;padding:2px 7px}
+.drill-foot{padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px}
+.drill-more{font-size:10.5px;color:var(--muted);text-align:center}
+.link{background:none;border:none;padding:0;cursor:pointer;color:var(--it);font-size:11.5px;font-weight:500;font-family:var(--font-body)}
+.link:hover{text-decoration:underline}
+
+/* ---- action bar ---- */
+.actionbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:9px 14px}
+.actionbar .asof{margin-inline-start:auto;font-family:var(--font-mono);font-size:10px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.actionbar .asof::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green)}
+.a-sep{width:1px;height:20px;background:var(--line)}
+
+/* narrow screens: stack the drill panel under the widgets */
+@media (max-width: 1100px){
+  .dash{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+}
