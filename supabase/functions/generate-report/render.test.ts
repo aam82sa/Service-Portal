@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { artifactMeta, toAOA, toCSV, toXLSX } from './render'
+import { artifactMeta, columnWidths, toAOA, toCSV, toXLSX } from './render'
 
 const columns = ['dept', 'total', 'sla_met']
 const rows = [
@@ -55,5 +55,26 @@ describe('artifactMeta', () => {
     expect(artifactMeta('csv')).toEqual({ ext: 'csv', contentType: 'text/csv; charset=utf-8' })
     expect(artifactMeta('xlsx').ext).toBe('xlsx')
     expect(artifactMeta('pdf').contentType).toBe('application/pdf')
+  })
+})
+
+describe('XLSX polish (branch 6)', () => {
+  it('sizes columns to content within the 8–40 clamp', () => {
+    const widths = columnWidths(['ref', 'title'], [
+      { ref: 'REQ-1291', title: 'a very long request title that should hit the upper clamp eventually yes' },
+    ])
+    expect(widths[0].wch).toBe(10) // 'REQ-1291' + 2
+    expect(widths[1].wch).toBe(40) // clamped
+    expect(columnWidths(['x'], [])[0].wch).toBe(8) // floor
+  })
+
+  it('writes widths and an autofilter into the sheet', () => {
+    const bytes = toXLSX(['dept', 'total'], [{ dept: 'IT', total: 12 }])
+    // cellStyles:true makes the reader parse <cols> back out of the file
+    const wb = XLSX.read(bytes, { type: 'array', cellStyles: true })
+    const ws = wb.Sheets['Report']
+    expect(ws['!autofilter']).toEqual({ ref: 'A1:B2' })
+    // widths survive the write/read round-trip
+    expect(ws['!cols']?.[0]?.wch ?? ws['!cols']?.[0]?.width).toBeTruthy()
   })
 })
