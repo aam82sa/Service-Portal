@@ -15,7 +15,7 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { compileQuery, type ReportConfig } from './compiler.ts'
+import { compileQuery, mergeRunParams, type ReportConfig } from './compiler.ts'
 import { artifactMeta, toCSV, toXLSX } from './render.ts'
 import { renderReportPdf } from './pdf.ts'
 import { buildPresentation } from './presentation.ts'
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
   const { data: runData, error: runErr } = await db
     .from('report_runs')
-    .select('id, status, format, run_as_owner, requested_by, attempts, requester:profiles!report_runs_requested_by_fkey(display_name), definition:report_definitions(data_source, config, name, slug)')
+    .select('id, status, format, run_as_owner, requested_by, attempts, params, requester:profiles!report_runs_requested_by_fkey(display_name), definition:report_definitions(data_source, config, name, slug)')
     .eq('id', runId)
     .single()
   if (runErr || !runData) return json({ error: 'run not found' }, 404)
@@ -116,7 +116,11 @@ Deno.serve(async (req) => {
     .eq('id', runId)
 
   try {
-    const { sql, columns } = compileQuery(def.data_source, def.config ?? {})
+    // the run's params (a schedule's filters_snapshot, or a dashboard's live
+    // filters) WIN over the definition's static config — this was the v1 bug
+    // where an "IT-only last-month" schedule silently sent everything
+    const effectiveConfig = mergeRunParams(def.config ?? {}, (run as { params?: Record<string, unknown> }).params ?? {})
+    const { sql, columns } = compileQuery(def.data_source, effectiveConfig)
 
     const { data: rowData, error: fetchErr } = await db.rpc('report_fetch_rows', { p_run: runId, p_sql: sql })
     if (fetchErr) throw new Error(`fetch rows: ${fetchErr.message}`)

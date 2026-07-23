@@ -54,6 +54,23 @@ export interface CompiledQuery {
   columns: string[]
 }
 
+/**
+ * Run-time params — a schedule's filters_snapshot or a dashboard's live
+ * filters — WIN over the definition's static config, key by key. v1 never
+ * read run.params at all, so an "IT-only last-month" schedule silently sent
+ * everything; generate-report now compiles the merged config.
+ */
+export function mergeRunParams(
+  config: ReportConfig,
+  params: Record<string, unknown> | null | undefined,
+): ReportConfig {
+  const out: Record<string, unknown> = { ...(config as Record<string, unknown>) }
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v !== null && v !== undefined) out[k] = v
+  }
+  return out as ReportConfig
+}
+
 /** Thrown for any definition the allowlist can't satisfy. Never leaks SQL. */
 export class CompileError extends Error {
   constructor(message: string) {

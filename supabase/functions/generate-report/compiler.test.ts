@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileQuery, CompileError } from './compiler'
+import { compileQuery, CompileError, mergeRunParams } from './compiler'
 
 describe('compileQuery — free-column sources', () => {
   it('emits the default column set for requests', () => {
@@ -155,5 +155,37 @@ describe('compileQuery — output is a single read-only statement', () => {
       expect(sql).not.toContain(';')
       expect(sql.trimStart().toLowerCase().startsWith('select')).toBe(true)
     }
+  })
+})
+
+describe('compileQuery — sources completed in v2 (pmo_risks, audit)', () => {
+  it('compiles the risk register with its stored score columns', () => {
+    const { sql, columns } = compileQuery('pmo_risks', {})
+    expect(sql).toContain('from pmo_risks k join projects p on p.id = k.project_id')
+    expect(columns).toContain('score')
+    expect(columns).toContain('risk_ref')
+  })
+
+  it('compiles the governance trail', () => {
+    const { sql, columns } = compileQuery('audit', {})
+    expect(sql).toContain('from admin_events e')
+    expect(columns).toEqual(['created_at', 'area', 'action', 'detail'])
+  })
+})
+
+describe('mergeRunParams — run params win over the definition config', () => {
+  it('a schedule filters_snapshot overrides the static config (the v1 bug)', () => {
+    const config = { filters: [{ column: 'dept', op: 'eq', value: 'ADMIN' }], group_by: ['status'] }
+    const params = { filters: [{ column: 'dept', op: 'eq', value: 'IT' }], period: { preset: 'last_month' } }
+    const merged = mergeRunParams(config as never, params)
+    expect((merged as { filters: { value: string }[] }).filters[0].value).toBe('IT')
+    expect((merged as { period?: { preset: string } }).period?.preset).toBe('last_month')
+    expect((merged as { group_by?: string[] }).group_by).toEqual(['status']) // untouched keys survive
+  })
+
+  it('null/undefined params leave the config untouched', () => {
+    const config = { group_by: ['dept'] }
+    expect(mergeRunParams(config as never, null)).toEqual(config)
+    expect(mergeRunParams(config as never, { filters: undefined })).toEqual(config)
   })
 })
