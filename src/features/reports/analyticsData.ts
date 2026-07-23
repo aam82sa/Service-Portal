@@ -70,6 +70,18 @@ export function periodDays(key: PeriodKey, now: Date): number {
   return Math.max(1, Math.ceil((now.getTime() - jan1.getTime()) / DAY))
 }
 
+/** the UI filter state compiled to allowlist filter clauses */
+export function buildFilterClauses(f: FilterState): { col: string; op?: string; value?: unknown }[] {
+  const filters: { col: string; op?: string; value?: unknown }[] = []
+  if (f.dept !== 'ALL') filters.push({ col: 'dept', op: 'eq', value: f.dept })
+  if (f.priority !== 'ALL') filters.push({ col: 'priority', op: 'eq', value: f.priority })
+  if (f.status === 'all') filters.push({ col: 'status', op: 'neq', value: 'cancelled' })
+  if (f.status === 'open') filters.push({ col: 'status', op: 'in', value: OPEN_STATUSES })
+  if (f.status === 'resolved') filters.push({ col: 'status', op: 'eq', value: 'resolved' })
+  if (f.status === 'closed') filters.push({ col: 'status', op: 'eq', value: 'closed' })
+  return filters
+}
+
 /**
  * The query-live request for a filter state: fetch 2× the period (previous
  * window feeds the KPI deltas) with the UI filters compiled server-side.
@@ -78,17 +90,25 @@ export function periodDays(key: PeriodKey, now: Date): number {
  */
 export function buildLiveConfig(f: FilterState, now: Date): ReportConfig {
   const days = periodDays(f.period, now)
-  const filters: { col: string; op?: string; value?: unknown }[] = []
-  if (f.dept !== 'ALL') filters.push({ col: 'dept', op: 'eq', value: f.dept })
-  if (f.priority !== 'ALL') filters.push({ col: 'priority', op: 'eq', value: f.priority })
-  if (f.status === 'all') filters.push({ col: 'status', op: 'neq', value: 'cancelled' })
-  if (f.status === 'open') filters.push({ col: 'status', op: 'in', value: OPEN_STATUSES })
-  if (f.status === 'resolved') filters.push({ col: 'status', op: 'eq', value: 'resolved' })
-  if (f.status === 'closed') filters.push({ col: 'status', op: 'eq', value: 'closed' })
   return {
     columns: REQUEST_COLUMNS as string[],
-    filters,
+    filters: buildFilterClauses(f),
     period: { from: new Date(now.getTime() - 2 * days * DAY).toISOString() },
+  }
+}
+
+/**
+ * The EXPORT config for a filter state: exactly the applied window (1×, not
+ * the delta-feeding 2×) and the same filters — what "Export PDF/XLSX with
+ * current filters" and a schedule's filters_snapshot carry.
+ */
+export function buildExportConfig(f: FilterState, now: Date): ReportConfig {
+  const days = periodDays(f.period, now)
+  return {
+    columns: ['ref', 'title', 'dept', 'service_code', 'service_name', 'status', 'priority', 'created_at', 'sla_met', 'breached'],
+    filters: buildFilterClauses(f),
+    period: { from: new Date(now.getTime() - days * DAY).toISOString() },
+    sort: [{ col: 'created_at', dir: 'desc' }],
   }
 }
 

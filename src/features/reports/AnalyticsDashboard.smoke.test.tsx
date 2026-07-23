@@ -8,7 +8,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../lib/supabase', () => ({
-  supabase: { functions: { invoke: () => Promise.resolve({ data: null, error: null }) } },
+  supabase: {
+    functions: { invoke: () => Promise.resolve({ data: null, error: null }) },
+    from: () => ({ select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [] }), maybeSingle: () => Promise.resolve({ data: null }) }), order: () => Promise.resolve({ data: [] }) }) }),
+  },
+}))
+vi.mock('../auth/AuthProvider', () => ({
+  useAuth: () => ({ profile: { id: 'u1' }, hasRole: () => false }),
 }))
 
 import { AnalyticsDashboard } from './AnalyticsDashboard'

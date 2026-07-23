@@ -17,8 +17,17 @@ import {
   segmentRows, splitWindow, volumeByService, weeklySla,
   type FilterState, type PeriodKey, type RequestRow, type Segment, type StatusKey,
 } from './analyticsData'
+import { useAuth } from '../auth/AuthProvider'
+import { getRun, runReport, type Format, type ReportRun } from './api'
+import { saveUrl } from './artifact'
 import { CURATED_DASHBOARDS, dashboardBySlug } from './dashboards'
+import { saveDashboard } from './dashboardsApi'
+import { seedWidgets } from './DashboardBuilder'
+import { ensureExportDefinition } from './exportDashboard'
 import { queryLive } from './queryLive'
+import { EmailReportDialog, ScheduleDialog } from './reportDialogs'
+import { createSchedule } from './api'
+import { buildExportConfig } from './analyticsData'
 
 const PRIORITY_META: Record<string, { label: string; fill: string }> = {
   P1: { label: 'P1 Critical', fill: 'var(--red)' },
@@ -32,6 +41,8 @@ const fmtDay = (d: Date) => `${d.getUTCDate()} ${d.toLocaleString('en', { month:
 export function AnalyticsDashboard() {
   const [params, setParams] = useSearchParams()
   const nav = useNavigate()
+  const { profile } = useAuth()
+  const ownerId = profile?.id ?? ''
 
   // ---- filter state: the URL is the source of truth ----
   const dash = dashboardBySlug(params.get('dash'))
@@ -64,6 +75,11 @@ export function AnalyticsDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [drill, setDrill] = useState<Segment | null>(null)
+  // ---- action bar: export/email/schedule through the v1 engine ----
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
+  const [actionNote, setActionNote] = useState<string | null>(null)
+  const [emailRun, setEmailRun] = useState<ReportRun | null>(null)
+  const [showSchedule, setShowSchedule] = useState(false)
   const fetchSeq = useRef(0)
   const now = useMemo(() => new Date(), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -103,6 +119,43 @@ export function AnalyticsDashboard() {
   const drillIndex = drill?.kind === 'service'
     ? services.findIndex((s) => s.code === drill.code && s.dept === drill.dept)
     : null
+
+  const doExport = async (fmt: Format) => {
+    setActionBusy(fmt); setActionNote(null)
+    try {
+      const def = await ensureExportDefinition(dash, filters, ownerId)
+      const res = await runReport(def, ownerId, fmt)
+      if (res.error) setActionNote(res.error)
+      else if (res.downloadUrl) saveUrl(res.downloadUrl, `${def.slug}.${fmt}`)
+    } catch (e) { setActionNote((e as Error).message) }
+    finally { setActionBusy(null) }
+  }
+
+  const doEmail = async () => {
+    setActionBusy('email'); setActionNote(null)
+    try {
+      const def = await ensureExportDefinition(dash, filters, ownerId)
+      const res = await runReport(def, ownerId, 'pdf', 'email')
+      if (res.error) { setActionNote(res.error); return }
+      const run = await getRun(res.runId)
+      if (run) setEmailRun(run)
+      else setActionNote('The export ran but its run row is not visible yet — try again.')
+    } catch (e) { setActionNote((e as Error).message) }
+    finally { setActionBusy(null) }
+  }
+
+  const doSaveView = async () => {
+    setActionBusy('save'); setActionNote(null)
+    try {
+      const suffix = [PERIOD_LABEL[filters.period], filters.dept !== 'ALL' ? filters.dept : null].filter(Boolean).join(' · ')
+      await saveDashboard({
+        name: `${dash.name} — ${suffix}`, visibility: 'private', deptId: null, ownerId,
+        widgets: seedWidgets(filters.dept),
+      })
+      setActionNote('View saved — open it from the builder’s "Open saved…" list.')
+    } catch (e) { setActionNote((e as Error).message) }
+    finally { setActionBusy(null) }
+  }
 
   const appliedChips: { k: string; label: string; clear: () => void }[] = []
   appliedChips.push({ k: 'period', label: PERIOD_LABEL[filters.period], clear: () => setFilter({ period: 'last30' }) })
@@ -362,15 +415,47 @@ export function AnalyticsDashboard() {
         )}
       </div>
 
-      {/* action bar */}
+      {/* action bar — exports run through the v1 engine with the CURRENT filters */}
       <div className="actionbar" role="toolbar" aria-label="Dashboard actions">
-        <button className="btn" disabled title="Arrives with the dashboard-export branch">Export PDF</button>
-        <button className="btn" disabled title="Arrives with the dashboard-export branch">Export XLSX</button>
+        <button className="btn" disabled={!!actionBusy} onClick={() => doExport('pdf')}>
+          {actionBusy === 'pdf' ? 'Exporting…' : 'Export PDF'}
+        </button>
+        <button className="btn" disabled={!!actionBusy} onClick={() => doExport('xlsx')}>
+          {actionBusy === 'xlsx' ? 'Exporting…' : 'Export XLSX'}
+        </button>
         <span className="a-sep" role="presentation" />
-        <button className="btn" disabled title="Arrives with the dashboard-export branch">Email</button>
-        <button className="btn" disabled title="Arrives with the dashboard-export branch">Schedule</button>
+        <button className="btn" disabled={!!actionBusy} onClick={doEmail}>
+          {actionBusy === 'email' ? 'Preparing…' : 'Email'}
+        </button>
+        <button className="btn" disabled={!!actionBusy} onClick={() => setShowSchedule(true)}>Schedule</button>
+        <span className="a-sep" role="presentation" />
+        <button className="btn primary" disabled={!!actionBusy} onClick={doSaveView}>
+          {actionBusy === 'save' ? 'Saving…' : 'Save view'}
+        </button>
         {asOf && <span className="asof">{asOfLabel(asOf, now)}</span>}
       </div>
+      {actionNote && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{actionNote}</div>
+      )}
+
+      {emailRun && <EmailReportDialog run={emailRun} onClose={() => setEmailRun(null)} />}
+      {showSchedule && (
+        <ScheduleDialog
+          formats={['pdf', 'csv', 'xlsx']}
+          onClose={() => setShowSchedule(false)}
+          onCreate={async (cadence, timezone, format) => {
+            const def = await ensureExportDefinition(dash, filters, ownerId)
+            // freeze the CURRENT filters — the dispatcher copies this into
+            // run.params, which generate-report merges over the definition
+            await createSchedule({
+              definitionId: def.id, cadence, timezone, format, ownerId, recipients: {},
+              filtersSnapshot: buildExportConfig(filters, new Date()),
+            })
+            setShowSchedule(false)
+            setActionNote('Scheduled — manage it under Exports & schedules.')
+          }}
+        />
+      )}
     </section>
   )
 }

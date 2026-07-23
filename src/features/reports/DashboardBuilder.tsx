@@ -32,8 +32,8 @@ const newWidget = (type: WidgetType): WidgetDraft => ({
   config: { period: { preset: 'last30' }, filters: [{ col: 'status', op: 'neq', value: 'cancelled' }] },
 })
 
-/** the Zone 1 curated overview as a starting draft ("Duplicate to edit") */
-const seedWidgets = (dept: string): WidgetDraft[] => {
+/** the Zone 1 curated overview as a starting draft ("Duplicate to edit" / "Save view") */
+export const seedWidgets = (dept: string): WidgetDraft[] => {
   const deptFilter: WidgetFilter[] = dept === 'ALL' ? [] : [{ col: 'dept', op: 'eq', value: dept }]
   const base = { period: { preset: 'last30' as const }, filters: [...deptFilter, { col: 'status', op: 'neq', value: 'cancelled' } as WidgetFilter] }
   return [
