@@ -3,7 +3,12 @@
  * dashboard per owner (the definition is rewritten, never duplicated), and
  * a subtitle that names the applied filters on the artifact.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// exportDashboard imports the supabase client at module level; CI's Node has
+// no native WebSocket for the realtime client, so tests always mock it
+vi.mock('../../lib/supabase', () => ({ supabase: {} }))
+
 import { exportSlug, exportSubtitle } from './exportDashboard'
 import { DEFAULT_DASHBOARD } from './dashboards'
 
