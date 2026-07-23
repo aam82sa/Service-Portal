@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  OPEN_STATUSES, asOfLabel, buildLiveConfig, dailySeries, deriveKpis, openByPriority,
+  OPEN_STATUSES, asOfLabel, buildExportConfig, buildLiveConfig, dailySeries, deriveKpis, openByPriority,
   periodDays, segmentRows, splitWindow, volumeByService, weeklySla, type RequestRow,
 } from './analyticsData'
 
@@ -192,5 +192,19 @@ describe('asOfLabel', () => {
   it('renders the relative stamp', () => {
     expect(asOfLabel(new Date(NOW.getTime() - 2 * 60_000).toISOString(), NOW)).toBe('Data as of 2 min ago')
     expect(asOfLabel(NOW.toISOString(), NOW)).toBe('Data as of just now')
+  })
+})
+
+describe('buildExportConfig (dashboard → document)', () => {
+  it('carries exactly the applied window (1×) and the same filters as the live view', () => {
+    const f = { dash: 'it-overview', period: 'last7' as const, dept: 'IT', priority: 'P1', status: 'open' as const }
+    const live = buildLiveConfig(f, NOW)
+    const exp = buildExportConfig(f, NOW)
+    expect(exp.period?.from).toBe(new Date(NOW.getTime() - 7 * DAY).toISOString())
+    expect(live.period?.from).toBe(new Date(NOW.getTime() - 14 * DAY).toISOString())
+    expect(exp.filters).toEqual(live.filters) // same filters, different window
+    expect(exp.sort).toEqual([{ col: 'created_at', dir: 'desc' }])
+    expect(exp.columns).toContain('ref')
+    expect(exp.columns).toContain('sla_met')
   })
 })

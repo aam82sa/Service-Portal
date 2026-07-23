@@ -143,6 +143,13 @@ export async function createSchedule(input: {
   format: Format
   ownerId: string
   recipients: { profile_ids?: string[]; external?: string[] }
+  /**
+   * run-time filters frozen at schedule time — the dispatcher copies this
+   * into run.params, which generate-report merges OVER the definition's
+   * config (params win). A dashboard schedule must carry its own snapshot
+   * because the shared export definition is rewritten on every export click.
+   */
+  filtersSnapshot?: ReportConfig
 }): Promise<void> {
   const { data: next } = await supabase.rpc('report_next_run', {
     p_expr: input.cadence, p_tz: input.timezone, p_after: new Date().toISOString(),
@@ -156,8 +163,20 @@ export async function createSchedule(input: {
     run_as_owner: input.ownerId,
     enabled: true,
     next_run_at: (next as string | null) ?? null,
+    ...(input.filtersSnapshot ? { filters_snapshot: input.filtersSnapshot } : {}),
   })
   if (error) throw error
+}
+
+/** one run row by id (for the email dialog after an on-demand export) */
+export async function getRun(runId: string): Promise<ReportRun | null> {
+  const { data, error } = await supabase
+    .from('report_runs')
+    .select('id, definition_id, trigger, status, format, row_count, artifact_path, error, created_at, finished_at')
+    .eq('id', runId)
+    .maybeSingle()
+  if (error) throw error
+  return (data as ReportRun | null) ?? null
 }
 
 export async function setScheduleEnabled(id: string, enabled: boolean): Promise<void> {
