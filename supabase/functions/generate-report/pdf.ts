@@ -8,14 +8,23 @@
  * department rails, zebra rows, totals, per-page footers) so fallback PDFs
  * look designed too.
  *
- * Fallback limits vs the worker: Helvetica/Courier only (no Space Grotesk /
- * Inter / JetBrains Mono) and WinAnsi text — non-Latin characters are reduced
- * to '?' so rendering never throws. The worker handles full script.
+ * Fallback limits vs the worker: Latin text stays Helvetica/Courier (no
+ * Space Grotesk / Inter / JetBrains Mono). Arabic renders CORRECTLY through
+ * the committed Noto Sans Arabic fonts (@pdf-lib/fontkit shapes the joining
+ * forms and returns Arabic runs in visual order; artext.ts handles the bidi
+ * run ordering for mixed lines) — non-Latin no longer degrades to '?'.
  */
 
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage, type RGB } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 
+import { hasArabic, visualRuns } from './artext.ts'
 import type { Bar, ColSpec, Kpi, Tone } from './presentation.ts'
+
+const readFont = (rel: string): Uint8Array =>
+  new Uint8Array(readFileSync(fileURLToPath(new URL(rel, import.meta.url))))
 
 export interface PdfInput {
   title: string
@@ -113,10 +122,29 @@ function chipFor(c: ColSpec, v: unknown): { text: string; color: RGB } | null | 
 /** Designed tabular PDF — the fallback when no rendering worker is set. */
 export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
+  doc.registerFontkit(fontkit)
   const helv = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
   const mono = await doc.embedFont(StandardFonts.Courier)
   const monoB = await doc.embedFont(StandardFonts.CourierBold)
+  // Arabic: one upfront scan decides whether to embed the committed Noto
+  // Sans Arabic pair — Latin-only reports carry no extra font payload, and
+  // `subset: true` keeps the artifact small when they are embedded
+  const inputStrings = [
+    input.title, input.subtitle ?? '', input.runBy ?? '',
+    ...(input.kpis ?? []).flatMap((k) => [k.value, k.label]),
+    ...(input.bars ?? []).map((b) => b.label),
+    ...input.columns.map((c) => spec(c).label),
+    ...input.rows.flatMap((r) => Object.values(r).map((v) => String(v ?? ''))),
+    ...Object.values(input.totalsRow ?? {}).map((v) => String(v ?? '')),
+  ]
+  const needsArabic = inputStrings.some(hasArabic)
+  const ar = needsArabic
+    ? {
+        regular: await doc.embedFont(readFont('./fonts/NotoSansArabic-Regular.ttf'), { subset: true }),
+        bold: await doc.embedFont(readFont('./fonts/NotoSansArabic-Bold.ttf'), { subset: true }),
+      }
+    : null
 
   const pageW = 842, pageH = 595, margin = 40
   const cols = (input.columns.length ? input.columns : ['(no columns)']).map(spec)
@@ -128,6 +156,26 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
 
   const text = (s: string, x: number, yy: number, o: { font?: PDFFont; size?: number; color?: RGB; right?: number } = {}) => {
     const font = o.font ?? helv, size = o.size ?? 8
+
+    if (ar && hasArabic(s)) {
+      // mixed/RTL line: draw the visual-order runs sequentially — Arabic runs
+      // with Noto (fontkit shapes + orders the glyphs), the rest as before.
+      // The bold/monoB Latin styles map to the Arabic bold face.
+      const arFont = font === bold || font === monoB ? ar.bold : ar.regular
+      const runs = visualRuns(s).map((r) => ({
+        ...r,
+        font: r.arabic ? arFont : font,
+        drawn: r.arabic ? r.text : asciiSafe(r.text),
+      }))
+      const total = runs.reduce((w, r) => w + r.font.widthOfTextAtSize(r.drawn, size), 0)
+      let cx = o.right !== undefined ? o.right - total : x
+      for (const r of runs) {
+        page.drawText(r.drawn, { x: cx, y: yy, size, font: r.font, color: o.color ?? C.ink })
+        cx += r.font.widthOfTextAtSize(r.drawn, size)
+      }
+      return
+    }
+
     const t = asciiSafe(s)
     const x2 = o.right !== undefined ? o.right - font.widthOfTextAtSize(t, size) : x
     page.drawText(t, { x: x2, y: yy, size, font, color: o.color ?? C.ink })

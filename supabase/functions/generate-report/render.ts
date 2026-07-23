@@ -31,9 +31,28 @@ export function toCSV(columns: string[], rows: Row[]): string {
   return toAOA(columns, rows).map((line) => line.map(esc).join(',')).join('\r\n')
 }
 
-/** XLSX workbook bytes with a single "Report" sheet. */
+/** column widths sized to content (clamped 8–40 chars) — Excel opens readable */
+export function columnWidths(columns: string[], rows: Row[]): { wch: number }[] {
+  return columns.map((c) => {
+    let w = String(c).length
+    for (const r of rows) w = Math.max(w, String(cell(r[c])).length)
+    return { wch: Math.min(40, Math.max(8, w + 2)) }
+  })
+}
+
+/**
+ * XLSX workbook bytes with a single "Report" sheet: content-sized column
+ * widths and an autofilter over the data range. (Header band colors / bold
+ * need a styling build of SheetJS — pending the xlsx-js-style decision.)
+ */
 export function toXLSX(columns: string[], rows: Row[]): Uint8Array {
   const ws = XLSX.utils.aoa_to_sheet(toAOA(columns, rows))
+  ws['!cols'] = columnWidths(columns, rows)
+  if (columns.length) {
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: columns.length - 1 } }),
+    }
+  }
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Report')
   return XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as Uint8Array
