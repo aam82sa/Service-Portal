@@ -21,8 +21,9 @@ import { useAuth } from '../auth/AuthProvider'
 import { getRun, runReport, type Format, type ReportRun } from './api'
 import { saveUrl } from './artifact'
 import { CURATED_DASHBOARDS, dashboardBySlug } from './dashboards'
-import { saveDashboard } from './dashboardsApi'
+import { listDashboards, saveDashboard, type DashboardRow } from './dashboardsApi'
 import { seedWidgets } from './DashboardBuilder'
+import { DashboardView } from './DashboardView'
 import { ensureExportDefinition } from './exportDashboard'
 import { queryLive } from './queryLive'
 import { EmailReportDialog, ScheduleDialog } from './reportDialogs'
@@ -43,6 +44,14 @@ export function AnalyticsDashboard() {
   const nav = useNavigate()
   const { profile } = useAuth()
   const ownerId = profile?.id ?? ''
+
+  // saved/builtin boards (00089 migrated the old templates here) share the
+  // same picker as the curated overviews; picking one switches to the
+  // generic widget renderer
+  const [dbBoards, setDbBoards] = useState<DashboardRow[]>([])
+  useEffect(() => { listDashboards().then(setDbBoards).catch(() => {}) }, [])
+  const dbBoard = dbBoards.find((b) => b.slug === params.get('dash')) ?? null
+  const isCurated = !dbBoard || CURATED_DASHBOARDS.some((d) => d.slug === params.get('dash'))
 
   // ---- filter state: the URL is the source of truth ----
   const dash = dashboardBySlug(params.get('dash'))
@@ -84,6 +93,7 @@ export function AnalyticsDashboard() {
   const now = useMemo(() => new Date(), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!isCurated) return // a saved board's widgets fetch for themselves
     const seq = ++fetchSeq.current
     setLoading(true); setError(null)
     queryLive('requests', buildLiveConfig(filters, new Date()))
@@ -94,7 +104,7 @@ export function AnalyticsDashboard() {
       })
       .catch((e) => { if (seq === fetchSeq.current) setError((e as Error).message) })
       .finally(() => { if (seq === fetchSeq.current) setLoading(false) })
-  }, [filters])
+  }, [filters, isCurated])
 
   // ---- derivations (all client-side, all from the one fetch) ----
   const days = periodDays(filters.period, now)
@@ -165,16 +175,63 @@ export function AnalyticsDashboard() {
     ? { k: 'status', label: '≠ Cancelled', clear: () => setFilter({ status: 'all' }) }
     : { k: 'status', label: STATUS_LABEL[filters.status], clear: () => setFilter({ status: 'all' }) })
 
+  const pickBoard = (slug: string) => {
+    if (CURATED_DASHBOARDS.some((d) => d.slug === slug)) { setFilter({ dash: slug }); return }
+    const next = new URLSearchParams(params)
+    next.set('tab', 'analytics')
+    next.set('dash', slug)
+    setParams(next, { replace: true })
+    setDrill(null)
+  }
+  const picker = (
+    <select
+      className="input" style={{ maxWidth: 250 }} aria-label="Dashboard"
+      value={isCurated ? dash.slug : dbBoard!.slug} onChange={(e) => pickBoard(e.target.value)}
+    >
+      <optgroup label="Curated overviews">
+        {CURATED_DASHBOARDS.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}
+      </optgroup>
+      {dbBoards.length > 0 && (
+        <optgroup label="Saved & builtin dashboards">
+          {dbBoards.map((b) => <option key={b.slug} value={b.slug}>{b.name}</option>)}
+        </optgroup>
+      )}
+    </select>
+  )
+
+  // a saved/builtin board renders through the generic widget renderer —
+  // its widgets carry their own queries (still the viewer's RLS)
+  if (!isCurated && dbBoard) {
+    return (
+      <section aria-label={`Analytics — ${dbBoard.name}`}>
+        <div className="builder-bar">
+          <h2>Analytics</h2>
+          {picker}
+          <span className="scope-badge scope-dept">
+            {dbBoard.kind === 'builtin' ? 'Builtin · org-wide' : `Custom · ${dbBoard.visibility}`}
+          </span>
+          <span className="tool-spacer" style={{ flex: 1 }} />
+          <button
+            className="btn"
+            onClick={() => {
+              const next = new URLSearchParams(params)
+              next.set('tab', 'builder')
+              setParams(next)
+            }}
+          >
+            Open in builder
+          </button>
+        </div>
+        <DashboardView board={dbBoard} />
+      </section>
+    )
+  }
+
   return (
     <section aria-label={`Analytics — ${dash.name}`} aria-busy={loading}>
       <div className="builder-bar">
         <h2>Analytics</h2>
-        <select
-          className="input" style={{ maxWidth: 250 }} aria-label="Dashboard"
-          value={dash.slug} onChange={(e) => setFilter({ dash: e.target.value })}
-        >
-          {CURATED_DASHBOARDS.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}
-        </select>
+        {picker}
         <span className="scope-badge scope-dept">{dash.scopeLabel}</span>
         <span className="tool-spacer" style={{ flex: 1 }} />
         <button
