@@ -89,6 +89,34 @@ export const SOURCES: Record<string, SourceSpec> = {
     groupable: ['status', 'department_scope', 'project_type'],
     defaults: ['code', 'name', 'status', 'department_scope'],
   },
+  // the PMI risk register — impact/score are stored generated columns, so the
+  // heat-map maths is never re-derived downstream
+  pmo_risks: {
+    from: 'pmo_risks k join projects p on p.id = k.project_id',
+    columns: {
+      project_code: 'p.code', project_name: 'p.name',
+      risk_ref: "('R-' || lpad(k.seq::text, 2, '0'))",
+      title: 'k.title', category: 'k.category::text', type: 'k.type::text',
+      probability: 'k.probability', impact: 'k.impact', score: 'k.score',
+      response_strategy: 'k.response_strategy::text', status: 'k.status::text',
+      contingency_amount: 'k.contingency_amount', next_review_date: 'k.next_review_date',
+      created_at: 'k.created_at',
+    },
+    filterable: { category: 'ident', type: 'ident', status: 'ident', score: 'number', created_at: 'date' },
+    groupable: ['category', 'type', 'status', 'project_code'],
+    defaults: ['project_code', 'risk_ref', 'title', 'category', 'probability', 'impact', 'score', 'status'],
+  },
+  // the governance trail (admin_events); its own RLS keeps reads admin-gated
+  audit: {
+    from: 'admin_events e',
+    columns: {
+      area: 'e.area', action: 'e.action', actor_id: 'e.actor_id::text',
+      detail: 'e.detail::text', created_at: 'e.created_at',
+    },
+    filterable: { area: 'ident', action: 'ident', created_at: 'date' },
+    groupable: ['area', 'action'],
+    defaults: ['created_at', 'area', 'action', 'detail'],
+  },
 }
 
 /**
@@ -98,3 +126,13 @@ export const SOURCES: Record<string, SourceSpec> = {
  * gated to dept scope + an extra role check on the definition (Branch 7).
  */
 export const FIXED_SOURCES = new Set(['dept_performance', 'employee_performance'])
+
+/**
+ * The ONE canonical list of report data sources. The report_definitions CHECK
+ * constraint (migration 00086) and this module must never diverge — the
+ * parity test (allowlist.parity.test.ts) parses the migration and asserts
+ * equality. pmo_evm was removed from the CHECK there: no tabular EVM source
+ * exists (baselines are JSONB snapshots), so it could only ever produce a
+ * guaranteed compile error.
+ */
+export const ALL_DATA_SOURCES: string[] = [...Object.keys(SOURCES), ...FIXED_SOURCES].sort()
