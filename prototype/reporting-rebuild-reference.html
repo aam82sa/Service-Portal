@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ABC Services Hub — Reporting rebuild (dashboard-first)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens copied verbatim from src/styles/app.css :root ---- */
+:root {
+  --amber-ink: #A9741A;             /* amber text on white/soft: AA-compliant */
+  --ink: #10192E;
+  --ink-2: #1A2540;
+  --ink-3: #243356;
+  --surface: #F4F5F8;
+  --card: #FFFFFF;
+  --line: #E4E7EE;
+  --text: #1B2437;
+  --muted: #6B7280;
+  --accent: #D97757;
+  --accent-soft: #FBEFE9;
+  --green: #2E9E6B;
+  --green-soft: #E7F5EE;
+  --amber: #DE9B2D;
+  --amber-soft: #FBF2DF;
+  --red: #D64545;
+  --red-soft: #FBEAEA;
+  --it: #3E6DD8;
+  --it-soft: #EAF0FC;
+  --admin: #8A5FC9;
+  --admin-soft: #F2EDFA;
+  --log: #2E9E6B;
+  --log-soft: #E7F5EE;
+  --radius: 14px;
+  --font-head: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-ar: 'Noto Naskh Arabic', 'Inter', sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-body);background:var(--surface);color:var(--text);font-size:14px}
+h1,h2,h3{font-family:var(--font-head);color:var(--ink);margin:0}
+.mono{font-family:var(--font-mono)}
+.shell{display:flex;min-height:100vh}
+
+/* ---- primary dark sidebar (same shell as queue / workflow references) ---- */
+.sidebar{width:200px;background:var(--ink);color:#B9C2D6;padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;color:#fff;font-family:var(--font-head);font-weight:600;padding:0 8px 18px}
+.brand-badge{font-family:var(--font-mono);font-size:11px;background:var(--accent);color:#fff;border-radius:6px;padding:3px 6px}
+.nav-group{font-size:11px;color:#5E6B85;margin:14px 8px 4px;font-weight:500}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:12.5px;color:#B9C2D6;background:none;border:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.nav-item:hover{background:var(--ink-2);color:#fff}
+.nav-item.active{background:var(--ink-3);color:#fff}
+.nav-item.active::before{content:'';position:absolute;inset-inline-start:0;top:7px;bottom:7px;width:3px;background:var(--accent);border-radius:2px}
+.sidebar-foot{margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--ink-3)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--ink-3);color:#fff;font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.foot-name{color:#fff;font-size:12px;font-weight:500}
+.foot-mail{font-family:var(--font-mono);font-size:9.5px;color:#5E6B85}
+
+.main{flex:1;padding:16px 22px 40px;min-width:0}
+
+/* ---- breadcrumb ---- */
+.crumb{font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.crumb-link{background:none;border:none;padding:0;cursor:pointer;color:var(--it);font-size:12px;font-family:var(--font-body)}
+.crumb-link:hover{text-decoration:underline}
+.crumb-sep{margin:0 6px;color:#C3CAD8}
+
+/* ---- shared toolbar / chips / buttons ---- */
+.builder-bar{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.builder-bar h2{font-size:18px}
+.scope-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:99px}
+.scope-dept{background:var(--it-soft);color:var(--it)}
+.tool-spacer{flex:1}
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.t-green{background:var(--green-soft);color:var(--green)}
+.t-amber{background:var(--amber-soft);color:var(--amber-ink)}
+.t-red{background:var(--red-soft);color:var(--red)}
+.t-muted{background:var(--surface);color:var(--muted)}
+.t-accent{background:var(--accent-soft);color:var(--accent)}
+.t-it{background:var(--it-soft);color:var(--it)}
+.t-admin{background:var(--admin-soft);color:var(--admin)}
+.btn{font-family:var(--font-body);font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#c9694b}
+.btn.ghost{border-color:transparent}
+.input,select.input{font-family:var(--font-body);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.hint{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:6px}
+
+/* ---- rebuild note ---- */
+.replaced{background:var(--red-soft);border:1px solid #F0CFCF;border-radius:10px;padding:8px 13px;font-size:11.5px;color:#8E2F2F;display:flex;align-items:baseline;gap:8px;margin-bottom:14px;line-height:1.5}
+.replaced .tag{font-family:var(--font-mono);font-size:9.5px;font-weight:500;background:var(--red);color:#fff;border-radius:5px;padding:1px 7px;flex-shrink:0;position:relative;top:-1px}
+
+/* ---- zone divider rendered as tabs ---- */
+.zonebar{display:flex;gap:4px;align-items:flex-end;border-bottom:1.5px solid var(--line);margin:30px 0 16px}
+.zonebar.first{margin-top:2px}
+.ztab{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--muted);background:none;border:none;padding:7px 14px 9px;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.ztab:hover{color:var(--ink)}
+.ztab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px}
+.ztab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.ztab .zk{font-family:var(--font-mono);font-size:9.5px;font-weight:400;color:#AEB6C6}
+.zone-note{margin-inline-start:auto;font-size:10.5px;color:var(--muted);padding-bottom:9px}
+
+/* ---- Zone 1 · run-time filter bar ---- */
+.filterbar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:11px 14px 12px;margin-bottom:14px}
+.f-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.f-group{display:flex;flex-direction:column;gap:4px}
+.f-lbl{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.f-group select.input{min-width:132px}
+.btn.add-filter{border-style:dashed;color:var(--muted)}
+.btn.add-filter:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.f-applied{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:11px;padding-top:10px;border-top:1px dashed var(--line)}
+.f-applied .lbl{font-size:10.5px;color:var(--muted);margin-inline-end:2px}
+.fchip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;background:var(--it-soft);color:var(--it);border:1px solid #D3DFF6;border-radius:99px;padding:3px 5px 3px 10px}
+.fchip .k{font-family:var(--font-mono);font-size:9.5px;opacity:.75}
+.fchip .x{border:none;background:none;color:inherit;opacity:.65;cursor:pointer;font-size:12px;line-height:1;padding:1px 4px;border-radius:99px}
+.fchip .x:hover{opacity:1;background:rgba(62,109,216,.14)}
+.fchip .x:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.f-note{margin-inline-start:auto;font-size:10.5px;color:var(--green);display:inline-flex;align-items:center;gap:6px}
+.f-note::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green)}
+
+/* ---- KPI row ---- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px 10px;display:flex;flex-direction:column;gap:2px}
+.kpi .k-lbl{font-size:11px;font-weight:600;color:var(--muted)}
+.kpi .k-row{display:flex;align-items:baseline;gap:8px}
+.kpi .k-val{font-family:var(--font-head);font-size:24px;font-weight:700;color:var(--ink);line-height:1.15}
+.kpi .k-unit{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.delta{font-family:var(--font-mono);font-size:10.5px;font-weight:500;border-radius:99px;padding:1px 7px}
+.delta.up{background:var(--green-soft);color:var(--green)}
+.delta.down{background:var(--red-soft);color:var(--red)}
+.delta.good{background:var(--green-soft);color:var(--green)}
+.kpi .k-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:5px}
+.kpi .k-sub{font-size:10px;color:var(--muted)}
+.spark{flex-shrink:0}
+
+/* ---- dashboard grid + widgets ---- */
+.dash{display:grid;grid-template-columns:1fr 292px;gap:14px;align-items:start}
+.widgets{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.widget{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative}
+.widget.drilled{outline:2px solid var(--accent);outline-offset:-1px}
+.w-head{display:flex;align-items:center;gap:8px;padding:10px 12px 8px}
+.w-title{font-family:var(--font-head);font-size:12.5px;font-weight:600;color:var(--ink)}
+.w-sub{font-family:var(--font-mono);font-size:9.5px;color:#AEB6C6}
+.kebab{margin-inline-start:auto;width:24px;height:24px;border:none;background:none;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.kebab:hover{background:var(--surface)}
+.kebab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.kebab i{display:block;width:3px;height:3px;border-radius:50%;background:var(--muted);box-shadow:0 -5px 0 var(--muted),0 5px 0 var(--muted)}
+.w-body{padding:2px 12px 10px}
+.w-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:0 12px 9px;font-size:10.5px;color:var(--muted)}
+.w-legend .lg{display:inline-flex;align-items:center;gap:5px}
+.w-legend .lg i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.w-legend .lg i.ln{width:16px;height:0;border-radius:0;border-top:2.5px solid}
+.w-hint{position:absolute;inset-inline-end:10px;bottom:8px;font-size:9.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:2px 9px;opacity:0;transition:opacity .12s;pointer-events:none}
+.widget:hover .w-hint,.widget:focus-within .w-hint{opacity:1}
+.widget.drilled .w-hint{opacity:1;color:var(--accent);background:var(--accent-soft);border-color:#F0D6C9}
+.chart{display:block;width:100%;height:auto}
+.chart text{font-family:var(--font-mono);font-size:9px;fill:#A9B1C1}
+.chart text.cat{font-family:var(--font-body);font-size:10px;fill:var(--muted)}
+.chart text.val{fill:var(--muted);font-size:9.5px}
+.chart text.big{font-family:var(--font-head);font-size:22px;font-weight:700;fill:var(--ink)}
+.chart text.biglbl{font-family:var(--font-body);font-size:9px;fill:var(--muted)}
+.chart .grid{stroke:#EDEFF4;stroke-width:1}
+.chart .bar{cursor:pointer}
+.chart .bar:hover{opacity:.85}
+
+/* ---- drill-down slide-over ---- */
+.drill{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:-8px 12px 28px rgba(16,25,46,.10);overflow:hidden;position:sticky;top:14px}
+.drill-head{padding:12px 14px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+.drill-head .t{display:flex;align-items:center;gap:8px}
+.drill-head h3{font-size:13.5px}
+.drill-head .x{margin-inline-start:auto;border:none;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:3px 6px;border-radius:7px}
+.drill-head .x:hover{background:var(--surface);color:var(--ink)}
+.drill-path{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;font-size:10.5px;color:var(--muted)}
+.drill-path .seg-chip{font-family:var(--font-mono);font-size:9.5px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 7px;color:var(--ink)}
+.drill-path .seg-chip.hi{background:var(--accent-soft);border-color:#F0D6C9;color:var(--accent)}
+.rec{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid #EDEFF4;background:none;border-inline:none;border-top:none;width:100%;font-family:var(--font-body);cursor:pointer;text-align:start}
+.rec:hover{background:var(--surface)}
+.rec:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.rec .ring{flex-shrink:0}
+.rec .rid{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--ink)}
+.rec .rsum{font-size:10.5px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:132px}
+.rec .chip{margin-inline-start:auto;flex-shrink:0;font-size:9.5px;padding:2px 7px}
+.drill-foot{padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px}
+.drill-more{font-size:10.5px;color:var(--muted);text-align:center}
+.link{background:none;border:none;padding:0;cursor:pointer;color:var(--it);font-size:11.5px;font-weight:500;font-family:var(--font-body)}
+.link:hover{text-decoration:underline}
+
+/* ---- action bar ---- */
+.actionbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:9px 14px}
+.actionbar .asof{margin-inline-start:auto;font-family:var(--font-mono);font-size:10px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.actionbar .asof::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green)}
+.a-sep{width:1px;height:20px;background:var(--line)}
+
+/* ---- Zone 2 · three-pane builder ---- */
+.builder{display:grid;grid-template-columns:186px 1fr 278px;gap:16px;align-items:start}
+.pane{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.palette{padding:10px}
+.pal-group{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:12px 6px 5px}
+.pal-group:first-child{margin-top:2px}
+.pal-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:1px dashed var(--line);border-radius:9px;background:var(--card);font-family:var(--font-body);font-size:11.5px;color:var(--text);cursor:grab;margin-bottom:5px;text-align:start}
+.pal-item:hover{border-color:var(--accent);background:var(--accent-soft)}
+.pal-item:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pal-ico{font-family:var(--font-mono);font-size:9px;width:22px;height:18px;border-radius:5px;background:var(--surface);color:var(--muted);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.pal-tag{margin-inline-start:auto;font-family:var(--font-mono);font-size:8.5px;background:var(--amber-soft);color:var(--amber-ink);border-radius:5px;padding:1px 5px}
+
+/* builder canvas */
+.b-canvas{padding:14px;background:var(--surface)}
+.slotgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.slot{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;position:relative;min-height:158px;display:flex;flex-direction:column}
+.slot.sel{outline:2px solid var(--accent);outline-offset:2px}
+.slot .sel-tag{position:absolute;top:-9px;inset-inline-end:10px;font-family:var(--font-mono);font-size:9px;background:var(--accent);color:#fff;border-radius:6px;padding:1px 7px;z-index:2}
+.slot.drop{border:1.5px dashed #C3CBDA;background:#FBFCFD;align-items:center;justify-content:center;color:var(--muted);font-size:11.5px;cursor:pointer;gap:6px}
+.slot.drop:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.slot.drop:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.slot.drop .plus{font-family:var(--font-mono);font-size:16px;line-height:1}
+.savebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);background:var(--card)}
+.savebar .prop-lbl{margin-bottom:0}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+.seg button{font-family:var(--font-body);font-size:11px;border:none;background:none;color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer}
+.seg button.on{background:var(--ink);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* properties */
+.props{padding:13px}
+.p-name{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--ink)}
+.p-key{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin:2px 0 12px}
+.prop-sec{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.prop-sec:first-of-type{margin-top:0}
+.prop-row{margin-bottom:11px}
+.prop-lbl{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.prop-row .input,.prop-row select.input{width:100%}
+.seg.full{width:100%;display:flex}
+.seg.full button{flex:1}
+.tr{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:11.5px;color:var(--ink);margin-bottom:5px}
+.tr .op{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.tr .x{margin-inline-start:auto;border:none;background:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px}
+.tr .x:hover{color:var(--red)}
+.toggle-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid #EDEFF4;font-size:12px;color:var(--ink)}
+.toggle-row .sub{font-size:10.5px;color:var(--muted);display:block;margin-top:1px}
+.toggle{width:36px;height:21px;border-radius:12px;background:#CBD2DE;border:none;position:relative;cursor:pointer;flex-shrink:0;margin-inline-start:auto}
+.toggle::after{content:'';position:absolute;top:2.5px;inset-inline-start:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:inset-inline-start .15s}
+.toggle.on{background:var(--green)}
+.toggle.on::after{inset-inline-start:17px}
+.toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.callout.quiet{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:11px;line-height:1.5;color:var(--muted);margin-top:14px}
+.callout.quiet .ct{font-weight:600;color:var(--ink);display:block;margin-bottom:2px;font-size:11px}
+
+/* mini widgets on the builder canvas */
+.mini-head{display:flex;align-items:center;gap:7px;padding:9px 11px 6px}
+.mini-title{font-family:var(--font-head);font-size:11.5px;font-weight:600;color:var(--ink)}
+.mini-body{padding:0 11px 10px;flex:1}
+.mini-kpi{font-family:var(--font-head);font-size:26px;font-weight:700;color:var(--ink);line-height:1.1}
+
+/* ---- Zone 3 · exports & schedules ---- */
+.exports{display:grid;grid-template-columns:332px 1fr;gap:16px;align-items:start}
+.pdfcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;align-items:center;gap:11px}
+.a4{width:248px;height:351px;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 10px 24px rgba(16,25,46,.14);overflow:hidden;display:flex;flex-direction:column;flex-shrink:0}
+.a4-head{background:var(--ink);color:#fff;padding:11px 14px 9px;border-bottom:3px solid var(--accent)}
+.a4-brand{display:flex;align-items:center;gap:6px;font-family:var(--font-head);font-weight:600;font-size:9.5px}
+.a4-brand .bb{font-family:var(--font-mono);font-size:7px;background:var(--accent);border-radius:4px;padding:1.5px 4px}
+.a4-title{font-family:var(--font-head);font-size:11.5px;font-weight:700;margin-top:6px}
+.a4-sub{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:2px}
+.a4-sub .en{font-family:var(--font-mono);font-size:6.5px;color:#8B96AD}
+.a4-sub .ar{font-family:var(--font-ar);font-size:8px;color:#B9C2D6;direction:rtl}
+.a4-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:9px 12px 0}
+.a4-kpi{border:1px solid var(--line);border-radius:5px;padding:5px 6px}
+.a4-kpi .v{font-family:var(--font-head);font-size:10.5px;font-weight:700;color:var(--ink)}
+.a4-kpi .l{font-size:5.5px;color:var(--muted);margin-top:1px;letter-spacing:.2px;text-transform:uppercase}
+.a4-sec{font-family:var(--font-head);font-size:7px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);padding:9px 12px 4px}
+.a4-chart{padding:0 12px;display:flex;flex-direction:column;gap:4px}
+.a4-bar{display:flex;align-items:center;gap:5px}
+.a4-bar .bl{font-size:6px;color:var(--muted);width:52px;flex-shrink:0;text-align:end}
+.a4-bar .track{flex:1;height:7px;background:var(--surface);border-radius:3px;overflow:hidden}
+.a4-bar .fill{height:100%;border-radius:3px}
+.a4-bar .bv{font-family:var(--font-mono);font-size:5.5px;color:var(--muted);width:14px;flex-shrink:0}
+.a4-table{margin:2px 12px 0;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.a4-tr{display:flex;align-items:center;gap:6px;padding:3.5px 7px;border-bottom:1px solid #EDEFF4;border-inline-start:3px solid transparent;font-size:6.5px}
+.a4-tr:last-child{border-bottom:none}
+.a4-tr.h{background:var(--surface);font-weight:600;letter-spacing:.3px;text-transform:uppercase;font-size:5.5px;color:var(--muted);border-inline-start-color:transparent}
+.a4-tr .c1{font-family:var(--font-mono);width:44px;color:var(--ink)}
+.a4-tr .c2{flex:1;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.a4-tr .c3{font-family:var(--font-mono);color:var(--muted)}
+.a4-foot{margin-top:auto;border-top:1px solid var(--line);padding:5px 12px;display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:5.5px;color:var(--muted)}
+.pdf-meta{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center}
+.pdf-meta .cap{font-size:10.5px;color:var(--muted);line-height:1.5}
+
+/* schedules table */
+.schedcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.stable{width:100%;border-collapse:collapse;font-size:12px}
+.stable th{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);text-align:start;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.stable td{padding:11px 14px;border-bottom:1px solid #EDEFF4;vertical-align:top}
+.stable tr:last-child td{border-bottom:none}
+.s-name{font-weight:600;color:var(--ink)}
+.s-sub{font-size:10.5px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.s-when{font-family:var(--font-mono);font-size:11px;color:var(--ink)}
+.s-tz{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);display:block;margin-top:2px}
+.fmt{font-family:var(--font-mono);font-size:9.5px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--muted)}
+.sched-foot{padding:9px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- primary sidebar -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-badge">ABC</span><span>Services Hub</span></div>
+    <div class="nav-group">Workspace</div>
+    <button class="nav-item"><span>Work</span></button>
+    <button class="nav-item"><span>Projects</span></button>
+    <button class="nav-item"><span>Correspondence</span></button>
+    <button class="nav-item"><span>Insights</span></button>
+    <button class="nav-item active"><span>Reports</span></button>
+    <button class="nav-item"><span>Assets</span></button>
+    <div class="nav-group">Administration</div>
+    <button class="nav-item"><span>PMO admin</span></button>
+    <button class="nav-item"><span>Admin console</span></button>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="avatar">SA</span>
+        <div><div class="foot-name">Sara Al-Amri</div><div class="foot-mail">sara.alamri@abc.sa</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <button class="crumb-link">Reports</button>
+      <span class="crumb-sep">/</span>
+      <button class="crumb-link">Analytics</button>
+      <span class="crumb-sep">/</span>
+      <span style="color:var(--ink);font-weight:500">IT Service Overview</span>
+    </nav>
+
+    <div class="replaced">
+      <span class="tag">replaced</span>
+      <span>The static 7-template library is replaced by this dashboard + builder; the engine (query compiler, owner-RLS, pg_cron) is retained and now serves widgets instead of fixed HTML tables.</span>
+    </div>
+
+    <!-- ================= ZONE 1 · ANALYTICS ================= -->
+    <div class="zonebar first" role="tablist" aria-label="Reporting sections">
+      <button class="ztab on" role="tab" aria-selected="true"><span class="zk">01</span>Analytics</button>
+      <button class="ztab" role="tab" aria-selected="false"><span class="zk">02</span>Report builder</button>
+      <button class="ztab" role="tab" aria-selected="false"><span class="zk">03</span>Exports &amp; schedules</button>
+      <span class="zone-note">Landing view — curated dashboards, filterable at run time</span>
+    </div>
+
+    <section aria-label="Analytics — IT Service Overview">
+      <div class="builder-bar">
+        <h2>Analytics</h2>
+        <span class="svc-pick">
+          <select class="input" style="max-width:250px" aria-label="Dashboard">
+            <option>IT Service Overview</option>
+            <option>Administration Overview</option>
+            <option>Logistics Overview</option>
+            <option>SLA &amp; Breach Watch</option>
+            <option>DoA Approvals Throughput</option>
+          </select>
+        </span>
+        <span class="scope-badge scope-dept">Curated · shared with IT</span>
+        <span class="chip t-muted mono">owner: Sara Al-Amri</span>
+        <span class="tool-spacer"></span>
+        <button class="btn ghost">Duplicate to edit</button>
+        <button class="btn">Open in builder</button>
+      </div>
+
+      <!-- run-time filter bar -->
+      <div class="filterbar" role="group" aria-label="Run-time filters">
+        <div class="f-row">
+          <div class="f-group">
+            <span class="f-lbl" id="fl-period">Period</span>
+            <select class="input" aria-labelledby="fl-period">
+              <option>Last 30 days</option>
+              <option>Last 7 days</option>
+              <option>Last quarter</option>
+              <option>Year to date</option>
+              <option>Custom range</option>
+            </select>
+          </div>
+          <div class="f-group">
+            <span class="f-lbl" id="fl-dept">Department</span>
+            <select class="input" aria-labelledby="fl-dept">
+              <option>IT</option>
+              <option>Administration</option>
+              <option>Logistics</option>
+              <option>All departments</option>
+            </select>
+          </div>
+          <div class="f-group">
+            <span class="f-lbl" id="fl-prio">Priority</span>
+            <select class="input" aria-labelledby="fl-prio">
+              <option>All</option>
+              <option>P1 Critical</option>
+              <option>P2 High</option>
+              <option>P3 Normal</option>
+              <option>P4 Low</option>
+            </select>
+          </div>
+          <div class="f-group">
+            <span class="f-lbl" id="fl-status">Status</span>
+            <select class="input" aria-labelledby="fl-status">
+              <option>All</option>
+              <option>Open only</option>
+              <option>Resolved</option>
+              <option>Closed</option>
+            </select>
+          </div>
+          <button class="btn add-filter">+ Filter</button>
+        </div>
+        <div class="f-applied">
+          <span class="lbl">Applied:</span>
+          <span class="fchip"><span class="k">period</span>Last 30 days<button class="x" aria-label="Remove filter: period Last 30 days">&times;</button></span>
+          <span class="fchip"><span class="k">dept</span>IT<button class="x" aria-label="Remove filter: department IT">&times;</button></span>
+          <span class="fchip"><span class="k">status</span>&ne; Cancelled<button class="x" aria-label="Remove filter: status not Cancelled">&times;</button></span>
+          <span class="f-note">Filters apply instantly — no re-run</span>
+        </div>
+      </div>
+
+      <!-- KPI row -->
+      <div class="kpis">
+        <div class="kpi">
+          <span class="k-lbl">Open requests</span>
+          <div class="k-row"><span class="k-val">128</span><span class="delta up">&#9650; 12</span></div>
+          <div class="k-foot">
+            <span class="k-sub">vs previous 30 days</span>
+            <svg class="spark" width="76" height="26" viewBox="0 0 76 26" aria-hidden="true">
+              <polyline points="2,18 12,15 22,17 32,12 42,14 52,9 62,11 74,6" fill="none" stroke="var(--it)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi">
+          <span class="k-lbl">SLA compliance</span>
+          <div class="k-row"><span class="k-val">94.2<span class="k-unit">%</span></span><span class="delta good">&#9650; 1.8</span></div>
+          <div class="k-foot">
+            <span class="k-sub">target 95%</span>
+            <svg class="spark" width="76" height="26" viewBox="0 0 76 26" aria-hidden="true">
+              <polyline points="2,16 12,17 22,13 32,15 42,11 52,12 62,8 74,6" fill="none" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi">
+          <span class="k-lbl">Avg resolution</span>
+          <div class="k-row"><span class="k-val">6.4<span class="k-unit">h</span></span><span class="delta good">&#9660; 0.6</span></div>
+          <div class="k-foot">
+            <span class="k-sub">business hours, Sun&ndash;Thu</span>
+            <svg class="spark" width="76" height="26" viewBox="0 0 76 26" aria-hidden="true">
+              <polyline points="2,7 12,10 22,8 32,13 42,12 52,16 62,15 74,19" fill="none" stroke="var(--green)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi">
+          <span class="k-lbl">Breaches</span>
+          <div class="k-row"><span class="k-val">7</span><span class="delta good" style="background:var(--green-soft);color:var(--green)">&#9660; 3</span></div>
+          <div class="k-foot">
+            <span class="k-sub">4 response · 3 resolution</span>
+            <svg class="spark" width="76" height="26" viewBox="0 0 76 26" aria-hidden="true">
+              <polyline points="2,6 12,9 22,7 32,12 42,10 52,15 62,14 74,18" fill="none" stroke="var(--red)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- widget grid + drill-down slide-over -->
+      <div class="dash">
+        <div class="widgets">
+
+          <!-- (a) line/area trend -->
+          <article class="widget">
+            <header class="w-head">
+              <div><div class="w-title">Requests created vs resolved</div><div class="w-sub">daily · last 30 days</div></div>
+              <button class="kebab" aria-label="Widget menu: Requests created vs resolved"><i></i></button>
+            </header>
+            <div class="w-body">
+              <svg class="chart" viewBox="0 0 508 158" role="img" aria-label="Line chart, requests created versus resolved per day over the last 30 days">
+                <line class="grid" x1="34" y1="132" x2="500" y2="132"/>
+                <line class="grid" x1="34" y1="96" x2="500" y2="96"/>
+                <line class="grid" x1="34" y1="60" x2="500" y2="60"/>
+                <line class="grid" x1="34" y1="24" x2="500" y2="24"/>
+                <text x="28" y="135" text-anchor="end">0</text>
+                <text x="28" y="99" text-anchor="end">8</text>
+                <text x="28" y="63" text-anchor="end">16</text>
+                <text x="28" y="27" text-anchor="end">24</text>
+                <path d="M40,104 L73,96 L106,101 L139,84 L172,90 L205,74 L238,81 L271,64 L304,72 L337,56 L370,65 L403,48 L436,58 L469,44 L496,50 L496,132 L40,132 Z" fill="var(--it-soft)" opacity=".8"/>
+                <polyline points="40,104 73,96 106,101 139,84 172,90 205,74 238,81 271,64 304,72 337,56 370,65 403,48 436,58 469,44 496,50" fill="none" stroke="var(--it)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                <polyline points="40,118 73,113 106,115 139,103 172,107 205,95 238,99 271,87 304,93 337,81 370,85 403,72 436,79 469,68 496,72" fill="none" stroke="var(--green)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                <circle cx="403" cy="48" r="3" fill="var(--card)" stroke="var(--it)" stroke-width="2"/>
+                <text x="40" y="150" class="cat">24 Jun</text>
+                <text x="268" y="150" class="cat" text-anchor="middle">8 Jul</text>
+                <text x="496" y="150" class="cat" text-anchor="end">22 Jul</text>
+              </svg>
+            </div>
+            <footer class="w-legend">
+              <span class="lg"><i class="ln" style="border-color:var(--it)"></i>Created</span>
+              <span class="lg"><i class="ln" style="border-color:var(--green)"></i>Resolved</span>
+            </footer>
+            <span class="w-hint">Click a point to drill down</span>
+          </article>
+
+          <!-- (b) horizontal bars — in drill-down state -->
+          <article class="widget drilled">
+            <header class="w-head">
+              <div><div class="w-title">Volume by service</div><div class="w-sub">top 6 · count of requests</div></div>
+              <span class="chip t-accent" style="font-size:9.5px">1 segment selected</span>
+              <button class="kebab" aria-label="Widget menu: Volume by service"><i></i></button>
+            </header>
+            <div class="w-body">
+              <svg class="chart" viewBox="0 0 508 168" role="img" aria-label="Horizontal bar chart, request volume by service, Access request selected with 24 requests">
+                <text x="120" y="21" class="cat" text-anchor="end">IN-02 Access request</text>
+                <rect class="bar" x="128" y="10" width="300" height="15" rx="4" fill="var(--it)" stroke="var(--accent)" stroke-width="2"/>
+                <text x="436" y="21" class="val mono" style="fill:var(--ink);font-weight:600">24</text>
+
+                <text x="120" y="46" class="cat" text-anchor="end">IN-01 Hardware</text>
+                <rect class="bar" x="128" y="35" width="238" height="15" rx="4" fill="var(--it)" opacity=".38"/>
+                <text x="374" y="46" class="val">19</text>
+
+                <text x="120" y="71" class="cat" text-anchor="end">IN-05 Software licence</text>
+                <rect class="bar" x="128" y="60" width="188" height="15" rx="4" fill="var(--it)" opacity=".38"/>
+                <text x="324" y="71" class="val">15</text>
+
+                <text x="120" y="96" class="cat" text-anchor="end">AD-04 Room booking</text>
+                <rect class="bar" x="128" y="85" width="150" height="15" rx="4" fill="var(--admin)" opacity=".38"/>
+                <text x="286" y="96" class="val">12</text>
+
+                <text x="120" y="121" class="cat" text-anchor="end">AD-07 Travel auth</text>
+                <rect class="bar" x="128" y="110" width="113" height="15" rx="4" fill="var(--admin)" opacity=".38"/>
+                <text x="249" y="121" class="val">9</text>
+
+                <text x="120" y="146" class="cat" text-anchor="end">LG-02 Fleet dispatch</text>
+                <rect class="bar" x="128" y="135" width="88" height="15" rx="4" fill="var(--log)" opacity=".38"/>
+                <text x="224" y="146" class="val">7</text>
+              </svg>
+            </div>
+            <footer class="w-legend">
+              <span class="lg"><i style="background:var(--it)"></i>IT</span>
+              <span class="lg"><i style="background:var(--admin)"></i>Administration</span>
+              <span class="lg"><i style="background:var(--log)"></i>Logistics</span>
+            </footer>
+            <span class="w-hint">Drilled: Access request &mdash; 24 records</span>
+          </article>
+
+          <!-- (c) donut -->
+          <article class="widget">
+            <header class="w-head">
+              <div><div class="w-title">By priority</div><div class="w-sub">open requests</div></div>
+              <button class="kebab" aria-label="Widget menu: By priority"><i></i></button>
+            </header>
+            <div class="w-body" style="display:flex;align-items:center;gap:16px;justify-content:center;padding-bottom:6px">
+              <svg class="chart" style="width:150px" viewBox="0 0 150 150" role="img" aria-label="Donut chart, 128 open requests by priority: P3 Normal 68, P4 Low 28, P2 High 25, P1 Critical 7">
+                <g transform="rotate(-90 75 75)">
+                  <circle cx="75" cy="75" r="54" fill="none" stroke="var(--surface)" stroke-width="17"/>
+                  <circle cx="75" cy="75" r="54" fill="none" stroke="var(--red)" stroke-width="17" stroke-dasharray="16.6 322.7" stroke-dashoffset="0" stroke-linecap="butt"/>
+                  <circle cx="75" cy="75" r="54" fill="none" stroke="var(--amber)" stroke-width="17" stroke-dasharray="64.3 275" stroke-dashoffset="-18.6" stroke-linecap="butt"/>
+                  <circle cx="75" cy="75" r="54" fill="none" stroke="var(--it)" stroke-width="17" stroke-dasharray="178.3 161" stroke-dashoffset="-84.9" stroke-linecap="butt"/>
+                  <circle cx="75" cy="75" r="54" fill="none" stroke="#AEB6C6" stroke-width="17" stroke-dasharray="72.2 267.1" stroke-dashoffset="-265.2" stroke-linecap="butt"/>
+                </g>
+                <text x="75" y="73" text-anchor="middle" class="big">128</text>
+                <text x="75" y="89" text-anchor="middle" class="biglbl">open requests</text>
+              </svg>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:11px;color:var(--muted)">
+                <span class="lg" style="display:inline-flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:3px;background:var(--red);display:inline-block"></i>P1 Critical <span class="mono" style="color:var(--ink)">7</span></span>
+                <span class="lg" style="display:inline-flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:3px;background:var(--amber);display:inline-block"></i>P2 High <span class="mono" style="color:var(--ink)">25</span></span>
+                <span class="lg" style="display:inline-flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:3px;background:var(--it);display:inline-block"></i>P3 Normal <span class="mono" style="color:var(--ink)">68</span></span>
+                <span class="lg" style="display:inline-flex;align-items:center;gap:6px"><i style="width:9px;height:9px;border-radius:3px;background:#AEB6C6;display:inline-block"></i>P4 Low <span class="mono" style="color:var(--ink)">28</span></span>
+              </div>
+            </div>
+            <span class="w-hint">Click a segment to drill down</span>
+          </article>
+
+          <!-- (d) stacked columns -->
+          <article class="widget">
+            <header class="w-head">
+              <div><div class="w-title">SLA met vs breached</div><div class="w-sub">by week · resolution SLA</div></div>
+              <button class="kebab" aria-label="Widget menu: SLA met vs breached"><i></i></button>
+            </header>
+            <div class="w-body">
+              <svg class="chart" viewBox="0 0 508 158" role="img" aria-label="Stacked column chart, SLA met versus breached per week over five weeks">
+                <line class="grid" x1="34" y1="132" x2="500" y2="132"/>
+                <line class="grid" x1="34" y1="92" x2="500" y2="92"/>
+                <line class="grid" x1="34" y1="52" x2="500" y2="52"/>
+                <text x="28" y="135" text-anchor="end">0</text>
+                <text x="28" y="95" text-anchor="end">40</text>
+                <text x="28" y="55" text-anchor="end">80</text>
+                <!-- W1 84/6 -->
+                <rect class="bar" x="62" y="48" width="46" height="84" rx="3" fill="var(--green)"/>
+                <rect class="bar" x="62" y="41" width="46" height="6" rx="2" fill="var(--red)"/>
+                <text x="85" y="148" class="cat" text-anchor="middle">22 Jun</text>
+                <!-- W2 91/4 -->
+                <rect class="bar" x="152" y="41" width="46" height="91" rx="3" fill="var(--green)"/>
+                <rect class="bar" x="152" y="36" width="46" height="4" rx="2" fill="var(--red)"/>
+                <text x="175" y="148" class="cat" text-anchor="middle">29 Jun</text>
+                <!-- W3 78/9 -->
+                <rect class="bar" x="242" y="54" width="46" height="78" rx="3" fill="var(--green)"/>
+                <rect class="bar" x="242" y="44" width="46" height="9" rx="2" fill="var(--red)"/>
+                <text x="265" y="148" class="cat" text-anchor="middle">6 Jul</text>
+                <!-- W4 88/5 -->
+                <rect class="bar" x="332" y="44" width="46" height="88" rx="3" fill="var(--green)"/>
+                <rect class="bar" x="332" y="38" width="46" height="5" rx="2" fill="var(--red)"/>
+                <text x="355" y="148" class="cat" text-anchor="middle">13 Jul</text>
+                <!-- W5 partial 41/2 -->
+                <rect class="bar" x="422" y="91" width="46" height="41" rx="3" fill="var(--green)" opacity=".55"/>
+                <rect class="bar" x="422" y="88" width="46" height="2.5" rx="1" fill="var(--red)" opacity=".55"/>
+                <text x="445" y="148" class="cat" text-anchor="middle">20 Jul*</text>
+              </svg>
+            </div>
+            <footer class="w-legend">
+              <span class="lg"><i style="background:var(--green)"></i>Met</span>
+              <span class="lg"><i style="background:var(--red)"></i>Breached</span>
+              <span style="margin-inline-start:auto">* week in progress</span>
+            </footer>
+            <span class="w-hint">Click a segment to drill down</span>
+          </article>
+        </div>
+
+        <!-- drill-down slide-over: view underlying data -->
+        <aside class="drill" aria-label="Underlying records">
+          <div class="drill-head">
+            <div class="t">
+              <h3>Underlying records &mdash; 24</h3>
+              <button class="x" aria-label="Close underlying records panel">&times;</button>
+            </div>
+            <div class="drill-path">
+              <span>Volume by service</span>
+              <span aria-hidden="true">&rsaquo;</span>
+              <span class="seg-chip hi">IN-02 Access request</span>
+              <span class="seg-chip">Last 30 days</span>
+              <span class="seg-chip">IT</span>
+            </div>
+          </div>
+
+          <button class="rec">
+            <svg class="ring" width="22" height="22" viewBox="0 0 22 22" aria-label="SLA 72% remaining">
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--surface)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--green)" stroke-width="3" stroke-dasharray="38.4 53.4" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span><span class="rid">REQ-1291</span><span class="rsum" style="display:block">SAP access &mdash; finance analyst</span></span>
+            <span class="chip t-amber">In progress</span>
+          </button>
+          <button class="rec">
+            <svg class="ring" width="22" height="22" viewBox="0 0 22 22" aria-label="SLA 88% remaining">
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--surface)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--green)" stroke-width="3" stroke-dasharray="47 53.4" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span><span class="rid">REQ-1287</span><span class="rsum" style="display:block">Shared drive &mdash; PMO folder</span></span>
+            <span class="chip t-it">Triaged</span>
+          </button>
+          <button class="rec">
+            <svg class="ring" width="22" height="22" viewBox="0 0 22 22" aria-label="SLA paused">
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--surface)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="30 53.4" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span><span class="rid">REQ-1284</span><span class="rsum" style="display:block">Admin rights &mdash; build server</span></span>
+            <span class="chip t-accent">Pending approval</span>
+          </button>
+          <button class="rec">
+            <svg class="ring" width="22" height="22" viewBox="0 0 22 22" aria-label="SLA 12% remaining, at risk">
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--surface)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--red)" stroke-width="3" stroke-dasharray="6.4 53.4" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span><span class="rid">REQ-1279</span><span class="rsum" style="display:block">VPN scope &mdash; contractor</span></span>
+            <span class="chip t-amber">In progress</span>
+          </button>
+          <button class="rec">
+            <svg class="ring" width="22" height="22" viewBox="0 0 22 22" aria-label="SLA met">
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--green)" stroke-width="3"/>
+            </svg>
+            <span><span class="rid">REQ-1276</span><span class="rsum" style="display:block">ERP role &mdash; procurement</span></span>
+            <span class="chip t-green">Resolved</span>
+          </button>
+          <button class="rec">
+            <svg class="ring" width="22" height="22" viewBox="0 0 22 22" aria-label="SLA 96% remaining">
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--surface)" stroke-width="3"/>
+              <circle cx="11" cy="11" r="8.5" fill="none" stroke="var(--green)" stroke-width="3" stroke-dasharray="51.3 53.4" stroke-linecap="round" transform="rotate(-90 11 11)"/>
+            </svg>
+            <span><span class="rid">REQ-1272</span><span class="rsum" style="display:block">MFA reset &mdash; field engineer</span></span>
+            <span class="chip t-it">New</span>
+          </button>
+
+          <div class="drill-foot">
+            <span class="drill-more">6 of 24 shown &mdash; same rows, same RLS as the queue</span>
+            <button class="btn" style="justify-content:center">View in Work queue &rarr;</button>
+            <button class="link" style="text-align:center">Export these 24 rows (XLSX)</button>
+          </div>
+        </aside>
+      </div>
+
+      <!-- action bar -->
+      <div class="actionbar" role="toolbar" aria-label="Dashboard actions">
+        <button class="btn">Export PDF</button>
+        <button class="btn">Export XLSX</button>
+        <span class="a-sep" role="presentation"></span>
+        <button class="btn">Email</button>
+        <button class="btn">Schedule</button>
+        <span class="a-sep" role="presentation"></span>
+        <button class="btn primary">Save view</button>
+        <span class="asof">Data as of 2 min ago</span>
+      </div>
+    </section>
+
+    <!-- ================= ZONE 2 · REPORT BUILDER ================= -->
+    <div class="zonebar" role="tablist" aria-label="Reporting sections">
+      <button class="ztab" role="tab" aria-selected="false"><span class="zk">01</span>Analytics</button>
+      <button class="ztab on" role="tab" aria-selected="true"><span class="zk">02</span>Report builder</button>
+      <button class="ztab" role="tab" aria-selected="false"><span class="zk">03</span>Exports &amp; schedules</button>
+      <span class="zone-note">Ad-hoc, zero-code — same three-pane pattern as the form and workflow builders</span>
+    </div>
+
+    <section aria-label="Report builder">
+      <div class="builder-bar">
+        <h2>Report builder</h2>
+        <span class="scope-badge scope-dept">Department admin · IT</span>
+        <span class="chip t-amber">draft</span>
+        <span class="tool-spacer"></span>
+        <span class="chip t-muted mono">autosaved 1 min ago</span>
+        <button class="btn">Preview full screen</button>
+      </div>
+
+      <div class="builder">
+
+        <!-- palette -->
+        <aside class="pane" aria-label="Data sources and widgets palette">
+          <div class="pane-head">Palette</div>
+          <div class="palette">
+            <div class="pal-group">Data sources</div>
+            <button class="pal-item"><span class="pal-ico">Rq</span>Requests</button>
+            <button class="pal-item"><span class="pal-ico">SL</span>SLA</button>
+            <button class="pal-item"><span class="pal-ico">As</span>Assets</button>
+            <button class="pal-item"><span class="pal-ico">Pr</span>Projects</button>
+            <button class="pal-item"><span class="pal-ico">Ri</span>Risks</button>
+            <button class="pal-item"><span class="pal-ico">Lt</span>Letters</button>
+            <button class="pal-item"><span class="pal-ico">Au</span>Audit</button>
+            <button class="pal-item"><span class="pal-ico">DP</span>Dept performance</button>
+            <button class="pal-item"><span class="pal-ico">EP</span>Employee perf.<span class="pal-tag">personal data</span></button>
+
+            <div class="pal-group">Widgets</div>
+            <button class="pal-item"><span class="pal-ico">#</span>KPI card</button>
+            <button class="pal-item"><span class="pal-ico">&#8599;</span>Line</button>
+            <button class="pal-item"><span class="pal-ico">&#9644;</span>Bar</button>
+            <button class="pal-item"><span class="pal-ico">&#9678;</span>Donut</button>
+            <button class="pal-item"><span class="pal-ico">&#9640;</span>Stacked</button>
+            <button class="pal-item"><span class="pal-ico">&#8862;</span>Table</button>
+            <button class="pal-item"><span class="pal-ico">&#8865;</span>Pivot</button>
+            <p class="hint" style="margin:8px 6px 2px">Drag a widget onto the canvas, then bind it to a data source in Properties.</p>
+          </div>
+        </aside>
+
+        <!-- canvas -->
+        <section class="pane" aria-label="Dashboard canvas">
+          <div class="pane-head">
+            <span>Canvas &mdash; Weekly IT performance (draft)</span>
+            <span class="chip t-muted mono">2 widgets &middot; 1 empty slot</span>
+          </div>
+          <div class="b-canvas">
+            <div class="slotgrid">
+
+              <!-- placed widget 1 -->
+              <button class="slot" style="text-align:start;font-family:var(--font-body);cursor:pointer">
+                <div class="mini-head">
+                  <span class="mini-title">SLA compliance</span>
+                  <span class="kebab" aria-hidden="true" style="pointer-events:none"><i></i></span>
+                </div>
+                <div class="mini-body">
+                  <div style="display:flex;align-items:baseline;gap:8px">
+                    <span class="mini-kpi">94.2%</span>
+                    <span class="delta good">&#9650; 1.8</span>
+                  </div>
+                  <svg width="180" height="30" viewBox="0 0 180 30" aria-hidden="true" style="margin-top:8px">
+                    <polyline points="2,22 26,23 50,17 74,19 98,13 122,15 146,9 178,7" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <div class="hint">Requests &middot; last 30 days &middot; IT</div>
+                </div>
+              </button>
+
+              <!-- placed widget 2 — selected -->
+              <button class="slot sel" style="text-align:start;font-family:var(--font-body);cursor:pointer" aria-current="true">
+                <span class="sel-tag">selected</span>
+                <div class="mini-head">
+                  <span class="mini-title">Volume by service</span>
+                  <span class="chip t-it" style="font-size:9px">Bar</span>
+                  <span class="kebab" aria-hidden="true" style="pointer-events:none;margin-inline-start:auto"><i></i></span>
+                </div>
+                <div class="mini-body">
+                  <svg width="100%" height="86" viewBox="0 0 230 86" aria-label="Preview: volume by service bar chart" preserveAspectRatio="xMinYMin meet">
+                    <text x="58" y="14" text-anchor="end" style="font-family:var(--font-body);font-size:8px;fill:var(--muted)">Access</text>
+                    <rect x="64" y="6" width="132" height="11" rx="3" fill="var(--it)"/>
+                    <text x="58" y="34" text-anchor="end" style="font-family:var(--font-body);font-size:8px;fill:var(--muted)">Hardware</text>
+                    <rect x="64" y="26" width="104" height="11" rx="3" fill="var(--it)" opacity=".55"/>
+                    <text x="58" y="54" text-anchor="end" style="font-family:var(--font-body);font-size:8px;fill:var(--muted)">Licence</text>
+                    <rect x="64" y="46" width="82" height="11" rx="3" fill="var(--it)" opacity=".55"/>
+                    <text x="58" y="74" text-anchor="end" style="font-family:var(--font-body);font-size:8px;fill:var(--muted)">Rooms</text>
+                    <rect x="64" y="66" width="64" height="11" rx="3" fill="var(--admin)" opacity=".55"/>
+                  </svg>
+                  <div class="hint">Live preview &middot; count of requests &middot; grouped by service, split by status</div>
+                </div>
+              </button>
+
+              <!-- drop target -->
+              <button class="slot drop">
+                <span class="plus">+</span>
+                <span>Drop a widget</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- save bar -->
+          <div class="savebar">
+            <label class="prop-lbl" for="rb-name">Name</label>
+            <input class="input" id="rb-name" value="Weekly IT performance" style="min-width:210px" />
+            <span class="prop-lbl" id="rb-vis" style="margin-inline-start:6px">Visibility</span>
+            <div class="seg" role="group" aria-labelledby="rb-vis">
+              <button>Private</button>
+              <button class="on">Department</button>
+              <button>Organization</button>
+            </div>
+            <span class="tool-spacer"></span>
+            <button class="btn ghost">Discard draft</button>
+            <button class="btn primary">Save &amp; publish</button>
+          </div>
+        </section>
+
+        <!-- properties -->
+        <aside class="pane" aria-label="Widget properties">
+          <div class="pane-head"><span>Properties</span><span class="chip t-muted mono">widget</span></div>
+          <div class="props">
+            <div class="p-name">Volume by service</div>
+            <div class="p-key">widget_02 &middot; source: Requests</div>
+
+            <div class="prop-sec">Query</div>
+            <div class="prop-row">
+              <label class="prop-lbl" for="pw-measure">Measure</label>
+              <select class="input" id="pw-measure">
+                <option>Count of requests</option>
+                <option>Avg resolution time</option>
+                <option>SLA compliance %</option>
+                <option>Sum of estimated cost (SAR)</option>
+              </select>
+            </div>
+            <div class="prop-row">
+              <label class="prop-lbl" for="pw-group">Group by</label>
+              <select class="input" id="pw-group">
+                <option>Service</option>
+                <option>Department</option>
+                <option>Priority</option>
+                <option>Assignee</option>
+                <option>Week</option>
+              </select>
+            </div>
+            <div class="prop-row">
+              <label class="prop-lbl" for="pw-split">Split by</label>
+              <select class="input" id="pw-split">
+                <option>Status</option>
+                <option>Priority</option>
+                <option>None</option>
+              </select>
+            </div>
+            <div class="prop-row">
+              <label class="prop-lbl" for="pw-period">Period</label>
+              <select class="input" id="pw-period">
+                <option>Last 30 days</option>
+                <option>Last quarter</option>
+                <option>Follow dashboard filter</option>
+              </select>
+            </div>
+
+            <div class="prop-sec">Filters</div>
+            <div class="tr">Department <span class="op">=</span> IT<button class="x" aria-label="Remove filter: Department = IT">&times;</button></div>
+            <div class="tr">Status <span class="op">&ne;</span> Cancelled<button class="x" aria-label="Remove filter: Status not Cancelled">&times;</button></div>
+            <button class="btn" style="width:100%;justify-content:center;border-style:dashed">+ Add filter</button>
+
+            <div class="prop-sec">Chart type</div>
+            <div class="seg full" role="group" aria-label="Chart type">
+              <button>KPI</button><button>Line</button><button class="on">Bar</button><button>Donut</button><button>Table</button>
+            </div>
+
+            <div class="toggle-row" style="margin-top:12px">
+              <span>Preview with live data<span class="sub">Renders against the real query as you edit</span></span>
+              <button class="toggle on" role="switch" aria-checked="true" aria-label="Preview with live data"></button>
+            </div>
+
+            <div class="callout quiet">
+              <span class="ct">Runs under your permissions</span>
+              This report executes with owner-level RLS &mdash; viewers see only rows their role and department scope allow. Nothing here can widen access.
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= ZONE 3 · EXPORTS & SCHEDULES ================= -->
+    <div class="zonebar" role="tablist" aria-label="Reporting sections">
+      <button class="ztab" role="tab" aria-selected="false"><span class="zk">01</span>Analytics</button>
+      <button class="ztab" role="tab" aria-selected="false"><span class="zk">02</span>Report builder</button>
+      <button class="ztab on" role="tab" aria-selected="true"><span class="zk">03</span>Exports &amp; schedules</button>
+      <span class="zone-note">Branded PDF/XLSX delivery &mdash; pg_cron schedules retained from the old engine</span>
+    </div>
+
+    <section aria-label="Exports and schedules">
+      <div class="builder-bar">
+        <h2>Exports &amp; schedules</h2>
+        <span class="chip t-green">3 active schedules</span>
+        <span class="tool-spacer"></span>
+        <button class="btn">Delivery log</button>
+        <button class="btn primary">+ New schedule</button>
+      </div>
+
+      <div class="exports">
+
+        <!-- PDF preview card -->
+        <div class="pdfcard">
+          <div class="a4" role="img" aria-label="Miniature preview of the branded PDF export, first of four pages">
+            <div class="a4-head">
+              <div class="a4-brand"><span class="bb">ABC</span><span>Services Hub</span></div>
+              <div class="a4-title">IT Service Overview &mdash; Weekly</div>
+              <div class="a4-sub">
+                <span class="en">PERIOD 22 JUN &ndash; 21 JUL 2026 &middot; DEPT IT</span>
+                <span class="ar" lang="ar">نظرة عامة على خدمات تقنية المعلومات</span>
+              </div>
+            </div>
+            <div class="a4-kpis">
+              <div class="a4-kpi"><div class="v">128</div><div class="l">Open</div></div>
+              <div class="a4-kpi"><div class="v">94.2%</div><div class="l">SLA</div></div>
+              <div class="a4-kpi"><div class="v">6.4h</div><div class="l">Avg res</div></div>
+              <div class="a4-kpi"><div class="v" style="color:var(--red)">7</div><div class="l">Breach</div></div>
+            </div>
+            <div class="a4-sec">Volume by service</div>
+            <div class="a4-chart">
+              <div class="a4-bar"><span class="bl">Access</span><span class="track"><span class="fill" style="width:92%;background:var(--it)"></span></span><span class="bv">24</span></div>
+              <div class="a4-bar"><span class="bl">Hardware</span><span class="track"><span class="fill" style="width:73%;background:var(--it)"></span></span><span class="bv">19</span></div>
+              <div class="a4-bar"><span class="bl">Licence</span><span class="track"><span class="fill" style="width:58%;background:var(--it)"></span></span><span class="bv">15</span></div>
+              <div class="a4-bar"><span class="bl">Rooms</span><span class="track"><span class="fill" style="width:46%;background:var(--admin)"></span></span><span class="bv">12</span></div>
+            </div>
+            <div class="a4-sec">Breached this period</div>
+            <div class="a4-table">
+              <div class="a4-tr h"><span class="c1">Ref</span><span class="c2">Summary</span><span class="c3">Over by</span></div>
+              <div class="a4-tr" style="border-inline-start-color:var(--it)"><span class="c1">REQ-1279</span><span class="c2">VPN scope &mdash; contractor</span><span class="c3">2.1h</span></div>
+              <div class="a4-tr" style="border-inline-start-color:var(--it)"><span class="c1">REQ-1263</span><span class="c2">Laptop swap &mdash; onboarding</span><span class="c3">1.4h</span></div>
+              <div class="a4-tr" style="border-inline-start-color:var(--admin)"><span class="c1">REQ-1258</span><span class="c2">Badge access &mdash; HQ B2</span><span class="c3">0.8h</span></div>
+              <div class="a4-tr" style="border-inline-start-color:var(--log)"><span class="c1">REQ-1251</span><span class="c2">Fleet dispatch &mdash; Dammam</span><span class="c3">0.5h</span></div>
+            </div>
+            <div class="a4-foot">
+              <span>Generated 21 Jul 2026 &middot; Asia/Riyadh</span>
+              <span>1 / 4</span>
+            </div>
+          </div>
+          <div class="pdf-meta">
+            <span class="chip t-green">Arabic supported &mdash; Noto Sans Arabic embedded</span>
+            <span class="cap">Rendered server-side from the same widget queries &mdash; what you filter on screen is what prints. RTL sections flip automatically.</span>
+          </div>
+        </div>
+
+        <!-- schedules -->
+        <div class="schedcard">
+          <table class="stable">
+            <thead>
+              <tr>
+                <th scope="col">Schedule</th>
+                <th scope="col">When</th>
+                <th scope="col">Delivery</th>
+                <th scope="col">Last run</th>
+                <th scope="col"><span style="position:absolute;clip:rect(0 0 0 0)">Enabled</span>On</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="s-name">Weekly IT performance</div>
+                  <div class="s-sub"><span class="fmt">PDF</span><span class="fmt">XLSX</span>4 recipients &middot; IT leadership</div>
+                </td>
+                <td><span class="s-when">Sunday 07:00</span><span class="s-tz">Asia/Riyadh &middot; pg_cron</span></td>
+                <td><span class="chip t-it">Email</span></td>
+                <td><span class="chip t-green">Success</span><span class="s-tz">20 Jul &middot; 07:00:12</span></td>
+                <td><button class="toggle on" role="switch" aria-checked="true" aria-label="Enable schedule: Weekly IT performance"></button></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="s-name">Monthly board pack</div>
+                  <div class="s-sub"><span class="fmt">PDF</span>Executive dashboard &middot; all departments</div>
+                </td>
+                <td><span class="s-when">1st &middot; 08:00</span><span class="s-tz">Asia/Riyadh &middot; pg_cron</span></td>
+                <td><span class="chip t-it">Email</span></td>
+                <td><span class="chip t-green">Success</span><span class="s-tz">1 Jul &middot; 08:00:41</span></td>
+                <td><button class="toggle on" role="switch" aria-checked="true" aria-label="Enable schedule: Monthly board pack"></button></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="s-name">Employee performance</div>
+                  <div class="s-sub"><span class="fmt">PDF</span>Dept heads only <span class="chip t-amber" style="font-size:9.5px">personal data &middot; secure link</span></div>
+                </td>
+                <td><span class="s-when">Sunday 08:00</span><span class="s-tz">Asia/Riyadh &middot; pg_cron</span></td>
+                <td><span class="chip t-admin">Secure link</span></td>
+                <td><span class="chip t-green">Success</span><span class="s-tz">20 Jul &middot; 08:00:07</span></td>
+                <td><button class="toggle on" role="switch" aria-checked="true" aria-label="Enable schedule: Employee performance"></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="sched-foot">
+            <span>Recipients are resolved against Entra ID groups at send time &mdash; leavers drop off automatically.</span>
+            <span class="tool-spacer"></span>
+            <span class="mono" style="font-size:9.5px">next run: Sun 26 Jul 07:00</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>
