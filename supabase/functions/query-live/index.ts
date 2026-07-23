@@ -17,7 +17,7 @@ const env = (k: string) => Deno.env.get(k)
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'POST, OPTIONS',
-  'access-control-allow-headers': 'authorization, content-type, apikey',
+  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
 }
 
 const json = (body: unknown, status = 200) =>
