@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
+import { AnalyticsDashboard } from './AnalyticsDashboard'
+import './reports.css'
 import {
   artifactSignedUrl, createSchedule, deleteSchedule, emailReport, listDefinitions, listRuns, listSchedules,
   previewReport, runReport, setScheduleEnabled,
@@ -34,30 +37,21 @@ function Tag({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted'
   )
 }
 
+/**
+ * Reports landing (Reporting Rebuild v2): the analytics dashboard IS the
+ * page — the zone tabs from the reference switch between it and the
+ * exportable/scheduled documents that keep using the v1 engine. Zone 2
+ * (the dashboard builder) arrives on its own branch.
+ */
 export function Reports() {
-  const { profile } = useAuth()
-  const ownerId = profile?.id ?? ''
+  const [params, setParams] = useSearchParams()
   const [enabled, setEnabled] = useState<boolean | null>(null)
-  const [defs, setDefs] = useState<ReportDefinition[]>([])
-  const [selId, setSelId] = useState<string | null>(null)
-  const [err, setErr] = useState<string | null>(null)
+  const tab = params.get('tab') === 'exports' ? 'exports' : 'analytics'
 
   useEffect(() => {
     supabase.from('feature_flags').select('is_enabled').eq('key', 'reporting').maybeSingle()
       .then(({ data }) => setEnabled(Boolean((data as { is_enabled?: boolean } | null)?.is_enabled)))
   }, [])
-
-  useEffect(() => {
-    if (!enabled) return
-    listDefinitions().then((d) => {
-      setDefs(d)
-      setSelId((cur) => cur ?? d[0]?.id ?? null)
-    }).catch((e) => setErr(e.message))
-  }, [enabled])
-
-  const sel = useMemo(() => defs.find((d) => d.id === selId) ?? null, [defs, selId])
-  const builtins = defs.filter((d) => d.kind === 'builtin')
-  const saved = defs.filter((d) => d.kind === 'custom')
 
   if (enabled === false) {
     return (
@@ -66,17 +60,62 @@ export function Reports() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: 24, maxWidth: 560 }}>
           <b>Reporting is not enabled yet.</b>
           <p style={{ color: 'var(--muted)', marginBottom: 0 }}>
-            An administrator can turn on the <span className="mono">reporting</span> feature flag in the Admin console to open the report library.
+            An administrator can turn on the <span className="mono">reporting</span> feature flag in the Admin console to open the analytics dashboards.
           </p>
         </div>
       </div>
     )
   }
 
+  const switchTab = (t: 'analytics' | 'exports') => {
+    const next = new URLSearchParams(params)
+    next.set('tab', t)
+    setParams(next, { replace: true })
+  }
+
   return (
-    <div style={{ padding: '24px 32px', display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
+    <div style={{ padding: '18px 32px 28px' }}>
+      <div className="zonebar first" role="tablist" aria-label="Reporting sections">
+        <button className={`ztab${tab === 'analytics' ? ' on' : ''}`} role="tab" aria-selected={tab === 'analytics'} onClick={() => switchTab('analytics')}>
+          <span className="zk">01</span>Analytics
+        </button>
+        <button className="ztab" role="tab" aria-selected={false} disabled title="Arrives with the dashboard builder">
+          <span className="zk">02</span>Report builder
+        </button>
+        <button className={`ztab${tab === 'exports' ? ' on' : ''}`} role="tab" aria-selected={tab === 'exports'} onClick={() => switchTab('exports')}>
+          <span className="zk">03</span>Exports &amp; schedules
+        </button>
+        <span className="zone-note">
+          {tab === 'analytics' ? 'Landing view — curated dashboards, filterable at run time' : 'Exportable & scheduled documents — v1 engine, owner-RLS'}
+        </span>
+      </div>
+      {tab === 'analytics' ? <AnalyticsDashboard /> : <ReportsLibrary />}
+    </div>
+  )
+}
+
+/** Zone 3 — the exportable/scheduled documents (the v1 report library). */
+function ReportsLibrary() {
+  const { profile } = useAuth()
+  const ownerId = profile?.id ?? ''
+  const [defs, setDefs] = useState<ReportDefinition[]>([])
+  const [selId, setSelId] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    listDefinitions().then((d) => {
+      setDefs(d)
+      setSelId((cur) => cur ?? d[0]?.id ?? null)
+    }).catch((e) => setErr(e.message))
+  }, [])
+
+  const sel = useMemo(() => defs.find((d) => d.id === selId) ?? null, [defs, selId])
+  const builtins = defs.filter((d) => d.kind === 'builtin')
+  const saved = defs.filter((d) => d.kind === 'custom')
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
       <div>
-        <h1 style={{ margin: '0 0 4px' }}>Reports</h1>
         <p style={{ color: 'var(--muted)', margin: '0 0 16px', fontSize: 13 }}>Run, download, email, and schedule reports — always under your own access.</p>
         {err && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>{err}</div>}
         <Library title="Built-in" defs={builtins} selId={selId} onSelect={setSelId} />
