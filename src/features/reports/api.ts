@@ -15,6 +15,7 @@ export interface ReportConfig {
   filters?: { col: string; op?: string; value?: unknown }[]
   group_by?: string[]
   aggregations?: { fn: string; col?: string; as?: string }[]
+  sort?: { col: string; dir?: 'asc' | 'desc' }[]
   period?: { from?: string; to?: string; col?: string }
   chart?: { type?: string } | null
 }

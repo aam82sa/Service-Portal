@@ -124,8 +124,28 @@ export function AnalyticsDashboard() {
         </select>
         <span className="scope-badge scope-dept">{dash.scopeLabel}</span>
         <span className="tool-spacer" style={{ flex: 1 }} />
-        <button className="btn ghost" disabled title="Arrives with the dashboard builder">Duplicate to edit</button>
-        <button className="btn" disabled title="Arrives with the dashboard builder">Open in builder</button>
+        <button
+          className="btn ghost"
+          title="Copy this dashboard's widgets into a new draft you own"
+          onClick={() => {
+            const next = new URLSearchParams(params)
+            next.set('tab', 'builder')
+            next.set('seed', dash.slug)
+            setParams(next)
+          }}
+        >
+          Duplicate to edit
+        </button>
+        <button
+          className="btn"
+          onClick={() => {
+            const next = new URLSearchParams(params)
+            next.set('tab', 'builder')
+            setParams(next)
+          }}
+        >
+          Open in builder
+        </button>
       </div>
 
       {/* run-time filter bar */}

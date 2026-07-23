@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { AnalyticsDashboard } from './AnalyticsDashboard'
+import { DashboardBuilder } from './DashboardBuilder'
 import './reports.css'
 import {
   artifactSignedUrl, createSchedule, deleteSchedule, emailReport, listDefinitions, listRuns, listSchedules,
@@ -46,7 +47,8 @@ function Tag({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted'
 export function Reports() {
   const [params, setParams] = useSearchParams()
   const [enabled, setEnabled] = useState<boolean | null>(null)
-  const tab = params.get('tab') === 'exports' ? 'exports' : 'analytics'
+  const rawTab = params.get('tab')
+  const tab = rawTab === 'exports' ? 'exports' : rawTab === 'builder' ? 'builder' : 'analytics'
 
   useEffect(() => {
     supabase.from('feature_flags').select('is_enabled').eq('key', 'reporting').maybeSingle()
@@ -67,7 +69,7 @@ export function Reports() {
     )
   }
 
-  const switchTab = (t: 'analytics' | 'exports') => {
+  const switchTab = (t: 'analytics' | 'builder' | 'exports') => {
     const next = new URLSearchParams(params)
     next.set('tab', t)
     setParams(next, { replace: true })
@@ -79,17 +81,19 @@ export function Reports() {
         <button className={`ztab${tab === 'analytics' ? ' on' : ''}`} role="tab" aria-selected={tab === 'analytics'} onClick={() => switchTab('analytics')}>
           <span className="zk">01</span>Analytics
         </button>
-        <button className="ztab" role="tab" aria-selected={false} disabled title="Arrives with the dashboard builder">
+        <button className={`ztab${tab === 'builder' ? ' on' : ''}`} role="tab" aria-selected={tab === 'builder'} onClick={() => switchTab('builder')}>
           <span className="zk">02</span>Report builder
         </button>
         <button className={`ztab${tab === 'exports' ? ' on' : ''}`} role="tab" aria-selected={tab === 'exports'} onClick={() => switchTab('exports')}>
           <span className="zk">03</span>Exports &amp; schedules
         </button>
         <span className="zone-note">
-          {tab === 'analytics' ? 'Landing view — curated dashboards, filterable at run time' : 'Exportable & scheduled documents — v1 engine, owner-RLS'}
+          {tab === 'analytics' ? 'Landing view — curated dashboards, filterable at run time'
+            : tab === 'builder' ? 'Ad-hoc, zero-code — same three-pane pattern as the form and workflow builders'
+            : 'Exportable & scheduled documents — v1 engine, owner-RLS'}
         </span>
       </div>
-      {tab === 'analytics' ? <AnalyticsDashboard /> : <ReportsLibrary />}
+      {tab === 'analytics' ? <AnalyticsDashboard /> : tab === 'builder' ? <DashboardBuilder /> : <ReportsLibrary />}
     </div>
   )
 }
