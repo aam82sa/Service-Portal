@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { artifactMeta, columnWidths, toAOA, toCSV, toXLSX } from './render'
+import { artifactMeta, columnWidths, sectionsToXLSX, toAOA, toCSV, toXLSX } from './render'
 
 const columns = ['dept', 'total', 'sla_met']
 const rows = [
@@ -76,5 +76,28 @@ describe('XLSX polish (branch 6)', () => {
     expect(ws['!autofilter']).toEqual({ ref: 'A1:B2' })
     // widths survive the write/read round-trip
     expect(ws['!cols']?.[0]?.wch ?? ws['!cols']?.[0]?.width).toBeTruthy()
+  })
+})
+
+describe('sectionsToXLSX (dashboard document)', () => {
+  it('writes one sheet per section with unique, sanitized names', () => {
+    const bytes = sectionsToXLSX([
+      { title: 'Volume by service', columns: ['service_code', 'value'], rows: [{ service_code: 'HW', value: 12 }] },
+      { title: 'By priority', columns: ['priority', 'value'], rows: [{ priority: 'P1', value: 3 }] },
+    ])
+    const wb = XLSX.read(bytes, { type: 'array' })
+    expect(wb.SheetNames).toEqual(['Volume by service', 'By priority'])
+    expect(XLSX.utils.sheet_to_json(wb.Sheets['By priority'])).toEqual([{ priority: 'P1', value: 3 }])
+  })
+
+  it('dedupes and clamps sheet names', () => {
+    const long = 'A very long widget title that exceeds the excel limit for sure'
+    const bytes = sectionsToXLSX([
+      { title: long, columns: ['a'], rows: [] },
+      { title: long, columns: ['a'], rows: [] },
+    ])
+    const wb = XLSX.read(bytes, { type: 'array' })
+    expect(wb.SheetNames[0]).toHaveLength(31)
+    expect(wb.SheetNames[0]).not.toBe(wb.SheetNames[1])
   })
 })

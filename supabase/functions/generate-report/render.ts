@@ -58,6 +58,42 @@ export function toXLSX(columns: string[], rows: Row[]): Uint8Array {
   return XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as Uint8Array
 }
 
+export interface SectionSheet {
+  title: string
+  columns: string[]
+  rows: Row[]
+}
+
+/** Excel sheet names: ≤31 chars, no \ / ? * [ ] :, unique per workbook */
+export function sheetName(title: string, taken: Set<string>): string {
+  let base = title.replace(/[\\/?*[\]:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Sheet'
+  let name = base
+  let n = 2
+  while (taken.has(name.toLowerCase())) {
+    const suffix = ` (${n++})`
+    name = base.slice(0, 31 - suffix.length) + suffix
+  }
+  taken.add(name.toLowerCase())
+  return name
+}
+
+/** dashboard document as a workbook — one sheet per widget section */
+export function sectionsToXLSX(sections: SectionSheet[]): Uint8Array {
+  const wb = XLSX.utils.book_new()
+  const taken = new Set<string>()
+  for (const sec of sections) {
+    const ws = XLSX.utils.aoa_to_sheet(toAOA(sec.columns, sec.rows))
+    ws['!cols'] = columnWidths(sec.columns, sec.rows)
+    if (sec.columns.length) {
+      ws['!autofilter'] = {
+        ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: sec.rows.length, c: sec.columns.length - 1 } }),
+      }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, sheetName(sec.title, taken))
+  }
+  return XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as Uint8Array
+}
+
 /** file extension + content type for a format (pdf handled by pdf.ts). */
 export function artifactMeta(format: string): { ext: string; contentType: string } {
   switch (format) {

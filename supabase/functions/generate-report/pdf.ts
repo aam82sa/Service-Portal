@@ -26,6 +26,13 @@ import type { Bar, ColSpec, Kpi, Tone } from './presentation.ts'
 const readFont = (rel: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(rel, import.meta.url))))
 
+export interface PdfSection {
+  title: string
+  kind: 'kpi' | 'bar' | 'table'
+  columns: string[]
+  rows: Record<string, unknown>[]
+}
+
 export interface PdfInput {
   title: string
   subtitle?: string
@@ -37,6 +44,8 @@ export interface PdfInput {
   bars?: Bar[]
   totalsRow?: Record<string, unknown>
   containsPersonalData?: boolean
+  /** dashboard document mode: render titled sections instead of the single table */
+  sections?: PdfSection[]
 }
 
 // ---- Services Hub tokens (as pdf-lib colors) ----
@@ -137,6 +146,9 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     ...input.columns.map((c) => spec(c).label),
     ...input.rows.flatMap((r) => Object.values(r).map((v) => String(v ?? ''))),
     ...Object.values(input.totalsRow ?? {}).map((v) => String(v ?? '')),
+    ...(input.sections ?? []).flatMap((sec) => [
+      sec.title, ...sec.columns, ...sec.rows.flatMap((r) => Object.values(r).map((v) => String(v ?? ''))),
+    ]),
   ]
   const needsArabic = inputStrings.some(hasArabic)
   const ar = needsArabic
@@ -147,9 +159,11 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     : null
 
   const pageW = 842, pageH = 595, margin = 40
-  const cols = (input.columns.length ? input.columns : ['(no columns)']).map(spec)
-  const colW = (pageW - margin * 2) / cols.length
+  const baseCols = (input.columns.length ? input.columns : ['(no columns)']).map(spec)
+  const baseColW = (pageW - margin * 2) / baseCols.length
   const rowH = 16
+  interface TableCtx { cols: ColSpec[]; colW: number }
+  const baseCtx: TableCtx = { cols: baseCols, colW: baseColW }
 
   let page: PDFPage = doc.addPage([pageW, pageH])
   let y = pageH - margin
@@ -203,10 +217,14 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     y -= 30
   }
 
-  // ---- KPI band ----
-  if (input.kpis?.length) {
+  /** start a new page when fewer than `need` points remain */
+  const ensure = (need: number) => {
+    if (y < margin + need) { page = doc.addPage([pageW, pageH]); y = pageH - margin }
+  }
+
+  const drawKpiBand = (kpis: Kpi[]) => {
     let x = margin
-    for (const k of input.kpis) {
+    for (const k of kpis) {
       const color = TONE[k.tone ?? 'ink']
       text(k.value, x, y - 16, { font: bold, size: 18, color })
       text(k.label.toUpperCase(), x, y - 26, { size: 6.5, color: C.faint })
@@ -216,12 +234,11 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     y -= 42
   }
 
-  // ---- chart bars ----
-  if (input.bars?.length) {
-    const max = Math.max(1, ...input.bars.map((b) => b.value))
+  const drawBarsBlock = (bars: Bar[]) => {
+    const max = Math.max(1, ...bars.map((b) => b.value))
     const labelW = 90, valueW = 50
     const trackW = pageW - margin * 2 - labelW - valueW - 16
-    for (const b of input.bars) {
+    for (const b of bars) {
       text(b.label.slice(0, 18), margin, y - 8, { size: 8, color: C.muted })
       rect(margin + labelW, y - 10, trackW, 10, C.surface)
       rect(margin + labelW, y - 10, Math.max(2, (b.value / max) * trackW), 10, hex(b.color.startsWith('#') ? b.color : '#5b606b'))
@@ -231,8 +248,15 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     y -= 8
   }
 
-  // ---- table ----
-  const drawHeadRow = () => {
+  // ---- KPI band ----
+  if (input.kpis?.length) drawKpiBand(input.kpis)
+
+  // ---- chart bars ----
+  if (input.bars?.length) drawBarsBlock(input.bars)
+
+  // ---- table (parametrized so dashboard sections can each draw their own) ----
+  const drawHeadRow = (ctx: TableCtx = baseCtx) => {
+    const { cols, colW } = ctx
     rect(margin, y - rowH + 3, pageW - margin * 2, rowH, C.surface)
     cols.forEach((c, i) => {
       const label = c.label.toUpperCase().slice(0, 26)
@@ -243,8 +267,9 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     page.drawLine({ start: { x: margin, y: y - rowH + 3 }, end: { x: pageW - margin, y: y - rowH + 3 }, thickness: 0.8, color: C.line })
     y -= rowH + 2
   }
-  const drawDataRow = (r: Record<string, unknown>, opts: { zebra?: boolean; totals?: boolean } = {}) => {
-    if (y < margin + rowH + 14) { page = doc.addPage([pageW, pageH]); y = pageH - margin; drawHeadRow() }
+  const drawDataRow = (r: Record<string, unknown>, opts: { zebra?: boolean; totals?: boolean } = {}, ctx: TableCtx = baseCtx) => {
+    const { cols, colW } = ctx
+    if (y < margin + rowH + 14) { page = doc.addPage([pageW, pageH]); y = pageH - margin; drawHeadRow(ctx) }
     if (opts.zebra && !opts.totals) rect(margin, y - rowH + 4, pageW - margin * 2, rowH - 1, C.zebra)
     if (opts.totals) page.drawLine({ start: { x: margin, y: y + 3 }, end: { x: pageW - margin, y: y + 3 }, thickness: 0.8, color: C.line })
     cols.forEach((c, i) => {
@@ -272,13 +297,66 @@ export async function fallbackPdf(input: PdfInput): Promise<Uint8Array> {
     y -= rowH
   }
 
-  drawHeadRow()
-  if (input.rows.length === 0) {
-    text('No data for this report.', pageW / 2 - 50, y - 10, { size: 9, color: C.faint })
-    y -= rowH
+  if (input.sections?.length) {
+    // ---- dashboard document mode: KPI band, then titled per-widget blocks ----
+    const SECTION_COLORS = ['#3E6DD8', '#2E9E6B', '#DE9B2D', '#D64545', '#8A5FC9', '#5b606b']
+    const fmtVal = (v: unknown) => {
+      const n = typeof v === 'number' ? v : Number(v)
+      return Number.isFinite(n) ? nfmt(Math.round(n * 100) / 100) : String(v ?? '—')
+    }
+    const kpiSecs = input.sections.filter((sec) => sec.kind === 'kpi')
+    if (kpiSecs.length) {
+      ensure(60)
+      drawKpiBand(kpiSecs.map((sec) => ({
+        value: fmtVal(sec.rows[0]?.['value'] ?? sec.rows.length),
+        label: sec.title,
+      })))
+    }
+    const heading = (t: string) => {
+      ensure(70)
+      text(t.slice(0, 80).toUpperCase(), margin, y - 10, { font: bold, size: 8.5, color: C.muted })
+      rect(margin, y - 14, pageW - margin * 2, 0.7, C.rowLine)
+      y -= 22
+    }
+    for (const sec of input.sections) {
+      if (sec.kind === 'kpi') continue
+      if (sec.kind === 'bar') {
+        const groupKey = sec.columns[0]
+        const bars: Bar[] = sec.rows.slice(0, 8).map((r, i) => ({
+          label: String(r[groupKey] ?? '—'),
+          value: Number(r['value']) || 0,
+          color: SECTION_COLORS[i % SECTION_COLORS.length],
+        }))
+        ensure(70 + bars.length * 15)
+        heading(sec.title)
+        if (bars.length) drawBarsBlock(bars)
+        else { text('No data.', margin, y - 8, { size: 8, color: C.faint }); y -= 18 }
+        continue
+      }
+      // table section: plain columns, capped so the document stays a document
+      const CAP = 40
+      const sCols = sec.columns.map((k) => ({ key: k, label: k }) as ColSpec)
+      const ctx: TableCtx = { cols: sCols, colW: (pageW - margin * 2) / Math.max(1, sCols.length) }
+      heading(sec.title)
+      drawHeadRow(ctx)
+      if (sec.rows.length === 0) { text('No data.', margin + 6, y - 8, { size: 8, color: C.faint }); y -= rowH }
+      sec.rows.slice(0, CAP).forEach((r, i) => drawDataRow(r, { zebra: i % 2 === 1 }, ctx))
+      if (sec.rows.length > CAP) {
+        text(`Showing the first ${CAP} of ${nfmt(sec.rows.length)} rows — export XLSX for the full set.`,
+          margin, y - 9, { size: 7.5, color: C.faint })
+        y -= 16
+      }
+      y -= 6
+    }
+  } else {
+    drawHeadRow()
+    if (input.rows.length === 0) {
+      text('No data for this report.', pageW / 2 - 50, y - 10, { size: 9, color: C.faint })
+      y -= rowH
+    }
+    input.rows.forEach((r, i) => drawDataRow(r, { zebra: i % 2 === 1 }))
+    if (input.totalsRow) drawDataRow(input.totalsRow, { totals: true })
   }
-  input.rows.forEach((r, i) => drawDataRow(r, { zebra: i % 2 === 1 }))
-  if (input.totalsRow) drawDataRow(input.totalsRow, { totals: true })
 
   // ---- per-page footer (drawn last so Page N of M is known) ----
   const pages = doc.getPages()
