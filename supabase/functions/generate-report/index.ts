@@ -16,8 +16,9 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { compileQuery, mergeRunParams, type ReportConfig } from './compiler.ts'
-import { artifactMeta, toCSV, toXLSX } from './render.ts'
-import { renderReportPdf } from './pdf.ts'
+import { artifactMeta, sectionsToXLSX, toCSV, toXLSX } from './render.ts'
+import { renderReportPdf, type PdfSection } from './pdf.ts'
+import { compileSections, parseSections } from './sections.ts'
 import { buildPresentation } from './presentation.ts'
 
 const env = (k: string) => Deno.env.get(k)
@@ -120,6 +121,57 @@ Deno.serve(async (req) => {
     // filters) WIN over the definition's static config — this was the v1 bug
     // where an "IT-only last-month" schedule silently sent everything
     const effectiveConfig = mergeRunParams(def.config ?? {}, (run as { params?: Record<string, unknown> }).params ?? {})
+
+    // dashboard document export: config.sections (or a schedule's snapshot of
+    // them) — run every widget query under the owner's RLS and render the
+    // dashboard itself, not a record list
+    const dashSections = parseSections(effectiveConfig as Record<string, unknown>)
+    if (dashSections) {
+      const compiled = compileSections(dashSections)
+      const rendered: PdfSection[] = []
+      for (const sec of compiled) {
+        const { data: secData, error: secErr } = await db.rpc('report_fetch_rows', { p_run: runId, p_sql: sec.sql })
+        if (secErr) throw new Error(`fetch rows (${sec.title}): ${secErr.message}`)
+        rendered.push({ title: sec.title, kind: sec.kind, columns: sec.columns, rows: (secData ?? []) as Record<string, unknown>[] })
+      }
+      const totalRows = rendered.reduce((n, sec) => n + sec.rows.length, 0)
+
+      const format = run.format || 'pdf'
+      const { ext, contentType } = artifactMeta(format)
+      let bytes: Uint8Array
+      if (format === 'xlsx') {
+        bytes = sectionsToXLSX(rendered)
+      } else if (format === 'pdf') {
+        const requester = (run as unknown as { requester?: { display_name?: string } | { display_name?: string }[] }).requester
+        const runBy = Array.isArray(requester) ? requester[0]?.display_name : requester?.display_name
+        bytes = await renderReportPdf(env, {
+          title: def.name ?? 'Dashboard',
+          subtitle: periodLabel(effectiveConfig),
+          columns: [], rows: [],
+          rowCountTotal: totalRows,
+          sections: rendered,
+          runBy,
+        })
+      } else {
+        throw new Error('dashboard exports support pdf and xlsx only')
+      }
+
+      const path = `${run.run_as_owner}/${runId}/${slugify(def.name ?? 'dashboard')}.${ext}`
+      const { error: upErr } = await db.storage.from('reports').upload(path, bytes, { contentType, upsert: true })
+      if (upErr) throw new Error(`upload: ${upErr.message}`)
+      const expiresIn = 3600
+      const { data: signed } = await db.storage.from('reports').createSignedUrl(path, expiresIn)
+      await db.from('report_runs').update({
+        status: 'succeeded',
+        row_count: totalRows,
+        artifact_path: path,
+        artifact_bytes: bytes.byteLength,
+        signed_url_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+        finished_at: new Date().toISOString(),
+      }).eq('id', runId)
+      return json({ ok: true, run_id: runId, row_count: totalRows, download_url: signed?.signedUrl ?? null })
+    }
+
     const { sql, columns } = compileQuery(def.data_source, effectiveConfig)
 
     const { data: rowData, error: fetchErr } = await db.rpc('report_fetch_rows', { p_run: runId, p_sql: sql })

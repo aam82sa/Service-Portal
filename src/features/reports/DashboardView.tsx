@@ -8,9 +8,14 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Donut, HBarChart } from '../../components/charts'
+import { useAuth } from '../auth/AuthProvider'
+import { createSchedule, getRun, runReport, type Format, type ReportConfig, type ReportRun } from './api'
+import { saveUrl } from './artifact'
 import { previewSupported, widgetToConfig, type WidgetDraft } from './builderQuery'
 import { getDashboardWidgets, type DashboardRow, type WidgetRow } from './dashboardsApi'
+import { boardSections, ensureExportDefinition } from './exportDashboard'
 import { queryLive } from './queryLive'
+import { EmailReportDialog, ScheduleDialog } from './reportDialogs'
 import { asOfLabel } from './analyticsData'
 
 const PALETTE = ['var(--it)', 'var(--green)', 'var(--amber)', 'var(--red)', '#AEB6C6', 'var(--admin)', 'var(--log)']
@@ -22,11 +27,55 @@ type WidgetData =
   | { status: 'na' }
 
 export function DashboardView({ board }: { board: DashboardRow }) {
+  const { profile } = useAuth()
+  const ownerId = profile?.id ?? ''
   const [widgets, setWidgets] = useState<WidgetRow[]>([])
   const [data, setData] = useState<Record<string, WidgetData>>({})
   const [asOf, setAsOf] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
+  const [actionNote, setActionNote] = useState<string | null>(null)
+  const [emailRun, setEmailRun] = useState<ReportRun | null>(null)
+  const [showSchedule, setShowSchedule] = useState(false)
   const seq = useRef(0)
+
+  // this board's widgets → sections; the export definition is keyed by the
+  // board slug + owner so it is rewritten in place, never duplicated
+  const drafts = (): WidgetDraft[] => widgets.map((w) => ({
+    widget_type: w.widget_type, data_source: w.data_source,
+    title: w.title, config: w.config as WidgetDraft['config'],
+  }))
+  const exportDef = () => ensureExportDefinition({
+    slugKey: board.slug,
+    name: board.name,
+    description: board.name,
+    sections: boardSections(drafts(), new Date()),
+    ownerId,
+  })
+
+  const doExport = async (fmt: Format) => {
+    setActionBusy(fmt); setActionNote(null)
+    try {
+      const def = await exportDef()
+      const res = await runReport(def, ownerId, fmt)
+      if (res.error) setActionNote(res.error)
+      else if (res.downloadUrl) saveUrl(res.downloadUrl, `${def.slug}.${fmt}`)
+    } catch (e) { setActionNote((e as Error).message) }
+    finally { setActionBusy(null) }
+  }
+
+  const doEmail = async () => {
+    setActionBusy('email'); setActionNote(null)
+    try {
+      const def = await exportDef()
+      const res = await runReport(def, ownerId, 'pdf', 'email')
+      if (res.error) { setActionNote(res.error); return }
+      const run = await getRun(res.runId)
+      if (run) setEmailRun(run)
+      else setActionNote('The export ran but its run row is not visible yet — try again.')
+    } catch (e) { setActionNote((e as Error).message) }
+    finally { setActionBusy(null) }
+  }
 
   useEffect(() => {
     const mySeq = ++seq.current
@@ -72,11 +121,37 @@ export function DashboardView({ board }: { board: DashboardRow }) {
         )}
       </div>
       <div className="actionbar" role="toolbar" aria-label="Dashboard actions">
-        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-          Widgets run their saved queries under your own access — edit them in the builder.
-        </span>
+        <button className="btn" disabled={!!actionBusy || widgets.length === 0} onClick={() => doExport('pdf')}>
+          {actionBusy === 'pdf' ? 'Exporting…' : 'Export PDF'}
+        </button>
+        <button className="btn" disabled={!!actionBusy || widgets.length === 0} onClick={() => doExport('xlsx')}>
+          {actionBusy === 'xlsx' ? 'Exporting…' : 'Export XLSX'}
+        </button>
+        <span className="a-sep" role="presentation" />
+        <button className="btn" disabled={!!actionBusy || widgets.length === 0} onClick={doEmail}>
+          {actionBusy === 'email' ? 'Preparing…' : 'Email'}
+        </button>
+        <button className="btn" disabled={!!actionBusy || widgets.length === 0} onClick={() => setShowSchedule(true)}>Schedule</button>
         {asOf && <span className="asof">{asOfLabel(asOf, new Date())}</span>}
       </div>
+      {actionNote && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>{actionNote}</div>}
+
+      {emailRun && <EmailReportDialog run={emailRun} onClose={() => setEmailRun(null)} />}
+      {showSchedule && (
+        <ScheduleDialog
+          formats={['pdf', 'xlsx']}
+          onClose={() => setShowSchedule(false)}
+          onCreate={async (cadence, timezone, format) => {
+            const def = await exportDef()
+            await createSchedule({
+              definitionId: def.id, cadence, timezone, format, ownerId, recipients: {},
+              filtersSnapshot: { sections: boardSections(drafts(), new Date()) } as unknown as ReportConfig,
+            })
+            setShowSchedule(false)
+            setActionNote('Scheduled — manage it under Exports & schedules.')
+          }}
+        />
+      )}
     </div>
   )
 }

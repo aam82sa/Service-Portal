@@ -18,17 +18,15 @@ import {
   type FilterState, type PeriodKey, type RequestRow, type Segment, type StatusKey,
 } from './analyticsData'
 import { useAuth } from '../auth/AuthProvider'
-import { getRun, runReport, type Format, type ReportRun } from './api'
+import { createSchedule, getRun, runReport, type Format, type ReportConfig, type ReportRun } from './api'
 import { saveUrl } from './artifact'
 import { CURATED_DASHBOARDS, dashboardBySlug } from './dashboards'
 import { listDashboards, saveDashboard, type DashboardRow } from './dashboardsApi'
 import { seedWidgets } from './DashboardBuilder'
 import { DashboardView } from './DashboardView'
-import { ensureExportDefinition } from './exportDashboard'
+import { curatedSections, ensureExportDefinition, exportSubtitle } from './exportDashboard'
 import { queryLive } from './queryLive'
 import { EmailReportDialog, ScheduleDialog } from './reportDialogs'
-import { createSchedule } from './api'
-import { buildExportConfig } from './analyticsData'
 
 const PRIORITY_META: Record<string, { label: string; fill: string }> = {
   P1: { label: 'P1 Critical', fill: 'var(--red)' },
@@ -130,10 +128,18 @@ export function AnalyticsDashboard() {
     ? services.findIndex((s) => s.code === drill.code && s.dept === drill.dept)
     : null
 
+  const exportDef = () => ensureExportDefinition({
+    slugKey: dash.slug,
+    name: dash.name,
+    description: exportSubtitle(dash, filters),
+    sections: curatedSections(filters, new Date()),
+    ownerId,
+  })
+
   const doExport = async (fmt: Format) => {
     setActionBusy(fmt); setActionNote(null)
     try {
-      const def = await ensureExportDefinition(dash, filters, ownerId)
+      const def = await exportDef()
       const res = await runReport(def, ownerId, fmt)
       if (res.error) setActionNote(res.error)
       else if (res.downloadUrl) saveUrl(res.downloadUrl, `${def.slug}.${fmt}`)
@@ -144,7 +150,7 @@ export function AnalyticsDashboard() {
   const doEmail = async () => {
     setActionBusy('email'); setActionNote(null)
     try {
-      const def = await ensureExportDefinition(dash, filters, ownerId)
+      const def = await exportDef()
       const res = await runReport(def, ownerId, 'pdf', 'email')
       if (res.error) { setActionNote(res.error); return }
       const run = await getRun(res.runId)
@@ -498,15 +504,17 @@ export function AnalyticsDashboard() {
       {emailRun && <EmailReportDialog run={emailRun} onClose={() => setEmailRun(null)} />}
       {showSchedule && (
         <ScheduleDialog
-          formats={['pdf', 'csv', 'xlsx']}
+          formats={['pdf', 'xlsx']}
           onClose={() => setShowSchedule(false)}
           onCreate={async (cadence, timezone, format) => {
-            const def = await ensureExportDefinition(dash, filters, ownerId)
-            // freeze the CURRENT filters — the dispatcher copies this into
-            // run.params, which generate-report merges over the definition
+            const def = await exportDef()
+            // freeze the CURRENT dashboard as sections — the dispatcher copies
+            // this into run.params, which generate-report merges over the
+            // definition (params win), so a later export click that rewrites
+            // the shared definition can't change what the schedule delivers
             await createSchedule({
               definitionId: def.id, cadence, timezone, format, ownerId, recipients: {},
-              filtersSnapshot: buildExportConfig(filters, new Date()),
+              filtersSnapshot: { sections: curatedSections(filters, new Date()) } as unknown as ReportConfig,
             })
             setShowSchedule(false)
             setActionNote('Scheduled — manage it under Exports & schedules.')

@@ -78,3 +78,34 @@ describe('Arabic rendering (branch 6 acceptance)', () => {
     expect(pdfHeader(bytes)).toBe('%PDF-')
   })
 })
+
+describe('dashboard document mode (sections)', () => {
+  it('renders a KPI band + titled bar/table sections into one PDF', async () => {
+    const bytes = await fallbackPdf({
+      title: 'IT Service Overview — export',
+      subtitle: 'Last 30 days · IT',
+      columns: [], rows: [],
+      sections: [
+        { title: 'Requests in period', kind: 'kpi', columns: ['value'], rows: [{ value: 128 }] },
+        { title: 'Volume by service', kind: 'bar', columns: ['service_code', 'value'], rows: [
+          { service_code: 'HW', value: 24 }, { service_code: 'AC', value: 19 },
+        ] },
+        { title: 'Underlying records', kind: 'table', columns: ['ref', 'dept', 'status'], rows: [
+          { ref: 'REQ-1', dept: 'IT', status: 'new' },
+        ] },
+      ],
+    })
+    expect(pdfHeader(bytes)).toBe('%PDF-')
+    const doc = await PDFDocument.load(bytes)
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders an Arabic-titled section correctly', async () => {
+    const bytes = await fallbackPdf({
+      title: 'لوحة المعلومات',
+      columns: [], rows: [],
+      sections: [{ title: 'الحجم حسب الخدمة', kind: 'bar', columns: ['service_code', 'value'], rows: [{ service_code: 'HW', value: 5 }] }],
+    })
+    expect((await baseFonts(bytes)).some((n) => n.includes('NotoSansArabic'))).toBe(true)
+  })
+})
