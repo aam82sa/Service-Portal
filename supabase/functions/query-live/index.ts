@@ -34,11 +34,17 @@ Deno.serve(async (req) => {
   if (!auth.toLowerCase().startsWith('bearer ')) return json({ error: 'sign in required' }, 401)
 
   // the caller's client: every query below runs under THEIR JWT and RLS
+  // header key must be capital-A 'Authorization': supabase-js sets its own
+  // 'Authorization' internally, and a lowercase duplicate does not merge —
+  // both get sent and the comma-joined value fails every downstream check
   const caller = createClient(env('SUPABASE_URL')!, env('SUPABASE_ANON_KEY')!, {
-    global: { headers: { authorization: auth } },
+    global: { headers: { Authorization: auth } },
     auth: { persistSession: false },
   })
-  const { data: userData, error: userErr } = await caller.auth.getUser()
+  // getUser() with NO argument looks for a stored session — an edge function
+  // never has one, so it fails before ever asking the auth server. Validate
+  // the incoming bearer token explicitly.
+  const { data: userData, error: userErr } = await caller.auth.getUser(auth.slice(7).trim())
   if (userErr || !userData?.user) return json({ error: 'sign in required' }, 401)
 
   let body: { source?: string; config?: ReportConfig; params?: Record<string, unknown> }
